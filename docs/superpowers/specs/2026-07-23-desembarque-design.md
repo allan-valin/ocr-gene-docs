@@ -450,8 +450,41 @@ large reduction in pixels, and it removes the resize-to-4000px the current run t
 It also makes per-field confidence meaningful, because a confidence attaches to a specific
 cell of a specific row rather than to a floating line of text.
 
-**Next measurements needed:** name-column-only CER and seconds/page; then the same for
-PaddleOCR-VL, to see whether the larger model is worth its size and latency.
+### Geometry-guided result (`scripts/spike_guided.py`)
+
+Cropping to the name column and assigning boxes to bands by their y centre:
+
+| Measure | Full page | Geometry-guided |
+|---|---|---|
+| Inference | 110.7 s | **27.0 s** |
+| Name CER, mean | 0.31 | **0.205** |
+| Names within 25% CER | 12 / 26 | **16 / 26** |
+| Grid detection | — | 1.9 s |
+
+**The decisive measure is retrieval, not CER.** The product is a search function, so the
+question is not "is the transcription correct" but "would someone hunting an ancestor land
+on the right row". Querying each true name against the OCR'd rows:
+
+* **correct row ranked first: 26 / 26**
+* effectively unfindable: 0 / 26
+
+Mean CER of 0.205 reads as a poor transcription and is a perfectly good search index. That
+is the premise the whole search design rests on — names are mangled twice, by the clerk and
+by the OCR, so matching has to be fuzzy — and it holds on real output.
+
+**What this test does not show.** It is a closed set: 26 rows from one page, so a query has
+only 25 distractors. Real search runs over thousands of rows where near-misses are far more
+numerous, and retrieval will degrade. The honest next measurement is the same query set
+against the full catalogue rather than one page.
+
+**What it implies for packaging.** If the small classical recogniser is sufficient for
+search, the 0.9B VL model may not be needed at all — which removes roughly a gigabyte from
+the download and most of the latency, and makes "runs on almost any PC" straightforward
+rather than marginal. Worth confirming before committing to the larger model.
+
+**Remaining measurements:** retrieval against the full catalogue; per-row crops and 2×
+upscaling, since the residual errors are on small degraded type; then PaddleOCR-VL for
+comparison, to decide whether its size buys anything the search actually needs.
 
 ### Working without a model: generated table structure
 
