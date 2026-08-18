@@ -17,3 +17,7 @@ scans/
 
 # generated prototype assets (embeds an archive page)
 prototype/build/
+
+# model venv
+.venv-ocr/
+.venv/
