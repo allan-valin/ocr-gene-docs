@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Saved SIAN result pages — ~49 MB of binary, and the parsed catalog below
+# carries everything we need from them. Keep locally, out of git history.
+indices/
+
+# Downloaded scans and derivatives
+data/
+scans/
+
+# ...but the parsed catalog is the corpus manifest and is versioned, since the
+# index PDFs it derives from are not in git and were saved by hand.
+!data/catalog.jsonl

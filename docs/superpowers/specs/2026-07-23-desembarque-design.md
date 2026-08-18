@@ -189,7 +189,91 @@ Two Baidu open-weight document models are worth revisiting after v1 ships:
 
 **How to evaluate cheaply:** the golden-file sample pages built for pipeline tests (see Testing) are already hand-checked ground truth. Run ~5 of them through Claude, Unlimited-OCR, and PaddleOCR-VL 1.5 and compare word error rate on name fields specifically. This is a spike, not v1 work.
 
+## Corpus acquisition (verified 2026-08-18)
+
+The SIAN search UI sits behind a login, but the derived image files are served
+unauthenticated from `imagem.sian.an.gov.br`. Corpus listing therefore works in two
+steps: save the search result pages as PDF (done — `indices/`), parse them into a
+catalog, then fetch each dossier by constructed URL.
+
+`scripts/parse_index.py` does the parsing. Over the 11 saved index pages it yields
+**7,679 unique dossiers** (0 duplicates — the saved pages are disjoint), 8 without a
+parseable ship name, 70 with a letter-suffixed index.
+
+### URL scheme
+
+```
+https://imagem.sian.an.gov.br/acervo/derivadas/BR_RJANRIO_{FUNDO}/0/RPV/{SERIES}/{FOLDER}/BR_RJANRIO_{FUNDO}_0_RPV_{SERIES}_{FOLDER}_d{NNNN}de{TOTAL}.pdf
+```
+
+| Rule | Detail |
+|---|---|
+| Santos | fundo `BS`, series `ENT`; folder is the index **zero-padded to 6** (`17397` → `017397`) |
+| Rio | fundo `OL`, series `PRJ`; folder is the index **unpadded** (`17322`) |
+| Letter suffix | pad the digits only, keep the letter: `14091A` → `014091A`. Server is case-insensitive. The lettered dossier is *distinct* from the unlettered one of the same number — both can exist. |
+| Multi-file | `d{part}de{total}`; `total` is the dossier's file count and is not in the index. Unknown until fetched. |
+
+**Construction is a guess, not a fact.** Spot checks: plain indices resolved in both
+series, but of three lettered ones tested, `014091A` returned 200 while `014222A` and
+`014744A` 404'd at every `de000N` — though plain `014222` exists. So a letter in the
+catalog does not guarantee a lettered file path. The downloader needs a fallback ladder
+(lettered → unlettered → probe increasing `total`) and must record unresolved dossiers
+for manual lookup rather than silently skipping. Affects ~70/7,679 (0.9%).
+
+**Fetching conduct:** this is a public archive on modest infrastructure. Serial or
+low-concurrency fetches, retry with backoff (the connection to it is flaky), resume via
+`-C -`, and cache aggressively — never re-fetch a dossier already on disk. Before the
+scans are rehosted on a public demo, check Arquivo Nacional's terms of use and attribute
+the source; linking back rather than rehosting is the safer default for the public tier.
+
+## Document structure (from two sampled dossiers)
+
+The two series are **different document types**, not variants of one:
+
+- **BS/ENT (Santos)** — printed ruled table, form model number in the footer
+  (e.g. `Mod. No. 136. 5000-6-'23`). Columns: Número, Nome e Cognomes, Nacionalidade,
+  Idade, Sexo, Estado, Profissão, Procedencia, Classe, Observações. ~26 rows/page,
+  entries mostly typewritten.
+- **OL/PRJ (Rio)** — "PARTE do Interprete" narrative form (`MODELO N. 1`), fully
+  handwritten, photographed as landscape book spreads; passenger lists are separate
+  attached pages. Page orientation varies *within* a dossier.
+
+Findings that change the pipeline:
+
+1. **Page classification is required before extraction.** Every dossier opens with a
+   cover/notation card carrying ship, date, procedência and sheet count — that is the
+   source for `document` metadata, and it is not passenger data. Pages must be typed
+   (cover / passenger table / narrative / blank) and routed to different prompts.
+2. **The PDFs already carry an OCR text layer, and it is unusable.** Produced by "PDF
+   Compressor 8.2.12.06"; the ship name GELRIA came out `GC- £R i' A` and the date as
+   `0••-3.(-)?-`. This validates the VLM-only engine decision. Keep the layer as a weak
+   signal for search fallback, never as a transcription source.
+3. **Ditto marks.** Repeated values (nationality, procedência) are written as `"`. The
+   extraction prompt must resolve them against the row above and record the resolved
+   value, or every ditto row loses its nationality.
+4. **Media is mixed per cell, not per page.** A typewritten table routinely has a
+   handwritten row, and the Observações column is nearly all cursive.
+5. **The archive flags its own bad scans.** Some pages carry a printed sidebar
+   "ORIGINAL ILEGÍVEL / Original difficult to read" — worth detecting and storing as a
+   page-level quality flag feeding the review queue ordering.
+6. **Image specs:** 300 DPI, ~3600×5000, grayscale or RGB, JPX/JPEG with a JBIG2 soft
+   mask. Extract with `pdfimages` rather than re-rasterizing.
+
+### Row-band alignment — status
+
+The v1 plan assumed the VLM would report row y-bands. The sampled Santos form is a
+*ruled printed table*, which suggests a cheaper and better-calibrated route: detect the
+rules geometrically and derive bands from them, with column x-ranges as per-template
+constants keyed by the printed form model number rather than per-page model output.
+
+A first projection-profile attempt at 90 DPI failed — it found only the scan's black
+border, because the table rules are too faint at that resolution. Not disproven, just
+untested: retry at 300 DPI with the border cropped first. Until that spike passes, the
+VLM-reported bands remain the plan, with proportional fallback as specified.
+
 ## Open items (pre-implementation)
 
-- Confirm object storage choice (Railway volume vs. Cloudflare R2) once corpus size is known after manual download.
+- Confirm object storage choice (Railway volume vs. Cloudflare R2) once corpus size is known after download. Sampled dossiers ran 0.9 MB (3 pages) and 6.9 MB (12 pages); a full 7,679-dossier pull is plausibly ~20–40 GB of originals.
 - Seed source for `name_variant` list (public genealogy variant tables).
+- Re-run the row-rule detection spike at 300 DPI before committing to VLM-reported bands.
+- Resolve the ~70 letter-suffixed dossiers whose image paths do not follow the rule.
