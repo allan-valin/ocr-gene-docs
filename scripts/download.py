@@ -59,14 +59,21 @@ def http_probe(url: str) -> bool:
 def _candidate_folders(e: Entry) -> list[Entry]:
     """Folder identities to try, most specific first.
 
-    A letter-suffixed index is catalogued separately from the plain one, but
-    ~1% of them have no lettered path on the image server. Try the lettered
-    path first so we never mistake one dossier for another, then fall back.
+    A letter-suffixed index is usually a *catalog stub*: the record exists in
+    the finding aid, but the images sit under a different notation, named in
+    the entry as "ver BR RJANRIO BS.0.RPV, ENT.20445". Follow that reference.
+
+    Critically, we never reach the real dossier by stripping the letter. The
+    unlettered index is a different dossier with a different ship, and taking
+    its images would file the wrong scans under this record — the one failure
+    a legal-evidence corpus cannot absorb. If neither the lettered path nor a
+    stated cross-reference resolves, the dossier is reported unresolved.
     """
-    if e.index.isdigit():
-        return [e]
-    plain = e.index.rstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-    return [e, Entry(e.fundo, e.series, plain, e.ship, e.rv, e.source)]
+    candidates = [e]
+    if e.see_also:
+        fundo, series, index = e.see_also
+        candidates.append(Entry(fundo, series, index, e.ship, e.rv, e.source))
+    return candidates
 
 
 def resolve_parts(
@@ -85,6 +92,25 @@ def resolve_parts(
                     for n in range(1, total + 1)
                 ]
     return []
+
+
+def entry_from_row(row: dict) -> Entry:
+    """Build an Entry from a catalog row, carrying every field across.
+
+    Constructing this positionally once dropped `see_also` silently, which sent
+    a cross-referenced dossier to the unresolved pile instead of following its
+    reference. Keep it in one place so a new catalog field cannot go missing.
+    """
+    see = row.get("see_also")
+    return Entry(
+        fundo=row["fundo"],
+        series=row["series"],
+        index=row["index"],
+        ship=row.get("ship"),
+        rv=row.get("rv"),
+        source=row.get("source"),
+        see_also=tuple(see) if see else None,
+    )
 
 
 def sample_per_source(rows: list[dict], n: int, seed: int) -> list[dict]:
@@ -135,10 +161,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with manifest_path.open("a", encoding="utf-8") as mf:
         for i, row in enumerate(picked, 1):
-            e = Entry(
-                row["fundo"], row["series"], row["index"],
-                row.get("ship"), row.get("rv"), row.get("source"),
-            )
+            e = entry_from_row(row)
             tag = f"{e.fundo}.{e.series}.{e.index}"
             if e.index in done:
                 skipped += 1

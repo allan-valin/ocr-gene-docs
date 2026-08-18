@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Desembarque — review prototype</title>
+<style>
+  :root{
+    --bg:#f6f4ef; --panel:#fffdf8; --ink:#2b2722; --muted:#7a7167; --line:#ded6c8;
+    --accent:#8c5a2b; --accent-soft:#f0e3d2; --ok:#3f7d4f; --warn:#b8860b; --bad:#a4453a;
+    --focus:#c9853f;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+    --bg:#191715; --panel:#221f1c; --ink:#ece5da; --muted:#9c9287; --line:#3a352f;
+    --accent:#d79a5b; --accent-soft:#33291f; --ok:#7fb98c; --warn:#d9b45c; --bad:#e08a7e;
+  }}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+       background:var(--bg);color:var(--ink);height:100vh;display:flex;flex-direction:column}
+  header{display:flex;gap:14px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);
+         background:var(--panel);flex-wrap:wrap}
+  h1{font-size:14px;margin:0;font-weight:650;letter-spacing:.01em}
+  .meta{color:var(--muted);font-size:12px}
+  .meta b{color:var(--ink);font-weight:600}
+  .spacer{flex:1}
+  button,.toggle{font:inherit;font-size:12px;padding:5px 10px;border:1px solid var(--line);
+    border-radius:7px;background:var(--panel);color:var(--ink);cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  #find{display:flex;align-items:center;gap:6px}
+  #findq{font:inherit;font-size:12px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;
+    background:var(--bg);color:var(--ink);width:190px}
+  #findq:focus{outline:2px solid var(--focus);outline-offset:1px}
+  #findcount{font-size:11px;color:var(--muted);min-width:62px;font-variant-numeric:tabular-nums}
+  main{flex:1;display:grid;grid-template-columns:1fr 1fr;min-height:0}
+  @media (max-width:860px){main{grid-template-columns:1fr;grid-template-rows:40vh 1fr}}
+  .pane{overflow:auto;position:relative;min-height:0}
+  #scanPane{background:#0e0d0c;border-right:1px solid var(--line)}
+  #scanInner{position:relative;width:100%}
+  #scan{display:block;width:100%;height:auto}
+  #bandBox{position:absolute;left:0;right:0;border-top:1px solid var(--focus);
+    border-bottom:1px solid var(--focus);background:rgba(201,133,63,.16);pointer-events:none;
+    transition:top .12s ease,height .12s ease}
+  #nameBox{position:absolute;border:1.5px solid var(--focus);border-radius:2px;
+    box-shadow:0 0 0 9999px rgba(0,0,0,.42);pointer-events:none;transition:all .12s ease}
+  #rowPane{background:var(--panel)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  thead th{position:sticky;top:0;background:var(--panel);border-bottom:1.5px solid var(--line);
+    text-align:left;padding:7px 6px;font-weight:600;font-size:11px;letter-spacing:.03em;
+    text-transform:uppercase;color:var(--muted);z-index:2}
+  tbody tr{border-bottom:1px solid var(--line);cursor:pointer}
+  tbody tr:hover{background:var(--accent-soft)}
+  tbody tr.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+  tbody tr.verified{opacity:.72}
+  td{padding:5px 6px;vertical-align:top}
+  td[contenteditable]:focus{outline:2px solid var(--focus);outline-offset:-2px;background:var(--bg)}
+  .num{color:var(--muted);font-variant-numeric:tabular-nums;width:26px}
+  .name{font-weight:600}
+  .lo{background:linear-gradient(transparent 62%,rgba(164,69,58,.28) 62%)}
+  .mid{background:linear-gradient(transparent 62%,rgba(184,134,11,.24) 62%)}
+  .null{color:var(--bad);font-style:italic;opacity:.75}
+  .ditto{color:var(--muted);border-bottom:1px dotted var(--muted)}
+  .hw{border-left:2px solid var(--warn);padding-left:4px}
+  mark{background:var(--focus);color:#fff;border-radius:2px;padding:0 1px}
+  tr.hit{box-shadow:inset 3px 0 0 var(--focus)}
+  .v{width:22px;text-align:center;color:var(--muted)}
+  tr.verified .v{color:var(--ok)}
+  footer{padding:6px 14px;border-top:1px solid var(--line);background:var(--panel);
+    font-size:11px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+  kbd{font:inherit;font-size:10px;border:1px solid var(--line);border-bottom-width:2px;
+    border-radius:4px;padding:0 4px;background:var(--bg)}
+  .warnbar{background:var(--accent-soft);color:var(--accent);padding:5px 14px;font-size:11.5px;
+    border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="warnbar" id="warn"></div>
+<header>
+  <h1>Desembarque</h1>
+  <span class="meta" id="docmeta"></span>
+  <span class="spacer"></span>
+  <div id="find">
+    <input id="findq" placeholder="Find in document…  (Ctrl+F)" autocomplete="off" spellcheck="false">
+    <span id="findcount"></span>
+    <button id="prev" title="Previous (Shift+Enter)">↑</button>
+    <button id="next" title="Next (Enter)">↓</button>
+  </div>
+  <button id="lock" aria-pressed="true" title="Lock the two panes together">⇅ Sync</button>
+  <button id="crop" aria-pressed="false" title="Isolate the name column">Name column</button>
+</header>
+<main>
+  <div class="pane" id="scanPane">
+    <div id="scanInner">
+      <img id="scan" alt="Original manifest scan">
+      <div id="bandBox" hidden></div>
+      <div id="nameBox" hidden></div>
+    </div>
+  </div>
+  <div class="pane" id="rowPane">
+    <table>
+      <thead><tr>
+        <th class="num">#</th><th>Nome e Cognomes</th><th>Nacionalidade</th>
+        <th>Id.</th><th>S</th><th>Estado</th><th>Profissão</th><th>Procedência</th><th class="v">✓</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+<footer>
+  <span><kbd>Ctrl</kbd>+<kbd>F</kbd> find</span>
+  <span><kbd>Enter</kbd>/<kbd>Shift</kbd>+<kbd>Enter</kbd> next/prev match</span>
+  <span><kbd>↑</kbd><kbd>↓</kbd> rows</span>
+  <span><kbd>V</kbd> verify</span>
+  <span><kbd>Esc</kbd> close find</span>
+  <span id="stat"></span>
+</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+let D=null, rows=[], sel=0, hits=[], hitAt=-1, syncing=false;
+
+// ---- fuzzy matching, standing in for the pg_trgm + phonetic + variant search ----
+const fold = s => (s||"").toString().normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const VARIANTS = {joao:["giovanni","juan","jean","john"], guilherme:["wilhelm","william"],
+  jose:["giuseppe","josef"], maria:["marie"], antonio:["anton","antoine"], pedro:["pietro","peter"],
+  joan:["joao"], manuel:["manoel"]};
+function expand(q){
+  const f=fold(q), out=new Set([f]);
+  for(const [k,v] of Object.entries(VARIANTS)){
+    if(k===f) v.forEach(x=>out.add(x));
+    if(v.includes(f)){ out.add(k); v.forEach(x=>out.add(x)); }
+  }
+  return [...out];
+}
+// trigram similarity, the same shape pg_trgm uses
+function tri(s){const p="  "+s+" ",g=new Set();for(let i=0;i<p.length-2;i++)g.add(p.slice(i,i+3));return g;}
+function sim(a,b){
+  const A=tri(a),B=tri(b); let n=0; for(const g of A) if(B.has(g)) n++;
+  return n/(A.size+B.size-n);
+}
+function rowMatches(r,q){
+  if(!q) return false;
+  const terms=expand(q);
+  const hay=[r.given,r.surname,r.nationality,r.occupation,r.origin,r.notes].map(fold);
+  for(const t of terms){
+    for(const h of hay){
+      if(!h) continue;
+      if(h.includes(t)) return true;
+      for(const w of h.split(/\s+/)) if(w.length>2 && sim(w,t)>0.42) return true;
+    }
+  }
+  return false;
+}
+
+// ---- rendering ----
+function conf(r,f){const c=r.conf&&r.conf[f];return c==null?"":c<0.5?"lo":c<0.8?"mid":"";}
+function cell(r,f,txt){
+  const isNull = txt==null;
+  const d = r.ditto&&r.ditto.includes(f);
+  const cls = [conf(r,f), isNull?"null":"", d?"ditto":""].filter(Boolean).join(" ");
+  const val = isNull ? "ilegível" : txt;
+  const title = isNull ? "unreadable — recorded as null, never guessed"
+              : d ? 'written as a ditto mark (") — resolved from the row above' : "";
+  return `<td contenteditable="true" data-f="${f}" class="${cls}" title="${title}">${val}</td>`;
+}
+function render(){
+  $("#rows").innerHTML = rows.map((r,i)=>`
+    <tr data-i="${i}" class="${r.verified?"verified":""}">
+      <td class="num">${r.n}</td>
+      <td class="name ${conf(r,'surname')} ${r.handwritten?'hw':''}" contenteditable="true" data-f="name"
+          title="${r.handwritten?'handwritten entry':''}">${r.given} ${r.surname}</td>
+      ${cell(r,"nationality",r.nationality)}
+      ${cell(r,"age",r.age)}
+      <td>${r.sex||""}</td>
+      <td>${r.status||""}</td>
+      ${cell(r,"occupation",r.occupation)}
+      ${cell(r,"origin",r.origin)}
+      <td class="v" data-v="1" title="Mark verified (V)">${r.verified?"✓":"○"}</td>
+    </tr>`).join("");
+  select(sel,false);
+  stat();
+}
+function stat(){
+  const v=rows.filter(r=>r.verified).length;
+  const lo=rows.filter(r=>Object.values(r.conf||{}).some(c=>c!=null&&c<0.5)).length;
+  $("#stat").textContent=`${v}/${rows.length} verified · ${lo} rows with a low-confidence field`;
+}
+
+// ---- geometry: band for row i ----
+function band(i){
+  const g=D.geometry;
+  const top=g.first_row_top + i*g.row_pitch;
+  return [top, top+g.row_height];
+}
+function paintBand(i){
+  const img=$("#scan"); if(!img.clientHeight) return;
+  const [t,b]=band(i), H=img.clientHeight, W=img.clientWidth;
+  const bb=$("#bandBox"); bb.hidden=false;
+  bb.style.top=(t*H)+"px"; bb.style.height=((b-t)*H)+"px";
+  const nb=$("#nameBox");
+  if($("#crop").getAttribute("aria-pressed")==="true"){
+    const [x0,x1]=D.geometry.name_column;
+    nb.hidden=false; nb.style.top=(t*H)+"px"; nb.style.height=((b-t)*H)+"px";
+    nb.style.left=(x0*W)+"px"; nb.style.width=((x1-x0)*W)+"px";
+  } else nb.hidden=true;
+}
+
+// ---- selection + synchronized scrolling ----
+function select(i,scroll=true){
+  if(i<0||i>=rows.length) return;
+  sel=i;
+  document.querySelectorAll("#rows tr").forEach(tr=>tr.classList.toggle("sel",+tr.dataset.i===i));
+  paintBand(i);
+  const tr=document.querySelector(`#rows tr[data-i="${i}"]`);
+  if(scroll&&tr) tr.scrollIntoView({block:"nearest"});
+  if(locked()) scanToRow(i);
+}
+const locked = ()=>$("#lock").getAttribute("aria-pressed")==="true";
+function scanToRow(i){
+  const pane=$("#scanPane"), img=$("#scan");
+  if(!img.clientHeight) return;
+  const [t,b]=band(i);
+  const centre=((t+b)/2)*img.clientHeight;
+  syncing=true;
+  pane.scrollTo({top: centre - pane.clientHeight/2, behavior:"smooth"});
+  setTimeout(()=>syncing=false,220);
+}
+// rows pane -> scan pane, continuous (not just on selection)
+$("#rowPane").addEventListener("scroll",()=>{
+  if(!locked()||syncing) return;
+  const pane=$("#rowPane");
+  const max=pane.scrollHeight-pane.clientHeight;
+  const frac = max>0 ? pane.scrollTop/max : 0;
+  const first=D.geometry.first_row_top, last=first+(rows.length-1)*D.geometry.row_pitch;
+  const y = first + frac*(last-first);
+  const sp=$("#scanPane"), img=$("#scan");
+  syncing=true;
+  sp.scrollTop = y*img.clientHeight - sp.clientHeight*0.35;
+  requestAnimationFrame(()=>syncing=false);
+});
+// scan pane -> rows pane
+$("#scanPane").addEventListener("scroll",()=>{
+  if(!locked()||syncing) return;
+  const sp=$("#scanPane"), img=$("#scan");
+  if(!img.clientHeight) return;
+  const y=(sp.scrollTop+sp.clientHeight*0.35)/img.clientHeight;
+  const g=D.geometry;
+  const idx=Math.round((y-g.first_row_top)/g.row_pitch);
+  const tr=document.querySelector(`#rows tr[data-i="${Math.max(0,Math.min(rows.length-1,idx))}"]`);
+  if(tr){ syncing=true; tr.scrollIntoView({block:"center"}); requestAnimationFrame(()=>syncing=false); }
+});
+
+// ---- find ----
+function runFind(){
+  const q=$("#findq").value.trim();
+  document.querySelectorAll("#rows tr").forEach(tr=>tr.classList.remove("hit"));
+  hits = q ? rows.map((r,i)=>rowMatches(r,q)?i:-1).filter(i=>i>=0) : [];
+  hitAt = hits.length?0:-1;
+  $("#findcount").textContent = q ? (hits.length? `1/${hits.length}` : "no match") : "";
+  hits.forEach(i=>document.querySelector(`#rows tr[data-i="${i}"]`)?.classList.add("hit"));
+  if(hits.length) select(hits[0]);
+}
+function step(d){
+  if(!hits.length) return;
+  hitAt=(hitAt+d+hits.length)%hits.length;
+  $("#findcount").textContent=`${hitAt+1}/${hits.length}`;
+  select(hits[hitAt]);
+}
+$("#findq").addEventListener("input",runFind);
+$("#next").onclick=()=>step(1); $("#prev").onclick=()=>step(-1);
+$("#findq").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){e.preventDefault();step(e.shiftKey?-1:1);}
+  if(e.key==="Escape"){$("#findq").value="";runFind();$("#findq").blur();}
+});
+
+// Ctrl/Cmd+F is intercepted: native find cannot see the scan, and would miss
+// rows once this list is virtualized. Shift+Ctrl+F falls through to the browser.
+addEventListener("keydown",e=>{
+  const typing=e.target.isContentEditable||e.target.tagName==="INPUT";
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="f"&&!e.shiftKey){
+    e.preventDefault();$("#findq").focus();$("#findq").select();return;
+  }
+  if(typing) return;
+  if(e.key==="ArrowDown"){e.preventDefault();select(sel+1);}
+  if(e.key==="ArrowUp"){e.preventDefault();select(sel-1);}
+  if(e.key.toLowerCase()==="v"){rows[sel].verified=!rows[sel].verified;render();}
+});
+
+// ---- editing ----
+$("#rows").addEventListener("click",e=>{
+  const tr=e.target.closest("tr"); if(!tr) return;
+  if(e.target.dataset.v){ rows[+tr.dataset.i].verified=!rows[+tr.dataset.i].verified; render(); return; }
+  select(+tr.dataset.i);
+});
+$("#rows").addEventListener("input",e=>{
+  const f=e.target.dataset.f; if(!f) return;
+  const r=rows[+e.target.closest("tr").dataset.i];
+  r.edits=r.edits||[]; r.edits.push({field:f,to:e.target.textContent,at:new Date().toISOString()});
+  e.target.classList.remove("lo","mid","null");
+});
+$("#lock").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",String(b.getAttribute("aria-pressed")!=="true"));};
+$("#crop").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",String(b.getAttribute("aria-pressed")!=="true"));paintBand(sel);};
+addEventListener("resize",()=>paintBand(sel));
+
+// ---- boot ----
+fetch("data.json").then(r=>r.json()).then(d=>{
+  D=d; rows=d.rows.map(r=>({...r,verified:false}));
+  $("#scan").src=d.image;
+  $("#scan").onload=()=>{paintBand(0);};
+  const m=d.document;
+  $("#docmeta").innerHTML=`<b>${m.ship}</b> · ${m.line} · ${m.origin} → ${m.port} · ${m.arrival} · <span title="archive notation">${m.notation}</span>`;
+  $("#warn").textContent="Prototype. "+d.geometry.note;
+  render();
+}).catch(e=>{
+  $("#warn").textContent="Could not load data.json — run scripts/make_prototype.py first. ("+e+")";
+});
+</script>
+</body>
+</html>

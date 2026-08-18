@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from download import resolve_parts, sample_per_source
+from download import entry_from_row, resolve_parts, sample_per_source
 from parse_index import Entry
 
 
@@ -34,12 +34,27 @@ def test_discovers_multi_file_dossier_and_returns_every_part():
     assert urls[-1].endswith("d0003de0003.pdf")
 
 
-def test_falls_back_to_unlettered_path_when_lettered_is_absent():
-    # 014222A is catalogued but only 014222 exists on the image server.
-    e = Entry("BS", "ENT", "14222A", "x", None)
-    urls = resolve_parts(e, probe=fake_archive("014222_d0001de0001"))
+def test_follows_the_cross_reference_when_the_lettered_path_is_absent():
+    """A lettered dossier is a catalog stub pointing at the real one.
+
+    14222A is "s. paulo. ver ... ent. 20445": the images live under 020445.
+    """
+    e = Entry("BS", "ENT", "14222A", "s. paulo", None, see_also=("BS", "ENT", "20445"))
+    urls = resolve_parts(e, probe=fake_archive("020445_d0001de0001"))
     assert len(urls) == 1
-    assert "/ENT/014222/" in urls[0]
+    assert "/ENT/020445/" in urls[0]
+
+
+def test_never_strips_the_letter_to_reach_a_different_dossier():
+    """014222 exists but is a DIFFERENT dossier; taking it would misattribute a ship."""
+    e = Entry("BS", "ENT", "14222A", "s. paulo", None, see_also=("BS", "ENT", "20445"))
+    urls = resolve_parts(e, probe=fake_archive("014222_d0001de0001"))
+    assert urls == []
+
+
+def test_lettered_dossier_without_a_cross_reference_is_left_unresolved():
+    e = Entry("BS", "ENT", "14999A", "x", None, see_also=None)
+    assert resolve_parts(e, probe=fake_archive("014999_d0001de0001")) == []
 
 
 def test_prefers_lettered_path_when_it_does_exist():
@@ -65,6 +80,24 @@ def test_unlettered_fallback_is_not_tried_for_plain_indices():
 
     resolve_parts(Entry("BS", "ENT", "14222", "x", None), probe=probe)
     assert all("/ENT/014222/" in u for u in seen)
+
+
+def test_entry_from_row_carries_the_cross_reference():
+    """Dropping see_also here sends a resolvable dossier to the unresolved pile."""
+    row = {
+        "fundo": "OL", "series": "PRJ", "index": "18792A", "ship": "vandyck",
+        "rv": "230", "source": "RJ/p28.pdf", "see_also": ["OL", "PRJ", "18784"],
+    }
+    e = entry_from_row(row)
+    assert e.see_also == ("OL", "PRJ", "18784")
+    assert e.ship == "vandyck"
+    assert e.source == "RJ/p28.pdf"
+
+
+def test_entry_from_row_handles_a_row_without_a_cross_reference():
+    e = entry_from_row({"fundo": "BS", "series": "ENT", "index": "13936", "ship": "itaquera"})
+    assert e.see_also is None
+    assert e.rv is None
 
 
 def test_samples_n_per_source_page():

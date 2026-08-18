@@ -96,6 +96,81 @@ def test_multi_file_index_numbers_every_part():
     assert urls[1].endswith("_d0002de0002.pdf")
 
 
+def test_splits_archival_note_off_the_ship_name():
+    lines = [
+        "  • BR RJANRIO BS.0.RPV, ENT.14744A - relação de passageiros do vapor gelria. "
+        "notação atribuída fora da ordem cronológica. ver br an,rio bs.0.rpv,ent.14750 - Dossiê"
+    ]
+    (e,) = parse_lines(lines)
+    assert e.ship == "gelria"
+    assert e.see_also == ("BS", "ENT", "14750")
+
+
+def test_extracts_cross_reference_with_spaced_notation():
+    lines = [
+        "  • BR RJANRIO BS.0.RPV, ENT.14222A - relação de passageiros do vapor s. paulo. "
+        "ver br rjanrio bs.0.rpv, ent. 20445 - Dossiê"
+    ]
+    (e,) = parse_lines(lines)
+    assert e.ship == "s. paulo"
+    assert e.see_also == ("BS", "ENT", "20445")
+
+
+def test_extracts_cross_reference_across_series():
+    lines = [
+        "  • BR RJANRIO OL.0.RPV, PRJ.18792A - relação de passageiros do vapor vandyck  - "
+        "notação atribuída fora da ordem cronológica. ver br an,rio ol.0.rpv, prj.18784 - Dossiê"
+    ]
+    (e,) = parse_lines(lines)
+    assert e.ship == "vandyck"
+    assert e.see_also == ("OL", "PRJ", "18784")
+
+
+def test_strips_a_note_whose_encoding_pdftotext_mangled():
+    """The Rio pages carry double-corrupted UTF-8 that cannot be round-tripped."""
+    lines = [
+        "  • BR RJANRIO OL.0.RPV, PRJ.15942A - relação de passageiros do vapor samara "
+        "(rv 195) - notaÃ§Ã£o atribuÃda fora da ordem cronolÃ3gica - Dossiê"
+    ]
+    (e,) = parse_lines(lines)
+    assert e.ship == "samara"
+
+
+def test_strips_a_trailing_provenance_note():
+    lines = [
+        "  • BR RJANRIO BS.0.RPV, ENT.16997 - relação de passageiros do vapor formosa . "
+        "procedência: gênova - requisição da listagem para inquérito administrativo - Dossiê"
+    ]
+    (e,) = parse_lines(lines)
+    assert e.ship == "formosa"
+
+
+def test_strips_a_bare_chronology_note():
+    lines = [
+        "  • BR RJANRIO BS.0.RPV, ENT.15000 - relação de passageiros do vapor "
+        "principe di udine  - fora da ordem cronológica - Dossiê"
+    ]
+    (e,) = parse_lines(lines)
+    assert e.ship == "principe di udine"
+
+
+def test_strips_a_mangled_level_marker_and_repairs_the_ship_name():
+    lines = [
+        "  • BR RJANRIO BS.0.RPV, ENT.15100 - relação de passageiros do vapor "
+        "florianÃ3polis  - DossiÃa"
+    ]
+    (e,) = parse_lines(lines)
+    assert e.ship == "florianópolis"
+
+
+def test_plain_entry_has_no_cross_reference():
+    lines = [
+        "  • BR RJANRIO BS.0.RPV, ENT.13936 - relação de passageiros do vapor itaquera. - Dossiê"
+    ]
+    (e,) = parse_lines(lines)
+    assert e.see_also is None
+
+
 def test_records_source_index_page():
     lines = [
         "  • BR RJANRIO BS.0.RPV, ENT.13936 - relação de passageiros do vapor itaquera. - Dossiê"

@@ -26,6 +26,22 @@ ENTRY_RE = re.compile(
     r"(?P<series>[A-Z]{3})\.(?P<index>\d+[A-Z]?)\s*-\s*(?P<rest>.*)"
 )
 SHIP_RE = re.compile(r"vapor\s+(?P<ship>.+?)\s*$", re.IGNORECASE)
+# Lettered dossiers are catalog stubs whose images live under another notation:
+# "ver br rjanrio bs.0.rpv, ent. 20445" / "ver br an,rio ol.0.rpv, prj.18784"
+SEE_ALSO_RE = re.compile(
+    r"ver\s+br\s*[a-z.,\s]*?rio\s*([a-z]{2})\.0\.rpv\s*,\s*([a-z]{3})\.?\s*(\d+[a-z]?)",
+    re.IGNORECASE,
+)
+# Archival annotations that follow the ship name. Matched in a
+# mojibake-tolerant way: pdftotext mangles the UTF-8 continuation bytes in the
+# Rio pages ("notação" -> "notaÃ§Ã£o", "cronológica" -> "cronolÃ3gica"), and
+# those cannot be repaired by a latin-1 round-trip, so the pattern has to
+# survive both spellings.
+NOTE_RE = re.compile(
+    r"\s*[-.]?\s*(nota\S*\s+atribu|nota[çc][ãa]o\b|ver\s+br\b|requisi\S*\s+da\s+listagem"
+    r"|procedência\s*:|fora\s+da\s+ordem).*$",
+    re.IGNORECASE,
+)
 RV_RE = re.compile(r"\(\s*rv\s*(?P<rv>[\w\s]+?)\s*\)", re.IGNORECASE)
 # page furniture from the saved browser print
 CHROME_RE = re.compile(r"^\s*(\d+\s+of\s+\d+|Arquivo Nacional\b|https?://)")
@@ -42,6 +58,7 @@ class Entry:
     ship: str | None
     rv: str | None
     source: str | None = None  # which saved index page this row came from
+    see_also: tuple[str, str, str] | None = None  # (fundo, series, index) of the real dossier
 
 
 def fix_mojibake(s: str) -> str:
@@ -55,23 +72,37 @@ def fix_mojibake(s: str) -> str:
             s = s.encode("latin-1").decode("utf-8")
         except (UnicodeEncodeError, UnicodeDecodeError):
             pass
+    # pdftotext turns some UTF-8 continuation bytes into look-alike ASCII before
+    # we ever see them, so a latin-1 round-trip cannot recover these. Repair the
+    # cases where the replacement is unambiguous.
+    for bad, good in (("Ã3", "ó"), ("Ã©", "é"), ("Ã¡", "á"), ("Ãª", "ê")):
+        s = s.replace(bad, good)
     # NFKC maps ﬁ/ﬂ/ﬀ to their component letters, leaving accents intact.
     return unicodedata.normalize("NFKC", s)
 
 
-def _clean_title(rest: str) -> tuple[str | None, str | None]:
+def _clean_title(rest: str) -> tuple[str | None, str | None, tuple[str, str, str] | None]:
     rest = fix_mojibake(rest)
     rv_m = RV_RE.search(rest)
     rv = rv_m.group("rv").strip() if rv_m else None
     rest = RV_RE.sub("", rest)
     # drop the trailing level marker ("- Dossiê", "- Item") and stray dashes
-    rest = re.sub(r"[-–]\s*(Dossiê|Dossie|Item|Série|Serie)\s*$", "", rest, flags=re.I)
+    # the level marker is mojibake-prone too ("Dossiê" -> "DossiÃa")
+    rest = re.sub(r"[-–]\s*(Dossi\S*|Item|S[ée]rie\S*)\s*$", "", rest, flags=re.I)
     rest = rest.strip().strip("-").strip()
+    see_m = SEE_ALSO_RE.search(rest)
+    see_also = (
+        (see_m.group(1).upper(), see_m.group(2).upper(), see_m.group(3).upper())
+        if see_m
+        else None
+    )
+    # strip the archival annotation so it does not end up inside the ship name
+    rest = NOTE_RE.sub("", rest).strip().strip("-").strip()
     ship_m = SHIP_RE.search(rest)
     if not ship_m:
-        return None, rv
+        return None, rv, see_also
     ship = ship_m.group("ship").strip().rstrip(".").strip()
-    return (ship or None), rv
+    return (ship or None), rv, see_also
 
 
 def parse_lines(lines: list[str], source: str | None = None) -> list[Entry]:
@@ -83,7 +114,7 @@ def parse_lines(lines: list[str], source: str | None = None) -> list[Entry]:
         nonlocal pending
         if pending is None:
             return
-        ship, rv = _clean_title(pending["rest"])
+        ship, rv, see_also = _clean_title(pending["rest"])
         entries.append(
             Entry(
                 fundo=pending["fundo"],
@@ -92,6 +123,7 @@ def parse_lines(lines: list[str], source: str | None = None) -> list[Entry]:
                 ship=ship,
                 rv=rv,
                 source=source,
+                see_also=see_also,
             )
         )
         pending = None
