@@ -19,20 +19,41 @@
   header{display:flex;gap:14px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);
          background:var(--panel);flex-wrap:wrap}
   h1{font-size:14px;margin:0;font-weight:650;letter-spacing:.01em}
-  .meta{color:var(--muted);font-size:12px}
+  .meta{color:var(--muted);font-size:12px;min-width:0;overflow:hidden;
+        text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
   .meta b{color:var(--ink);font-weight:600}
-  .spacer{flex:1}
+  .spacer{flex:0 0 0}
   button,.toggle{font:inherit;font-size:12px;padding:5px 10px;border:1px solid var(--line);
     border-radius:7px;background:var(--panel);color:var(--ink);cursor:pointer}
   button:hover{border-color:var(--accent)}
   button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
   #find{display:flex;align-items:center;gap:6px}
   #findq{font:inherit;font-size:12px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;
-    background:var(--bg);color:var(--ink);width:190px}
+    background:var(--bg);color:var(--ink);width:170px;min-width:110px}
+  #find{flex:0 1 auto}
   #findq:focus{outline:2px solid var(--focus);outline-offset:1px}
+  #scope{font:inherit;font-size:11px;padding:5px 6px;border:1px solid var(--line);
+    border-radius:7px;background:var(--panel);color:var(--ink)}
   #findcount{font-size:11px;color:var(--muted);min-width:62px;font-variant-numeric:tabular-nums}
-  main{flex:1;display:grid;grid-template-columns:1fr 1fr;min-height:0}
-  @media (max-width:860px){main{grid-template-columns:1fr;grid-template-rows:40vh 1fr}}
+  main{flex:1;display:grid;grid-template-columns:230px 1fr 1fr;min-height:0}
+  main.nosidebar{grid-template-columns:0 1fr 1fr}
+  @media (max-width:980px){main{grid-template-columns:0 1fr 1fr}}
+  #sidebar{overflow:auto;border-right:1px solid var(--line);background:var(--panel);min-width:0}
+  main.nosidebar #sidebar{display:none}
+  .doc{padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px}
+  .doc:hover{background:var(--accent-soft)}
+  .doc.on{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+  .doc b{display:block;font-weight:600;text-transform:capitalize}
+  .doc span{color:var(--muted);font-size:10.5px;font-variant-numeric:tabular-nums}
+  .doc .badge{display:inline-block;margin-top:3px;padding:0 5px;border-radius:99px;font-size:9.5px;
+    background:var(--ok);color:#fff;letter-spacing:.02em}
+  .sidehead{position:sticky;top:0;background:var(--panel);border-bottom:1.5px solid var(--line);
+    padding:7px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);z-index:2}
+  #pagestrip{display:flex;gap:4px;padding:6px;border-bottom:1px solid var(--line);
+    background:var(--panel);position:sticky;top:0;z-index:3;flex-wrap:wrap}
+  #pagestrip button{padding:3px 9px;font-size:11px}
+  .empty{padding:26px 18px;color:var(--muted);font-size:12.5px;line-height:1.6}
+  .empty b{color:var(--ink)}
   .pane{overflow:auto;position:relative;min-height:0}
   #scanPane{background:#0e0d0c;border-right:1px solid var(--line)}
   #scanInner{position:relative;width:100%}
@@ -55,10 +76,13 @@
   td[contenteditable]:focus{outline:2px solid var(--focus);outline-offset:-2px;background:var(--bg)}
   .num{color:var(--muted);font-variant-numeric:tabular-nums;width:26px}
   .name{font-weight:600}
-  .lo{background:linear-gradient(transparent 62%,rgba(164,69,58,.28) 62%)}
-  .mid{background:linear-gradient(transparent 62%,rgba(184,134,11,.24) 62%)}
+  /* uncertainty marks the text, not the cell: a wavy underline reads as
+     "check this" without turning the table into a heat map */
+  .lo{text-decoration:underline wavy var(--bad);text-underline-offset:3px;text-decoration-thickness:1px}
+  .mid{text-decoration:underline wavy var(--warn);text-underline-offset:3px;text-decoration-thickness:1px}
   .null{color:var(--bad);font-style:italic;opacity:.75}
-  .ditto{color:var(--muted);border-bottom:1px dotted var(--muted)}
+  .ditto{color:var(--muted)}
+  .ditto::before{content:"❝ ";font-size:9px;vertical-align:2px;opacity:.6}
   .hw{border-left:2px solid var(--warn);padding-left:4px}
   mark{background:var(--focus);color:#fff;border-radius:2px;padding:0 1px}
   tr.hit{box-shadow:inset 3px 0 0 var(--focus)}
@@ -79,44 +103,63 @@
   <span class="meta" id="docmeta"></span>
   <span class="spacer"></span>
   <div id="find">
-    <input id="findq" placeholder="Find in document…  (Ctrl+F)" autocomplete="off" spellcheck="false">
+    <input id="findq" placeholder="Buscar no documento…  (Ctrl+F)" autocomplete="off" spellcheck="false">
+    <select id="scope" title="Coluna a pesquisar">
+      <option value="name" selected>Nome</option>
+      <option value="nationality">Nacionalidade</option>
+      <option value="age">Idade</option>
+      <option value="sex">Sexo</option>
+      <option value="status">Estado civil</option>
+      <option value="occupation">Profissão</option>
+      <option value="origin">Procedência</option>
+      <option value="notes">Observações</option>
+      <option value="all">Todas as colunas</option>
+    </select>
     <span id="findcount"></span>
-    <button id="prev" title="Previous (Shift+Enter)">↑</button>
-    <button id="next" title="Next (Enter)">↓</button>
+    <button id="prev" title="Anterior (Shift+Enter)">↑</button>
+    <button id="next" title="Próximo (Enter)">↓</button>
   </div>
-  <button id="lock" aria-pressed="true" title="Lock the two panes together">⇅ Sync</button>
-  <button id="crop" aria-pressed="false" title="Isolate the name column">Name column</button>
+  <button id="side" aria-pressed="true" title="Mostrar ou ocultar a lista de documentos">☰</button>
+  <button id="lock" aria-pressed="true" title="Travar os dois painéis juntos">⇅ Sincronizar</button>
+  <button id="crop" aria-pressed="false" title="Isolar a coluna do nome">Coluna do nome</button>
 </header>
-<main>
+<main id="main">
+  <div id="sidebar">
+    <div class="sidehead" id="sidehead">Documentos</div>
+    <div id="doclist"></div>
+  </div>
   <div class="pane" id="scanPane">
     <div id="scanInner">
-      <img id="scan" alt="Original manifest scan">
+      <img id="scan" alt="Digitalização original da relação de passageiros">
       <div id="bandBox" hidden></div>
       <div id="nameBox" hidden></div>
     </div>
   </div>
   <div class="pane" id="rowPane">
-    <table>
+    <div id="pagestrip"></div>
+    <div id="empty" class="empty" hidden></div>
+    <table id="tbl">
       <thead><tr>
-        <th class="num">#</th><th>Nome e Cognomes</th><th>Nacionalidade</th>
-        <th>Id.</th><th>S</th><th>Estado</th><th>Profissão</th><th>Procedência</th><th class="v">✓</th>
+        <th class="num">#</th><th>Nome</th><th>Nacionalidade</th>
+        <th>Idade</th><th>Sexo</th><th>Estado civil</th><th>Profissão</th><th>Procedência</th><th class="v">✓</th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
 </main>
 <footer>
-  <span><kbd>Ctrl</kbd>+<kbd>F</kbd> find</span>
-  <span><kbd>Enter</kbd>/<kbd>Shift</kbd>+<kbd>Enter</kbd> next/prev match</span>
-  <span><kbd>↑</kbd><kbd>↓</kbd> rows</span>
-  <span><kbd>V</kbd> verify</span>
-  <span><kbd>Esc</kbd> close find</span>
+  <span><kbd>Ctrl</kbd>+<kbd>F</kbd> buscar</span>
+  <span><kbd>Enter</kbd>/<kbd>Shift</kbd>+<kbd>Enter</kbd> próximo/anterior</span>
+  <span><kbd>↑</kbd><kbd>↓</kbd> linhas</span>
+  <span><kbd>V</kbd> verificar</span>
+  <span><kbd>Esc</kbd> fechar busca</span>
   <span id="stat"></span>
 </footer>
 
+<script id="payload" type="application/json">__DATA__</script>
 <script>
 const $ = s => document.querySelector(s);
-let D=null, rows=[], sel=0, hits=[], hitAt=-1, syncing=false;
+let DB=null, D=null, docIdx=0, pageIdx=0, rows=[], sel=0, hits=[], hitAt=-1, syncing=false;
 
 // ---- fuzzy matching, standing in for the pg_trgm + phonetic + variant search ----
 const fold = s => (s||"").toString().normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
@@ -137,15 +180,35 @@ function sim(a,b){
   const A=tri(a),B=tri(b); let n=0; for(const g of A) if(B.has(g)) n++;
   return n/(A.size+B.size-n);
 }
-function rowMatches(r,q){
+// Search is scoped, and defaults to names only. Searching every field means
+// looking for "Paul" returns every passenger living in São Paulo, which buries
+// the one thing a genealogical search is actually for.
+const SCOPES={
+  name:        r=>[r.given,r.surname],
+  nationality: r=>[r.nationality],
+  age:         r=>[r.age],
+  sex:         r=>[r.sex],
+  status:      r=>[r.status],
+  occupation:  r=>[r.occupation],
+  origin:      r=>[r.origin],
+  notes:       r=>[r.notes],
+  all:         r=>[r.given,r.surname,r.nationality,r.age,r.sex,r.status,r.occupation,r.origin,r.notes],
+};
+function rowMatches(r,q,scope){
   if(!q) return false;
   const terms=expand(q);
-  const hay=[r.given,r.surname,r.nationality,r.occupation,r.origin,r.notes].map(fold);
+  const hay=(SCOPES[scope]||SCOPES.name)(r).map(fold).filter(Boolean);
   for(const t of terms){
     for(const h of hay){
-      if(!h) continue;
-      if(h.includes(t)) return true;
-      for(const w of h.split(/\s+/)) if(w.length>2 && sim(w,t)>0.42) return true;
+      // whole-word or prefix match first; fuzzy only for words of similar length,
+      // so "paul" no longer drags in "paulo" by trigram overlap alone
+      for(const w of h.split(/\s+/)){
+        if(!w) continue;
+        if(w===t || w.startsWith(t) && t.length>=3) return true;
+        // 0.44 keeps the OCR variants that matter (vasquez~vazquez scores .455)
+        // without the scope-crossing noise that motivated scoping in the first place
+        if(w.length>3 && Math.abs(w.length-t.length)<=2 && sim(w,t)>0.44) return true;
+      }
     }
   }
   return false;
@@ -158,8 +221,8 @@ function cell(r,f,txt){
   const d = r.ditto&&r.ditto.includes(f);
   const cls = [conf(r,f), isNull?"null":"", d?"ditto":""].filter(Boolean).join(" ");
   const val = isNull ? "ilegível" : txt;
-  const title = isNull ? "unreadable — recorded as null, never guessed"
-              : d ? 'written as a ditto mark (") — resolved from the row above' : "";
+  const title = isNull ? "ilegível — registrado como nulo, nunca adivinhado"
+              : d ? 'escrito como aspas de repetição (") — resolvido a partir da linha acima' : "";
   return `<td contenteditable="true" data-f="${f}" class="${cls}" title="${title}">${val}</td>`;
 }
 function render(){
@@ -167,23 +230,82 @@ function render(){
     <tr data-i="${i}" class="${r.verified?"verified":""}">
       <td class="num">${r.n}</td>
       <td class="name ${conf(r,'surname')} ${r.handwritten?'hw':''}" contenteditable="true" data-f="name"
-          title="${r.handwritten?'handwritten entry':''}">${r.given} ${r.surname}</td>
+          title="${r.handwritten?'entrada manuscrita':''}">${r.given} ${r.surname}</td>
       ${cell(r,"nationality",r.nationality)}
       ${cell(r,"age",r.age)}
       <td>${r.sex||""}</td>
       <td>${r.status||""}</td>
       ${cell(r,"occupation",r.occupation)}
       ${cell(r,"origin",r.origin)}
-      <td class="v" data-v="1" title="Mark verified (V)">${r.verified?"✓":"○"}</td>
+      <td class="v" data-v="1" title="Marcar como verificado (V)">${r.verified?"✓":"○"}</td>
     </tr>`).join("");
   select(sel,false);
   stat();
 }
 function stat(){
+  if(!rows.length){ $("#stat").textContent="sem transcrição"; return; }
   const v=rows.filter(r=>r.verified).length;
   const lo=rows.filter(r=>Object.values(r.conf||{}).some(c=>c!=null&&c<0.5)).length;
-  $("#stat").textContent=`${v}/${rows.length} verified · ${lo} rows with a low-confidence field`;
+  $("#stat").textContent=`${v}/${rows.length} verificadas · ${lo} linhas com campo de baixa confiança`;
 }
+
+// ---- documents ----
+function renderDocList(){
+  const t=DB.documents.filter(d=>d.rows).length;
+  $("#sidehead").textContent=`${DB.documents.length} documentos · ${t} transcrito${t===1?"":"s"}`;
+  $("#doclist").innerHTML=DB.documents.map((d,i)=>`
+    <div class="doc ${i===docIdx?"on":""}" data-d="${i}">
+      <b>${d.ship}</b>
+      <span>${d.notation} · ${d.total_pages} p.</span>
+      ${d.rows?'<span class="badge">transcrito</span>':""}
+    </div>`).join("");
+}
+function renderPageStrip(){
+  $("#pagestrip").innerHTML = D.pages.map(p=>{
+    const isT = D.transcribed_page===p.n;
+    return `<button data-p="${p.n}" aria-pressed="${p.n===D.pages[pageIdx].n}"
+      title="${isT?'página transcrita':''}">p.${p.n}${isT?" ✓":""}</button>`;
+  }).join("") + (D.total_pages>D.pages.length
+    ? `<span style="align-self:center;color:var(--muted);font-size:11px">
+        de ${D.total_pages} (as demais não foram renderizadas)</span>` : "");
+}
+function openDoc(i,page){
+  docIdx=i; D=DB.documents[i];
+  pageIdx=Math.max(0, D.pages.findIndex(p=>p.n===(page ?? D.transcribed_page ?? D.pages[0].n)));
+  if(pageIdx<0) pageIdx=0;
+  const showRows = !!D.rows && D.pages[pageIdx].n===D.transcribed_page;
+  rows = showRows ? D.rows.map(r=>({...r,verified:false})) : [];
+  sel=0; hits=[]; hitAt=-1;
+  $("#scan").src=D.pages[pageIdx].file;
+  const m=D.meta;
+  $("#docmeta").innerHTML = m
+    ? `<b>${m.ship}</b> · ${m.line} · ${m.origin} → ${m.port} · ${m.arrival} · ${m.notation}`
+    : `<b>${D.ship}</b> · ${D.notation} · página ${D.pages[pageIdx].n} de ${D.total_pages}`;
+  $("#tbl").hidden=!showRows;
+  $("#empty").hidden=showRows;
+  if(!showRows){
+    $("#empty").innerHTML = D.rows
+      ? `<b>Página ${D.pages[pageIdx].n} não transcrita.</b><br>A transcrição de amostra
+         cobre apenas a página ${D.transcribed_page} deste documento.`
+      : `<b>Documento não transcrito.</b><br>Nenhum modelo está conectado ainda, e nada
+         é inventado: a lista de passageiros aparece aqui quando houver transcrição real.
+         Use a página ao lado para conferir o original.`;
+  }
+  renderDocList(); renderPageStrip(); render(); paintBand(0);
+  $("#stat").textContent = showRows ? "" : "sem transcrição";
+}
+$("#doclist").addEventListener("click",e=>{
+  const d=e.target.closest(".doc"); if(d) openDoc(+d.dataset.d);
+});
+$("#pagestrip").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(b) openDoc(docIdx,+b.dataset.p);
+});
+$("#side").onclick=e=>{
+  const b=e.currentTarget, on=b.getAttribute("aria-pressed")!=="true";
+  b.setAttribute("aria-pressed",String(on));
+  $("#main").classList.toggle("nosidebar",!on);
+  paintBand(sel);
+};
 
 // ---- geometry: band for row i ----
 function band(i){
@@ -192,7 +314,10 @@ function band(i){
   return [top, top+g.row_height];
 }
 function paintBand(i){
-  const img=$("#scan"); if(!img.clientHeight) return;
+  const img=$("#scan");
+  if(!img.clientHeight || !D.geometry || !rows.length){
+    $("#bandBox").hidden=true; $("#nameBox").hidden=true; return;
+  }
   const [t,b]=band(i), H=img.clientHeight, W=img.clientWidth;
   const bb=$("#bandBox"); bb.hidden=false;
   bb.style.top=(t*H)+"px"; bb.style.height=((b-t)*H)+"px";
@@ -206,7 +331,7 @@ function paintBand(i){
 
 // ---- selection + synchronized scrolling ----
 function select(i,scroll=true){
-  if(i<0||i>=rows.length) return;
+  if(i<0||i>=rows.length||!rows.length) return;
   sel=i;
   document.querySelectorAll("#rows tr").forEach(tr=>tr.classList.toggle("sel",+tr.dataset.i===i));
   paintBand(i);
@@ -215,45 +340,48 @@ function select(i,scroll=true){
   if(locked()) scanToRow(i);
 }
 const locked = ()=>$("#lock").getAttribute("aria-pressed")==="true";
+// One shared guard, released on the next frame. A timed guard (the first
+// version used 220ms) swallows any scroll the user makes right after clicking
+// a row, which is exactly what someone verifying a page does. Sync scrolling is
+// instant for the same reason: a smooth animation keeps firing scroll events
+// after the guard clears, and the two panes start driving each other.
+function guarded(fn){ syncing=true; fn(); requestAnimationFrame(()=>{syncing=false;}); }
 function scanToRow(i){
   const pane=$("#scanPane"), img=$("#scan");
-  if(!img.clientHeight) return;
+  if(!img.clientHeight || !D.geometry) return;
   const [t,b]=band(i);
   const centre=((t+b)/2)*img.clientHeight;
-  syncing=true;
-  pane.scrollTo({top: centre - pane.clientHeight/2, behavior:"smooth"});
-  setTimeout(()=>syncing=false,220);
+  guarded(()=>{ pane.scrollTop = centre - pane.clientHeight/2; });
 }
 // rows pane -> scan pane, continuous (not just on selection)
 $("#rowPane").addEventListener("scroll",()=>{
-  if(!locked()||syncing) return;
+  if(!locked()||syncing||!D.geometry||!rows.length) return;
   const pane=$("#rowPane");
   const max=pane.scrollHeight-pane.clientHeight;
   const frac = max>0 ? pane.scrollTop/max : 0;
   const first=D.geometry.first_row_top, last=first+(rows.length-1)*D.geometry.row_pitch;
   const y = first + frac*(last-first);
   const sp=$("#scanPane"), img=$("#scan");
-  syncing=true;
-  sp.scrollTop = y*img.clientHeight - sp.clientHeight*0.35;
-  requestAnimationFrame(()=>syncing=false);
+  guarded(()=>{ sp.scrollTop = y*img.clientHeight - sp.clientHeight*0.35; });
 });
 // scan pane -> rows pane
 $("#scanPane").addEventListener("scroll",()=>{
-  if(!locked()||syncing) return;
+  if(!locked()||syncing||!D.geometry||!rows.length) return;
   const sp=$("#scanPane"), img=$("#scan");
   if(!img.clientHeight) return;
   const y=(sp.scrollTop+sp.clientHeight*0.35)/img.clientHeight;
   const g=D.geometry;
   const idx=Math.round((y-g.first_row_top)/g.row_pitch);
   const tr=document.querySelector(`#rows tr[data-i="${Math.max(0,Math.min(rows.length-1,idx))}"]`);
-  if(tr){ syncing=true; tr.scrollIntoView({block:"center"}); requestAnimationFrame(()=>syncing=false); }
+  if(tr) guarded(()=>tr.scrollIntoView({block:"center"}));
 });
 
 // ---- find ----
 function runFind(){
   const q=$("#findq").value.trim();
   document.querySelectorAll("#rows tr").forEach(tr=>tr.classList.remove("hit"));
-  hits = q ? rows.map((r,i)=>rowMatches(r,q)?i:-1).filter(i=>i>=0) : [];
+  const scope=$("#scope").value;
+  hits = q ? rows.map((r,i)=>rowMatches(r,q,scope)?i:-1).filter(i=>i>=0) : [];
   hitAt = hits.length?0:-1;
   $("#findcount").textContent = q ? (hits.length? `1/${hits.length}` : "no match") : "";
   hits.forEach(i=>document.querySelector(`#rows tr[data-i="${i}"]`)?.classList.add("hit"));
@@ -266,6 +394,7 @@ function step(d){
   select(hits[hitAt]);
 }
 $("#findq").addEventListener("input",runFind);
+$("#scope").addEventListener("change",runFind);
 $("#next").onclick=()=>step(1); $("#prev").onclick=()=>step(-1);
 $("#findq").addEventListener("keydown",e=>{
   if(e.key==="Enter"){e.preventDefault();step(e.shiftKey?-1:1);}
@@ -282,7 +411,7 @@ addEventListener("keydown",e=>{
   if(typing) return;
   if(e.key==="ArrowDown"){e.preventDefault();select(sel+1);}
   if(e.key==="ArrowUp"){e.preventDefault();select(sel-1);}
-  if(e.key.toLowerCase()==="v"){rows[sel].verified=!rows[sel].verified;render();}
+  if(e.key.toLowerCase()==="v"&&rows.length){rows[sel].verified=!rows[sel].verified;render();}
 });
 
 // ---- editing ----
@@ -302,16 +431,21 @@ $("#crop").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",Str
 addEventListener("resize",()=>paintBand(sel));
 
 // ---- boot ----
-fetch("data.json").then(r=>r.json()).then(d=>{
-  D=d; rows=d.rows.map(r=>({...r,verified:false}));
-  $("#scan").src=d.image;
-  $("#scan").onload=()=>{paintBand(0);};
-  const m=d.document;
-  $("#docmeta").innerHTML=`<b>${m.ship}</b> · ${m.line} · ${m.origin} → ${m.port} · ${m.arrival} · <span title="archive notation">${m.notation}</span>`;
-  $("#warn").textContent="Prototype. "+d.geometry.note;
-  render();
+function loadData(){
+  const el=document.getElementById("payload");
+  if(el && el.textContent.trim()) return Promise.resolve(JSON.parse(el.textContent));
+  // no embedded payload (template opened directly): fall back to a fetch, which
+  // only works when served over http, not from file://
+  return fetch("data.json").then(r=>r.json());
+}
+loadData().then(d=>{
+  DB=d;
+  $("#scan").onload=()=>paintBand(sel);
+  const g=(d.documents.find(x=>x.geometry)||{}).geometry;
+  $("#warn").textContent="Protótipo. "+(g?g.note:"");
+  openDoc(d.active||0);
 }).catch(e=>{
-  $("#warn").textContent="Could not load data.json — run scripts/make_prototype.py first. ("+e+")";
+  $("#warn").textContent="Sem dados. Gere com: python3 scripts/make_prototype.py   ("+e+")";
 });
 </script>
 </body>
