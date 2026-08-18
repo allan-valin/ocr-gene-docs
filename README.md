@@ -38,8 +38,15 @@ Not working yet:
 ## Running it
 
 ```sh
-python3 scripts/serve.py            # browse ./data/scans
-python3 scripts/serve.py --root ~/Documents/manifestos
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python scripts/serve.py            # browse ./data/scans
+.venv/bin/python scripts/serve.py --root ~/Documents/manifestos
+```
+
+Optional transcription engine (large, and the app works without it):
+
+```sh
+python3 -m venv .venv-ocr && .venv-ocr/bin/pip install -r requirements-ocr.txt
 ```
 
 It binds `127.0.0.1` only and reads nothing outside the folder you point it at.
@@ -47,7 +54,7 @@ It binds `127.0.0.1` only and reads nothing outside the folder you point it at.
 Tests:
 
 ```sh
-python3 -m pytest tests/ -q               # library and pipeline
+.venv/bin/python -m pytest tests/ -q      # library and pipeline
 python3 scripts/smoke_prototype.py        # drives the real UI in Chromium and Firefox
 ```
 
