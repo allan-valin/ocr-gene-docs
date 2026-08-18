@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify          # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
+from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page          # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,12 +74,7 @@ def pdf_pages(pdf: Path) -> int:
     key = f"{pdf.name}:{pdf.stat().st_mtime_ns}"
     if key in _COUNTS:
         return _COUNTS[key]
-    out = subprocess.run(["pdfinfo", str(pdf)], capture_output=True, text=True)
-    n = 0
-    for line in out.stdout.splitlines():
-        if line.startswith("Pages:"):
-            n = int(line.split()[1])
-            break
+    n = pdflib.page_count(pdf)
     _COUNTS[key] = n
     CACHE.mkdir(parents=True, exist_ok=True)
     try:
@@ -93,16 +89,7 @@ def render_page(pdf: Path, n: int, dpi: int = 120) -> Path | None:
     dest = CACHE / f"{pdf.stem}-p{n}-{dpi}.jpg"
     if dest.exists() and dest.stat().st_size:
         return dest
-    stem = dest.with_suffix("")
-    r = subprocess.run(
-        ["pdftoppm", "-f", str(n), "-l", str(n), "-r", str(dpi), "-jpeg",
-         "-jpegopt", "quality=78", str(pdf), str(stem)],
-        capture_output=True)
-    made = sorted(stem.parent.glob(f"{stem.name}-*.jpg"))
-    if r.returncode != 0 or not made:
-        return None
-    made[0].replace(dest)
-    return dest
+    return dest if pdflib.render_page(pdf, n, dest, dpi=dpi) else None
 
 
 def list_dir(d: Path) -> dict:

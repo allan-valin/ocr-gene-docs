@@ -163,12 +163,19 @@ def build_url(e: Entry, part: int = 1, total: int = 1) -> str:
 
 
 def pdf_lines(path: Path) -> list[str]:
-    out = subprocess.run(
-        ["pdftotext", "-layout", str(path), "-"],
-        capture_output=True,
-        check=True,
-    )
-    return out.stdout.decode("utf-8", errors="replace").splitlines()
+    """Text of a saved index page.
+
+    pdftotext -layout is preferred when poppler happens to be installed, because
+    its column reconstruction keeps each catalogue entry on one line. pypdfium2
+    is the portable fallback so the tool has no GPL dependency of its own.
+    """
+    if shutil.which("pdftotext"):
+        out = subprocess.run(["pdftotext", "-layout", str(path), "-"],
+                             capture_output=True, check=True)
+        return out.stdout.decode("utf-8", errors="replace").splitlines()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from desembarque import pdf as pdflib
+    return pdflib.extract_text(path).splitlines()
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -34,27 +34,13 @@ SAMPLE_INDEX = "017397"
 
 
 def pdf_page_count(pdf: Path) -> int:
-    out = subprocess.run(["pdfinfo", str(pdf)], capture_output=True, text=True)
-    for line in out.stdout.splitlines():
-        if line.startswith("Pages:"):
-            return int(line.split()[1])
-    return 0
+    from desembarque import pdf as pdflib
+    return pdflib.page_count(pdf)
 
 
 def render(pdf: Path, page: int, dpi: int, dest: Path) -> tuple[int, int] | None:
-    stem = dest.with_suffix("")
-    r = subprocess.run(
-        ["pdftoppm", "-f", str(page), "-l", str(page), "-r", str(dpi), "-jpeg",
-         "-jpegopt", "quality=78", str(pdf), str(stem)],
-        capture_output=True,
-    )
-    made = sorted(stem.parent.glob(f"{stem.name}-*.jpg"))
-    if r.returncode != 0 or not made:
-        return None
-    made[0].replace(dest)
-    from PIL import Image
-    with Image.open(dest) as im:
-        return im.size
+    from desembarque import pdf as pdflib
+    return pdflib.render_page(pdf, page, dest, dpi=dpi)
 
 
 def main(argv: list[str] | None = None) -> int:

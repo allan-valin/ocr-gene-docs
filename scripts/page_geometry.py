@@ -406,12 +406,28 @@ def page_image(pdf: Path, n: int, workdir: Path, dpi: int = 300) -> Path | None:
     rules from the mask and two or three from a render. So prefer the embedded
     layer, and fall back to rendering for PDFs that have none.
     """
+    import shutil
+    import subprocess
+
+    from desembarque import pdf as pdflib
+
     workdir.mkdir(parents=True, exist_ok=True)
-    stem = workdir / f"{pdf.stem}-p{n}"
-    subprocess.run(["pdfimages", "-f", str(n), "-l", str(n), "-png", str(pdf), str(stem)],
-                   capture_output=True)
+
+    # pdfium decodes image objects but does not expose an MRC soft mask as a
+    # usable image — those come back 1x1 — so when poppler's pdfimages happens
+    # to be installed we use it, purely as a quality accelerator. It is never
+    # required and is not shipped, so the distributable stays free of GPL.
+    candidates: list[Path] = []
+    if shutil.which("pdfimages"):
+        stem = workdir / f"{pdf.stem}-p{n}-pi"
+        subprocess.run(["pdfimages", "-f", str(n), "-l", str(n), "-png",
+                        str(pdf), str(stem)], capture_output=True)
+        candidates = sorted(stem.parent.glob(f"{stem.name}-*.png"))
+    if not candidates:
+        candidates = pdflib.extract_images(pdf, n, workdir)
+
     best, best_px, best_bilevel = None, 0, False
-    for cand in sorted(stem.parent.glob(f"{stem.name}-*.png")):
+    for cand in candidates:
         try:
             with Image.open(cand) as im:
                 px = im.width * im.height
@@ -421,17 +437,19 @@ def page_image(pdf: Path, n: int, workdir: Path, dpi: int = 300) -> Path | None:
                 bilevel = im.mode == "1" or (colours is not None and len(colours) <= 2)
         except Exception:
             continue
-        # prefer a bilevel layer; among those, the largest
+        # A bilevel layer only helps if it is the actual page. Decoders emit
+        # degenerate 1x1 placeholders for masks they cannot expose, and those
+        # are bilevel by definition — preferring them once produced a
+        # single-pixel "page" and no geometry at all.
+        if px < 250_000:
+            continue
         if (bilevel, px) > (best_bilevel, best_px):
             best, best_px, best_bilevel = cand, px, bilevel
     if best is not None and best_bilevel:
         return best
 
-    out = workdir / f"{pdf.stem}-p{n}-render"
-    subprocess.run(["pdftoppm", "-f", str(n), "-l", str(n), "-r", str(dpi), "-png",
-                    str(pdf), str(out)], capture_output=True)
-    made = sorted(out.parent.glob(f"{out.name}-*.png"))
-    return made[0] if made else best
+    out = workdir / f"{pdf.stem}-p{n}-render.png"
+    return out if pdflib.render_page(pdf, n, out, dpi=dpi, grayscale=True) else best
 
 
 def analyze_pdf_page(pdf: Path, n: int, workdir: Path) -> Geometry | None:

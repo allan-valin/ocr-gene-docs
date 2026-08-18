@@ -513,6 +513,20 @@ How it works, and what each step cost to get right:
 7. **Fit an evenly spaced comb** and shift it half a pitch, so bands bracket their line
    rather than bisecting it.
 
+**PDF access is pypdfium2, not poppler** (`desembarque/pdf.py`). Poppler is GPL; calling
+it by subprocess was arm's-length aggregation, but shipping those binaries would have
+carried GPL obligations for that part, which sits badly with keeping a commercial licence
+possible. PDFium is BSD-3-Clause and ships as a Python wheel rather than per-OS binaries.
+
+**One capability did not survive the swap.** pdfium decodes image objects but does not
+expose an MRC *soft mask* as a usable image — those come back as 1×1 placeholders. Since a
+1×1 image is bilevel by definition, the "prefer a bilevel layer" rule happily chose it and
+produced a single-pixel page with no geometry at all; candidates are now required to be
+substantial. Where `pdfimages` happens to be installed it is used purely as a quality
+accelerator, never required and never shipped, so a distributable stays GPL-free. Improving
+the render path — local rather than global thresholding — is the way to close the gap for
+machines without poppler, and is not done yet.
+
 **Prefer the PDF's embedded bilevel layer over a render.** These are MRC-compressed, so
 each page carries a sharp mask beside a blurry background; the same page yields nine
 column rules from the mask and two or three from a render. Rendering is the fallback for
