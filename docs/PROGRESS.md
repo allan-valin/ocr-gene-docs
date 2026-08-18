@@ -4,6 +4,39 @@ Running checkpoint. Newest first. The design record is
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
 next actions.
 
+## 2026-08-19 — session ended deliberately (laptop noise; Allan sleeping)
+
+Heavy work stopped on request. Nothing is running. **Resume from "Next, in order" below.**
+
+### State of the machine
+
+* No background processes left (`spike_*`, `serve.py` all stopped; load back to ~1.0).
+* Two virtualenvs: `.venv` (app: pypdfium2, Pillow, numpy) and `.venv-ocr` (optional
+  engine: paddlepaddle, paddleocr). Model weights cached in `~/.paddlex/official_models/`.
+* Everything committed and pushed to https://github.com/allan-valin/ocr-gene-docs
+* 76 Python tests, 29 browser assertions, all passing at the last run.
+
+### The one result that is NOT valid
+
+`scripts/spike_scale.py` reported **0/26 retrieval at scale. Ignore that number.** The
+script took the first fourteen dossiers by filename, which stop at `015652A`, so the
+ground-truth dossier `017397` was never in the pool — every query searched for names that
+were not indexed at all. The script now refuses to run unless the ground-truth dossier is
+present, but **the measurement has not been redone**.
+
+What the run does legitimately show: **13 pages OCR'd in 484 s, so ~37 s per page**
+including geometry, on CPU. And per-page cost is very uneven — 2 s to 61 s — because the
+cropped strip tracks the row count.
+
+So the honest position on accuracy is still the single-page result: **26/26 ranked first
+with 25 distractors**, and *no* evidence yet about behaviour against a large pool.
+
+### Also built tonight, not yet wired up
+
+`desembarque/batch.py` — folder indexer with per-document isolation, resume from the
+content-hash cache, stop, and a surfaced failure list. Seven tests, all on failure paths.
+**Not connected to an endpoint and never run against the corpus.**
+
 ## 2026-08-19 — overnight session
 
 ### Done
@@ -26,7 +59,13 @@ next actions.
 
 ### Next, in order
 
-1. **Retrieval at scale.** The 26/26 result is a closed set with 25 distractors. Rerun the
+0. **Redo retrieval at scale** with the fixed script (`.venv-ocr/bin/python
+   scripts/spike_scale.py`). ~10 min of loud CPU. This is the number that decides whether
+   the small recogniser is enough or a larger model is needed. Everything else is
+   downstream of it.
+1. **Wire `batch.py` to an endpoint and the UI** — background folder indexing with
+   progress, which is now the product's main flow rather than per-document transcription.
+2. **Retrieval at scale (old item, superseded by 0).** The 26/26 result is a closed set with 25 distractors. Rerun the
    same queries against the whole catalogue, where near-misses are far more numerous. This
    is the number that decides whether the small recogniser is enough.
 2. **Per-row crops and 2× upscaling.** Residual errors are on small degraded type

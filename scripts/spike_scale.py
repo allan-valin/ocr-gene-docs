@@ -52,7 +52,17 @@ def main() -> int:
 
     pool: list[dict] = []
     t_all = time.time()
-    pdfs = sorted(Path(ROOT / "data/scans").glob("BR_RJANRIO_BS_*.pdf"))[:14]
+    # The ground-truth dossier must be in the pool, or every query searches for
+    # names that are simply not indexed. Taking the first N by filename once
+    # excluded it and produced a meaningless 0/26.
+    GROUND_TRUTH = "017397"
+    all_pdfs = sorted(Path(ROOT / "data/scans").glob("BR_RJANRIO_BS_*.pdf"))
+    truth_pdfs = [p for p in all_pdfs if GROUND_TRUTH in p.name]
+    if not truth_pdfs:
+        print("ground-truth dossier not present; the result would be meaningless",
+              file=sys.stderr)
+        return 1
+    pdfs = truth_pdfs + [p for p in all_pdfs if GROUND_TRUTH not in p.name][:14]
     for pdf in pdfs:
         for pg in range(2, min(pdflib.page_count(pdf), 4) + 1):
             try:
@@ -96,7 +106,11 @@ def main() -> int:
 
     truth = json.loads((ROOT / "prototype" / "sample_rows.json").read_text(encoding="utf-8"))
     names = [f"{r['given']} {r['surname']}" for r in truth["rows"]]
-    gelria = [p for p in pool if "017397" in p["doc"]]
+    gelria = [p for p in pool if GROUND_TRUTH in p["doc"]]
+    if not gelria:
+        print("ground-truth rows missing from the pool — result not meaningful",
+              file=sys.stderr)
+        return 1
 
     rank1 = top5 = 0
     misses = []
