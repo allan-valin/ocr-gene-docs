@@ -573,6 +573,37 @@ rather than around the one it loses:
 4. **Search it again later.** Transcription is paid once per page; searching is then free
    and instant, forever, over everything indexed so far.
 
+### Two users, and only one of them can afford the indexing cost
+
+**Allan, 2026-08-19:** *"for a lawyer working with it it would make sense, build the
+database once and search after, assuming the program would not crash while loading
+hundreds of docs. For a normal person that time is unacceptable."*
+
+That is the segmentation, and it decides who the product is for:
+
+* **The professional** — a *despachante* or lawyer doing this repeatedly — indexes a corpus
+  once and searches it for years. The cost is amortised over hundreds of enquiries, so
+  hours of background indexing is a fair trade. This user justifies the tool.
+* **The one-off researcher** — someone tracing their own family, with a handful of
+  dossiers — will not wait five minutes a document, and should not be asked to. For them
+  the honest offering is the **geometry-generated empty grid plus side-by-side manual
+  entry**, which costs no inference at all, and search over whatever is already indexed.
+
+The second user is why the no-model path is not a fallback but a first-class feature.
+
+### Robustness is a feature, not a quality bar
+
+Indexing hundreds of documents unattended means **a single bad PDF must never take the run
+down**. Requirements that follow directly:
+
+* per-document isolation — one failure is recorded against that document and the run
+  continues;
+* resume from the content-hash cache, so an interrupted run re-does nothing;
+* bounded memory, since the machine is a 14 GB laptop that has been frozen before by
+  stacked processes;
+* a failure list surfaced in the UI, because silently skipping a document in an evidentiary
+  corpus is worse than failing loudly.
+
 ### Consequence: index in the background, never make anyone wait
 
 The earlier design had "select a document → transcribe → wait" as the main flow, which is
