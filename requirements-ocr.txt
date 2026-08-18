@@ -1,0 +1,4 @@
+# Optional transcription engine. Installed separately because it is large and
+# the application is useful without it (geometry-detected tables, manual entry).
+paddlepaddle==3.3.1
+paddleocr==3.7.0

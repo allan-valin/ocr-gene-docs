@@ -1,0 +1,4 @@
+# Runtime dependencies. All permissively licensed — see LICENSING.md.
+pypdfium2>=5.0      # PDF rendering, page counts, text and image extraction (BSD-3/Apache-2.0)
+Pillow>=10          # image handling (HPND)
+numpy>=1.26         # page geometry (BSD-3)

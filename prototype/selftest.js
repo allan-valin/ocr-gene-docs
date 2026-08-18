@@ -60,8 +60,23 @@ window.addEventListener("load",async()=>{
   ok("name column box shown", !q("#nameBox").hidden && parseFloat(q("#nameBox").style.width)>0);
   document.querySelector('#rows tr[data-i="0"] td[data-v]').click(); await wait();
   ok("verify marks row", document.querySelector('#rows tr[data-i="0"]').classList.contains("verified"));
-  ok("unreadable shown as ilegivel", document.querySelectorAll("#rows td.null").length>0);
-  ok("ditto marked", document.querySelectorAll("#rows td.ditto").length>0);
+  ok("unreadable shown as ilegivel", document.querySelectorAll("#rows .null").length>0);
+  ok("ditto marked", document.querySelectorAll("#rows .ditto").length>0);
+
+  // confidence must read as confidence, not as a spellchecker complaint
+  const dots=document.querySelectorAll("#rows .dot");
+  ok("confidence shown as semaphore dots", dots.length>0);
+  ok("no wavy underline left behind",
+     !document.querySelector("#rows .lo[style*='wavy'], #rows .mid[style*='wavy']"));
+  ok("dots carry a text label for screen readers and colour-blind readers",
+     [...dots].every(d=>(d.getAttribute("aria-label")||"").length>3));
+  ok("all three semaphore states present on this page",
+     ["hi","mid","lo"].every(k=>document.querySelector(".dot."+k)));
+  const hiBefore=document.querySelectorAll(".dot.hi").length;
+  const ed=document.querySelector('#rows tr[data-i="4"] [data-f="nationality"]');
+  if(ed){ ed.textContent="BELGA"; ed.dispatchEvent(new Event("input",{bubbles:true})); await wait();
+    ok("editing a cell clears its stale confidence",
+       document.querySelectorAll(".dot.hi").length>hiBefore); }
 
   // Structure without a model: on a ruled page the grid is measurable, so an
   // untranscribed document can still produce an empty table to fill in by hand.
@@ -86,7 +101,7 @@ window.addEventListener("load",async()=>{
            madeRows>0 || declined);
         if(madeRows>0){
           ok("generated cells are empty, not invented",
-             [...document.querySelectorAll('#rows td[data-f="nationality"]')]
+             [...document.querySelectorAll('#rows [data-f="nationality"]')]
                .every(td=>/^\s*(ilegível)?\s*$/.test(td.textContent)));
         }
       }

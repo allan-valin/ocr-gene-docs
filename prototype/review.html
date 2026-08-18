@@ -89,13 +89,23 @@
   tbody tr.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
   tbody tr.verified{opacity:.72}
   td{padding:5px 6px;vertical-align:top}
-  td[contenteditable]:focus{outline:2px solid var(--focus);outline-offset:-2px;background:var(--bg)}
+  td [contenteditable]:focus,td[contenteditable]:focus{outline:2px solid var(--focus);
+     outline-offset:-2px;background:var(--bg)}
+  .cellwrap{white-space:normal}
   .num{color:var(--muted);font-variant-numeric:tabular-nums;width:26px}
   .name{font-weight:600}
-  /* uncertainty marks the text, not the cell: a wavy underline reads as
-     "check this" without turning the table into a heat map */
-  .lo{text-decoration:underline wavy var(--bad);text-underline-offset:3px;text-decoration-thickness:1px}
-  .mid{text-decoration:underline wavy var(--warn);text-underline-offset:3px;text-decoration-thickness:1px}
+  /* Confidence is shown as a semaphore dot after the value, not as a wavy
+     underline: a wavy underline is the spellchecker's "misspelled word" signal,
+     and these documents are full of names no dictionary contains, so it reads
+     as a complaint about spelling rather than a statement about trust.
+     Shape carries the meaning as well as colour, for colour-blind readers. */
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:5px;
+       vertical-align:1px;border:1.5px solid transparent}
+  .dot.hi{background:var(--ok);border-color:var(--ok)}
+  .dot.mid{background:var(--warn);border-color:var(--warn);
+           background:repeating-linear-gradient(45deg,var(--warn) 0 2px,transparent 2px 4px)}
+  .dot.lo{background:transparent;border-color:var(--bad);border-style:double;border-width:3px}
+  .dot.none{background:transparent;border-color:var(--muted);border-style:dotted}
   .null{color:var(--bad);font-style:italic;opacity:.75}
   .ditto{color:var(--muted)}
   .ditto::before{content:"❝ ";font-size:9px;vertical-align:2px;opacity:.6}
@@ -236,22 +246,33 @@ function rowMatches(r,q,scope){
 }
 
 // ---- rendering ----
-function conf(r,f){const c=r.conf&&r.conf[f];return c==null?"":c<0.5?"lo":c<0.8?"mid":"";}
+function conf(r,f){const c=r.conf&&r.conf[f];return c==null?"":c<0.5?"lo":c<0.8?"mid":"hi";}
+const CONF_LABEL={hi:"alta confiança",mid:"confiança média — conferir",
+                  lo:"baixa confiança — conferir no original",none:"sem valor legível"};
+function dot(r,f){
+  const c=r.conf&&r.conf[f];
+  const k = c==null ? "none" : (c<0.5?"lo":c<0.8?"mid":"hi");
+  const pct = c==null ? "" : ` (${Math.round(c*100)}%)`;
+  return `<span class="dot ${k}" role="img" aria-label="${CONF_LABEL[k]}${pct}"
+           title="${CONF_LABEL[k]}${pct}"></span>`;
+}
 function cell(r,f,txt){
   const isNull = txt==null;
   const d = r.ditto&&r.ditto.includes(f);
-  const cls = [conf(r,f), isNull?"null":"", d?"ditto":""].filter(Boolean).join(" ");
+  const cls = [isNull?"null":"", d?"ditto":""].filter(Boolean).join(" ");
   const val = isNull ? "ilegível" : txt;
   const title = isNull ? "ilegível — registrado como nulo, nunca adivinhado"
               : d ? 'escrito como aspas de repetição (") — resolvido a partir da linha acima' : "";
-  return `<td contenteditable="true" data-f="${f}" class="${cls}" title="${title}">${val}</td>`;
+  const mark = (r.conf && f in r.conf) ? dot(r,f) : "";
+  return `<td class="cellwrap"><span contenteditable="true" data-f="${f}" class="${cls}"
+           title="${title}">${val}</span>${mark}</td>`;
 }
 function render(){
   $("#rows").innerHTML = rows.map((r,i)=>`
     <tr data-i="${i}" class="${r.verified?"verified":""}">
       <td class="num">${r.n}</td>
-      <td class="name ${conf(r,'surname')} ${r.handwritten?'hw':''}" contenteditable="true" data-f="name"
-          title="${r.handwritten?'entrada manuscrita':''}">${r.given} ${r.surname}</td>
+      <td class="name ${r.handwritten?'hw':''}"><span contenteditable="true" data-f="name"
+          title="${r.handwritten?'entrada manuscrita':''}">${r.given} ${r.surname}</span>${r.conf&&'surname' in r.conf?dot(r,'surname'):''}</td>
       ${cell(r,"nationality",r.nationality)}
       ${cell(r,"age",r.age)}
       <td>${r.sex||""}</td>
@@ -571,7 +592,11 @@ $("#rows").addEventListener("input",e=>{
   const f=e.target.dataset.f; if(!f) return;
   const r=rows[+e.target.closest("tr").dataset.i];
   r.edits=r.edits||[]; r.edits.push({field:f,to:e.target.textContent,at:new Date().toISOString()});
-  e.target.classList.remove("lo","mid","null");
+  e.target.classList.remove("null");
+  // a human has now supplied this value, so the model's confidence no longer
+  // applies to it: show it as verified rather than keeping a stale amber dot
+  const d=e.target.parentElement.querySelector(".dot");
+  if(d){ d.className="dot hi"; d.title=d.ariaLabel="conferido por pessoa"; }
 });
 $("#lock").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",String(b.getAttribute("aria-pressed")!=="true"));};
 $("#crop").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",String(b.getAttribute("aria-pressed")!=="true"));paintBand(sel);};

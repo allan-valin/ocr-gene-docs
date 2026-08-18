@@ -37,6 +37,12 @@ def build_harness() -> str:
     return PAGE.as_uri()
 
 
+# A harness that throws early reports only the assertions it reached, which
+# looked like "2/2 passed - ALL PASS" when a duplicate declaration killed the
+# script. A truncated run must fail, not congratulate itself.
+MIN_ASSERTIONS = 15
+
+
 def parse(text: str) -> list[str]:
     text = text.replace("&gt;", ">").replace("&lt;", "<").replace("&amp;", "&")
     m = re.search(r"RESULTS>>\s*(.*)", text)
@@ -118,8 +124,12 @@ def main(argv: list[str] | None = None) -> int:
             continue
         ran += 1
         bad = [r for r in results if r.startswith("FAIL") or r.startswith("THREW")]
+        if len(results) < MIN_ASSERTIONS:
+            bad.append(f"TRUNCATED only {len(results)} assertions ran, expected at least "
+                       f"{MIN_ASSERTIONS} — the harness stopped early")
         failed += len(bad)
-        print(f"\n{name}: {len(results) - len(bad)}/{len(results)} passed")
+        print(f"\n{name}: {len(results) - len([b for b in bad if not b.startswith('TRUNCATED')])}"
+              f"/{len(results)} passed")
         for b in bad:
             print(f"  {b}")
 
