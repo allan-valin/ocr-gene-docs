@@ -403,6 +403,56 @@ Findings that change the pipeline:
 6. **Image specs:** 300 DPI, ~3600×5000, grayscale or RGB, JPX/JPEG with a JBIG2 soft
    mask. Extract with `pdfimages` rather than re-rasterizing.
 
+## First engine benchmark (2026-08-19)
+
+PaddleOCR 3.7 (PP-OCRv6_medium, the lightweight classical detector+recogniser, *not* the
+0.9B VL model) on *Gelria* p2, CPU only, 300 dpi, against the hand-checked ground truth in
+`prototype/sample_rows.json`. Run with `scripts/spike_ocr.py`.
+
+| Measure | Result |
+|---|---|
+| Model load | 1.1 s |
+| Inference | **110.7 s for one page** |
+| Lines returned | 222 (all columns) |
+| Name CER, mean | **0.31** |
+| Names exact | 2 / 26 |
+| Names within 25% CER | **12 / 26** |
+
+Note: oneDNN crashes this paddle build on this CPU (`ConvertPirAttribute2RuntimeAttribute
+not support`), so it runs with `enable_mkldnn=False` — plain CPU kernels, which is part of
+why it is slow.
+
+**Read pessimistically, this says the engine is not usable: 110 s/page means a 12-page
+dossier takes 22 minutes, and half the names are wrong.** But two things in the failures
+show the measurement, not just the model, is at fault:
+
+* `UMBERTO LUCCHETI` → `UMBERTO`: the recogniser split one name across boxes.
+* `ELISABETH L. DE HELD` → `PAUL HELD`, `ANTONIO VALVERDE` → `Nacionalidade`: the score
+  matched each expected name against *every* line on the page, so a missed name silently
+  borrows the nearest string from anywhere, including a column header.
+
+The spike threw away the one thing that fixes both: **the recogniser returns boxes, and we
+already detect row bands and column ranges.**
+
+### Consequence: geometry-guided OCR
+
+Rather than OCR a whole page and try to reassemble it, use the measured grid:
+
+1. Detect the grid (already working — deskew, rules, comb fit).
+2. **Crop to a cell** — the name column is x 0.078–0.295, about 5% of the page area.
+3. Recognise the crop, and attribute the text to that row by construction.
+
+This is expected to help on both axes at once. Accuracy: a name matched inside its own band
+cannot be confused with a header or a neighbour, and the pessimistic scoring above
+disappears. Speed: recognising a narrow column strip instead of a full 3592×5016 page is a
+large reduction in pixels, and it removes the resize-to-4000px the current run triggers.
+
+It also makes per-field confidence meaningful, because a confidence attaches to a specific
+cell of a specific row rather than to a floating line of text.
+
+**Next measurements needed:** name-column-only CER and seconds/page; then the same for
+PaddleOCR-VL, to see whether the larger model is worth its size and latency.
+
 ### Working without a model: generated table structure
 
 **A table can be recovered from a scan with no model at all**, because the grid is
