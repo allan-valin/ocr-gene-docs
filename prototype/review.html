@@ -285,10 +285,11 @@ function render(){
   stat();
 }
 function stat(){
-  if(!rows.length){ $("#stat").textContent="sem transcrição"; return; }
+  const suffix = saveState ? ` · ${saveState}` : "";
+  if(!rows.length){ $("#stat").textContent="sem transcrição"+suffix; return; }
   const v=rows.filter(r=>r.verified).length;
   const lo=rows.filter(r=>Object.values(r.conf||{}).some(c=>c!=null&&c<0.5)).length;
-  $("#stat").textContent=`${v}/${rows.length} verificadas · ${lo} linhas com campo de baixa confiança`;
+  $("#stat").textContent=`${v}/${rows.length} verificadas · ${lo} com campo de baixa confiança`+suffix;
 }
 
 function pageURL(doc,page){
@@ -585,9 +586,28 @@ addEventListener("keydown",e=>{
 // ---- editing ----
 $("#rows").addEventListener("click",e=>{
   const tr=e.target.closest("tr"); if(!tr) return;
-  if(e.target.dataset.v){ rows[+tr.dataset.i].verified=!rows[+tr.dataset.i].verified; render(); return; }
+  if(e.target.dataset.v){ rows[+tr.dataset.i].verified=!rows[+tr.dataset.i].verified; render(); scheduleSave(); return; }
   select(+tr.dataset.i);
 });
+let saveTimer=null, saveState="";
+// Save state lives beside the row counts rather than replacing them: stat() runs
+// on every render, and having it clobber "salvo" made autosave look broken.
+function markSaved(t){ saveState=t; stat(); }
+function scheduleSave(){
+  if(!SERVED||!D) return;
+  clearTimeout(saveTimer);
+  markSaved("alterações não salvas…");
+  saveTimer=setTimeout(()=>{
+    const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
+    fetch(`/api/save?pdf=${encodeURIComponent(D.file)}${dir}`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({rows,geometry:D.geometry,page:D.pages[pageIdx].n,
+                           source:(D.geometry&&D.geometry.bands_source==="detected")?"manual":"manual"})
+    }).then(r=>r.json()).then(j=>{
+      markSaved(j.saved?`salvo (${j.rows} linhas)`:"falha ao salvar");
+    }).catch(()=>markSaved("falha ao salvar"));
+  },900);
+}
 $("#rows").addEventListener("input",e=>{
   const f=e.target.dataset.f; if(!f) return;
   const r=rows[+e.target.closest("tr").dataset.i];
@@ -597,6 +617,16 @@ $("#rows").addEventListener("input",e=>{
   // applies to it: show it as verified rather than keeping a stale amber dot
   const d=e.target.parentElement.querySelector(".dot");
   if(d){ d.className="dot hi"; d.title=d.ariaLabel="conferido por pessoa"; }
+  // reflect the edit into the row model, then persist
+  const idx=+e.target.closest("tr").dataset.i;
+  const val=e.target.textContent.trim();
+  if(f==="name"){
+    const parts=val.split(/\s+/);
+    rows[idx].given=parts.shift()||""; rows[idx].surname=parts.join(" ");
+  } else {
+    rows[idx][f] = val==="" || val==="ilegível" ? null : val;
+  }
+  scheduleSave();
 });
 $("#lock").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",String(b.getAttribute("aria-pressed")!=="true"));};
 $("#crop").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",String(b.getAttribute("aria-pressed")!=="true"));paintBand(sel);};

@@ -72,6 +72,20 @@ window.addEventListener("load",async()=>{
      [...dots].every(d=>(d.getAttribute("aria-label")||"").length>3));
   ok("all three semaphore states present on this page",
      ["hi","mid","lo"].every(k=>document.querySelector(".dot."+k)));
+  // manual transcription must survive a refresh, or an hour of typing is lost
+  if(typeof SERVED!=="undefined" && SERVED){
+    const cell0=document.querySelector('#rows tr[data-i="0"] [data-f="occupation"]');
+    if(cell0){
+      cell0.textContent="SIRVIENTA"; cell0.dispatchEvent(new Event("input",{bubbles:true}));
+      await wait(120);
+      ok("edit marks unsaved state", /não salvas/.test(document.getElementById("stat").textContent));
+      let saved=false;
+      for(let i=0;i<25 && !saved;i++){ await wait(200);
+        saved=/salvo/.test(document.getElementById("stat").textContent); }
+      ok("edit is autosaved to the server", saved);
+    }
+  }
+
   const hiBefore=document.querySelectorAll(".dot.hi").length;
   const ed=document.querySelector('#rows tr[data-i="4"] [data-f="nationality"]');
   if(ed){ ed.textContent="BELGA"; ed.dispatchEvent(new Event("input",{bubbles:true})); await wait();

@@ -26,6 +26,7 @@ import json
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -322,9 +323,45 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # keep the server alive; surface the error to the UI
             return self._send(500, {"error": f"{type(e).__name__}: {e}"})
 
+    def _body(self) -> dict:
+        n = int(self.headers.get("Content-Length") or 0)
+        if not n:
+            return {}
+        try:
+            return json.loads(self.rfile.read(n) or b"{}")
+        except ValueError:
+            return {}
+
     def do_POST(self):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+
+        if u.path == "/api/save":
+            # Manual transcription is real work — an hour of typing against a
+            # scan — so it is written to the same content-hash cache the engine
+            # uses, and survives a refresh, a rename, or reopening the folder.
+            pdf = safe(str(Path(q.get("dir", "")) / q.get("pdf", "")), STATE["root"])
+            if not pdf or not pdf.exists():
+                return self._send(404, {"error": "no such pdf"})
+            body = self._body()
+            rows = body.get("rows")
+            if not isinstance(rows, list):
+                return self._send(400, {"error": "rows must be a list"})
+            ident = identify(pdf)
+            existing = JOBS.cached(ident.doc_hash) or {}
+            existing.update({
+                "hash": ident.doc_hash,
+                "notation": ident.notation,
+                "identified_by": ident.source,
+                "rows": rows,
+                "geometry": body.get("geometry") or existing.get("geometry"),
+                "transcribed_page": body.get("page") or existing.get("transcribed_page"),
+                "source": body.get("source") or "manual",
+                "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            })
+            JOBS.store(ident.doc_hash, existing)
+            return self._send(200, {"saved": True, "hash": ident.doc_hash,
+                                    "rows": len(rows)})
         if u.path == "/api/transcribe":
             pdf = safe(str(Path(q.get("dir", "")) / q.get("pdf", "")), STATE["root"])
             if not pdf or not pdf.exists():

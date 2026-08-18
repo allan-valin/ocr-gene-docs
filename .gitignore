@@ -21,3 +21,8 @@ prototype/build/
 # model venv
 .venv-ocr/
 .venv/
+
+# transcription cache (per-machine work product, not source)
+data/transcriptions/
+data/pagecache/
+data/spike_*.json
