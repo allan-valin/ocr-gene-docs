@@ -415,6 +415,40 @@ border, because the table rules are too faint at that resolution. Not disproven,
 untested: retry at 300 DPI with the border cropped first. Until that spike passes, the
 VLM-reported bands remain the plan, with proportional fallback as specified.
 
+## Distribution: what the friend receives
+
+**Requirement (Allan, 2026-08-18):** download a zip, open a file, any OS, no installation,
+open a PDF and see it transcribed.
+
+That rules out a Python command, a local server, and a packaged desktop binary as the
+*delivery* path. Verified on 2026-08-18 that a page opened from `file://` still has:
+`webkitdirectory` (a real folder picker), the File System Access API, FileReader, blob
+URLs, WebAssembly and Workers. So the shipping build needs **no server at all** — the
+earlier "file:// can't list a directory" limit was about *fetch*, not about user-chosen
+files.
+
+**Shape of the deliverable:**
+
+| Piece | Where it runs | Notes |
+|---|---|---|
+| Static viewer (`index.html` + vendored [pdf.js](https://github.com/mozilla/pdf.js), Apache-2.0) | friend's browser, from disk | renders PDFs client-side from a `File`; no install, no network |
+| Transcriptions (JSON) | shipped in the zip | small; matched to PDFs by the notation embedded in the filename |
+| The PDFs | **the friend's own folder** | he points the picker at scans he already holds; the zip need not carry them, so nothing from the archive is redistributed |
+| Transcription pipeline | Allan's machine only | one-time offline batch, as settled under Hardware constraint |
+
+**The honest limit.** "Open a PDF and it shows transcribed" holds for dossiers already in
+the shipped transcription set. A PDF nobody has processed cannot be transcribed with zero
+installation — a 0.9B document model in-browser WASM is not realistic on commodity
+hardware, and bundling an engine would mean shipping an executable, which the requirement
+excludes. The workflow is therefore: Allan ingests in bulk, the friend reads, verifies and
+exports. If the friend must transcribe arbitrary new PDFs himself, that is a different
+product and needs a packaged binary — an open question, not an assumption.
+
+**`scripts/serve.py` remains a development tool**, not the delivery path: it is how Allan
+browses folders and drives ingest locally. A native window (WebKitGTK is present on his
+machine, and pywebview covers Windows/macOS with system webviews) stays optional polish
+over the same server, worth building only if the desktop feel is wanted.
+
 ## Browser support
 
 The product must run in **any browser on almost any PC** — same constraint as the
