@@ -14,8 +14,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from page_geometry import comb_fit, detect_rules, estimate_skew, ink_mask
 
 
-def synthetic_table(rows=20, pitch=100, angle=0.0, w=1200, h=2400):
-    """White page, black ruled table, optionally rotated."""
+def synthetic_table(rows=20, pitch=100, angle=0.0, w=1200, h=2400, text=True):
+    """White page, black ruled table, a bar of "writing" in each row.
+
+    The written line matters: detection keys on the text, because on real scans
+    the rules print faintly and break up while a row of typing does not.
+    """
     from PIL import Image, ImageDraw
 
     im = Image.new("L", (w, h), 255)
@@ -26,6 +30,11 @@ def synthetic_table(rows=20, pitch=100, angle=0.0, w=1200, h=2400):
     for r in range(rows + 1):
         y = y0 + r * pitch
         d.line([(x0, y), (x1, y)], fill=0, width=3)
+    if text:
+        for r in range(rows):
+            cy = y0 + r * pitch + pitch // 2
+            d.rectangle([x0 + 30, cy - 12, 380, cy + 12], fill=0)
+            d.rectangle([420, cy - 12, 680, cy + 12], fill=0)
     if angle:
         im = im.rotate(-angle, resample=Image.BICUBIC, fillcolor=255)
     return im
@@ -41,11 +50,41 @@ def test_estimates_known_skew_within_a_tenth_of_a_degree(angle):
     assert abs(est - angle) < 0.15, f"wanted {angle}, got {est}"
 
 
-def test_finds_every_row_rule_on_a_straight_synthetic_table():
+def test_finds_every_row_on_a_straight_synthetic_table():
     mask = ink_mask(synthetic_table(rows=20, pitch=100))
     g = detect_rules(mask)
     assert len(g.rows) == 20
     assert abs(np.median(np.diff(g.row_edges)) - 100) < 2
+
+
+def test_bands_bracket_the_writing_rather_than_bisecting_it():
+    """A band that cuts through its own line of text is useless for cropping."""
+    pitch = 100
+    g = detect_rules(ink_mask(synthetic_table(rows=20, pitch=pitch)))
+    for i, (top, bottom) in enumerate(g.rows[:5]):
+        centre_of_text = 200 + i * pitch + pitch / 2
+        assert top < centre_of_text < bottom, f"row {i} does not contain its text"
+
+
+def test_table_extent_is_bounded_by_the_vertical_rules():
+    """Without this bound the row comb runs off into the letterhead."""
+    g = detect_rules(ink_mask(synthetic_table(rows=20, pitch=100)))
+    assert g.table_box is not None
+    x0, top, x1, bottom = g.table_box
+    assert abs(top - 200) < 12 and abs(bottom - 2200) < 12
+    assert all(top - 100 <= e <= bottom + 100 for e in g.row_edges)
+
+
+def test_ignores_writing_outside_the_table(tmp_path):
+    """Letterhead above the table must not extend the row comb."""
+    from PIL import ImageDraw
+    im = synthetic_table(rows=20, pitch=100)
+    d = ImageDraw.Draw(im)
+    for k in range(3):                      # "letterhead" lines above the table
+        d.rectangle([300, 40 + k * 45, 900, 60 + k * 45], fill=0)
+    g = detect_rules(ink_mask(im))
+    assert g.table_box[1] > 150
+    assert min(g.row_edges) > 120
 
 
 def test_recovers_rows_after_deskewing_a_rotated_table():

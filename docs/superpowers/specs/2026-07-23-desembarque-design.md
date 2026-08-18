@@ -403,6 +403,43 @@ Findings that change the pipeline:
 6. **Image specs:** 300 DPI, ~3600×5000, grayscale or RGB, JPX/JPEG with a JBIG2 soft
    mask. Extract with `pdfimages` rather than re-rasterizing.
 
+### Working without a model: generated table structure
+
+**A table can be recovered from a scan with no model at all**, because the grid is
+geometry rather than recognition. `/api/grid` measures a page and returns an empty table
+with the right number of rows, aligned to the scan, which someone fills in by hand with
+the original beside it. Structure without invention — the useful floor when no engine is
+installed, and a check on the engine's row count when one is.
+
+How it works, and what each step cost to get right:
+
+1. **Binarize with Otsu.** A fixed threshold works on the bilevel layer inside these PDFs
+   but not on a render, where aged paper sits near 0.7 and its texture crosses the line,
+   lifting the ink fraction from 0.05 to 0.20 and flattening every projection.
+2. **Trim the scanner surround** *before* estimating skew. The dark frame is axis-aligned
+   and strong enough to pin the estimate at zero, hiding the ~0.6° that matters.
+3. **Deskew.** Half a degree smears a vertical rule across ~26px and erases it from a
+   column projection.
+4. **Column rules with an adaptive threshold**, scaled to the strongest column present.
+5. **Table extent from the vertical rules**, which exist only inside the table. Without
+   this bound the row comb runs into the letterhead and returns 37 rows for a 26-row page.
+6. **Rows from the written lines, not the horizontal rules.** Rules print faintly and
+   break up; a line of typing does not. Rules are rejected by *width* — a rule is a narrow
+   peak, a line of writing several times broader — which is what stops them winning the
+   comb fit and landing between rows instead of on them.
+7. **Fit an evenly spaced comb** and shift it half a pitch, so bands bracket their line
+   rather than bisecting it.
+
+**Prefer the PDF's embedded bilevel layer over a render.** These are MRC-compressed, so
+each page carries a sharp mask beside a blurry background; the same page yields nine
+column rules from the mask and two or three from a render. Rendering is the fallback for
+PDFs without such a layer.
+
+Measured on *Gelria* p2: 33 row bands (1 header + 26 written + 6 blank ruled rows), 9
+column rules, name column at x 0.078–0.295, verified by drawing the grid back onto the
+scan. On cover cards and the handwritten Rio forms it detects nothing and says so, which
+is correct: those pages have no ruled table to measure.
+
 ### Row-band alignment — status
 
 The v1 plan assumed the VLM would report row y-bands. The sampled Santos form is a
@@ -437,6 +474,17 @@ viewer cannot do it.
 **Sizing is the open risk.** A quantized open-weight document model plus runtime is
 plausibly 0.6–1.5 GB, making for a large but downloadable zip. Model choice therefore has
 to be settled *before* packaging, not after.
+
+**One executable per OS.** PyInstaller and Nuitka cannot cross-compile, so each binary is
+built on its target — Windows on Windows, Linux on Linux. GitHub Actions runners cover all
+three and are free for public repositories. Ship **one zip per OS, each containing the app
+and the weights**, so the recipient downloads a single file for their platform; splitting
+the weights into a separate download would reintroduce the two-step setup that "no
+installation" exists to avoid.
+
+**No training is involved.** The models are used for inference only — pretrained weights,
+downloaded once and bundled. Fine-tuning on verified rows stays a possible later flywheel
+and would need a GPU; nothing in v1 depends on it.
 
 ### Document identity (`desembarque/identity.py`)
 

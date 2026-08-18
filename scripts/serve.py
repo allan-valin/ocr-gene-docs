@@ -32,9 +32,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify          # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
+from page_geometry import analyze_pdf_page          # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / "data" / "pagecache"
@@ -161,6 +163,49 @@ def corpus(folder: Path, limit: int = 0) -> dict:
             "root": str(folder)}
 
 
+COLUMN_LABELS = ["numero", "nome", "nacionalidade", "idade", "sexo",
+                 "estado", "profissao", "procedencia", "classe", "observacoes"]
+
+
+def build_grid(pdf: Path, page_n: int) -> dict:
+    """Recover a page's table structure with no model involved.
+
+    Detecting the grid is geometry, not recognition: the rules and the written
+    lines are measurable. That gives an empty table with the right number of
+    rows, aligned to the scan, which someone can fill in by hand with the
+    original beside it. It is the useful floor when no transcription engine is
+    installed — structure without invention.
+    """
+    geo = analyze_pdf_page(pdf, page_n, CACHE / "geometry")
+    if not geo or not geo.rows or len(geo.col_edges) < 3:
+        return {"detected": False,
+                "reason": "nenhuma tabela com réguas detectada nesta página"}
+
+    bands = geo.normalized_rows()
+    cols = geo.normalized_cols()
+    name = geo.name_column(0)
+    rows = [{"n": i + 1, "surname": None, "given": None, "nationality": None,
+             "age": None, "sex": None, "status": None, "occupation": None,
+             "origin": None, "notes": None, "conf": {}, "band": list(b)}
+            for i, b in enumerate(bands)]
+    return {
+        "detected": True,
+        "source": "geometry",
+        "rows": rows,
+        "columns": cols,
+        "labels": COLUMN_LABELS[: max(0, len(cols) - 1)],
+        "geometry": {
+            "bands_source": "detected",
+            "note": "Estrutura detectada geometricamente (sem modelo). "
+                    "As células estão vazias: preencha conferindo com o original.",
+            "name_column": list(name) if name else None,
+            "row_bands": [list(b) for b in bands],
+            "skew_deg": geo.skew,
+            "row_pitch": geo.row_pitch,
+        },
+    }
+
+
 def classify(page_n: int) -> str:
     """Placeholder classification. Real page typing is a model job; the cover
     card is not reliably page 1 (conservation varies), so this only biases the
@@ -262,6 +307,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(500, {"error": "render failed"})
                 return self._send(200, img.read_bytes(), "image/jpeg",
                                   {"Cache-Control": "max-age=86400"})
+
+            if u.path == "/api/grid":
+                pdf = safe(str(Path(q.get("dir", "")) / q.get("pdf", "")), STATE["root"])
+                if not pdf or not pdf.exists():
+                    return self._send(404, {"error": "no such pdf"})
+                return self._send(200, build_grid(pdf, int(q.get("n", 1))))
 
             if u.path == "/api/health":
                 return self._send(200, {"ok": True, "root": str(STATE["root"]),

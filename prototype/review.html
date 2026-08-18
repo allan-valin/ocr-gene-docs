@@ -378,7 +378,8 @@ function renderEmpty(msg){
       ? "Clique abaixo para transcrever. O original fica ao lado para conferência."
       : `<span class="warnstate">${(ENGINE&&ENGINE.detail)||"Motor de transcrição indisponível."}</span>
          <br>Nada é inventado: nenhuma linha aparece sem transcrição real.`}
-    ${SERVED ? `<br><button id="dotranscribe" ${engineOK?"":"disabled"}>Transcrever documento</button>` : ""}`;
+    ${SERVED ? `<br><button id="dotranscribe" ${engineOK?"":"disabled"}>Transcrever documento</button>
+       <button id="dogrid" title="Detecta a grade da tabela sem modelo: linhas vazias para preencher à mão">Gerar tabela vazia</button>` : ""}`;
 }
 let ENGINE=null, poll=null;
 function startTranscription(){
@@ -419,11 +420,35 @@ function finishTranscription(){
 }
 document.addEventListener("click",e=>{
   if(e.target.id==="dotranscribe") startTranscription();
+  if(e.target.id==="dogrid") buildGrid();
 });
+
+// Structure without recognition: the table's rules and written lines are
+// measurable, so an empty grid aligned to the scan can be produced with no
+// model at all, and filled in by hand against the original.
+function buildGrid(){
+  if(!SERVED||!D) return;
+  const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
+  renderEmpty(`<b><span class="spin"></span>Detectando a grade…</b>`);
+  fetch(`/api/grid?pdf=${encodeURIComponent(D.file)}&n=${D.pages[pageIdx].n}${dir}`)
+    .then(r=>r.json()).then(g=>{
+      if(!g.detected) return renderEmpty(
+        `<b>Não foi possível detectar uma tabela.</b><br>${g.reason||""}<br>
+         Páginas manuscritas ou sem réguas não têm grade para medir.`);
+      D.geometry=g.geometry; D.rows=g.rows; D.transcribed_page=D.pages[pageIdx].n;
+      rows=g.rows.map(r=>({...r,verified:false}));
+      $("#tbl").hidden=false; $("#empty").hidden=true;
+      $("#warn").textContent="Grade detectada geometricamente. Células vazias — "
+        +"preencha conferindo com o original ao lado.";
+      render(); select(0);
+    }).catch(e=>renderEmpty(`<b>Falhou.</b><br>${e}`));
+}
 
 // ---- geometry: band for row i ----
 function band(i){
   const g=D.geometry;
+  // detected geometry gives a band per row; the hand-fitted sample gives a pitch
+  if(g.row_bands && g.row_bands[i]) return g.row_bands[i];
   const top=g.first_row_top + i*g.row_pitch;
   return [top, top+g.row_height];
 }

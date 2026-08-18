@@ -62,6 +62,36 @@ window.addEventListener("load",async()=>{
   ok("verify marks row", document.querySelector('#rows tr[data-i="0"]').classList.contains("verified"));
   ok("unreadable shown as ilegivel", document.querySelectorAll("#rows td.null").length>0);
   ok("ditto marked", document.querySelectorAll("#rows td.ditto").length>0);
+
+  // Structure without a model: on a ruled page the grid is measurable, so an
+  // untranscribed document can still produce an empty table to fill in by hand.
+  if(typeof SERVED!=="undefined" && SERVED){
+    const untranscribed=[...document.querySelectorAll(".doc")]
+      .find(d=>!d.querySelector(".badge"));
+    if(untranscribed){
+      untranscribed.click(); await wait(700);
+      const btn=document.getElementById("dogrid");
+      ok("empty-grid button offered when untranscribed", !!btn);
+      if(btn){
+        btn.click();
+        let built=false;
+        for(let i=0;i<40 && !built;i++){
+          await wait(250);
+          built = document.querySelectorAll("#rows tr").length>0
+                  || /Não foi possível detectar/.test(document.getElementById("empty").textContent);
+        }
+        const madeRows=document.querySelectorAll("#rows tr").length;
+        const declined=/Não foi possível detectar/.test(document.getElementById("empty").textContent);
+        ok(`grid either builds rows or says it cannot [rows=${madeRows} declined=${declined}]`,
+           madeRows>0 || declined);
+        if(madeRows>0){
+          ok("generated cells are empty, not invented",
+             [...document.querySelectorAll('#rows td[data-f="nationality"]')]
+               .every(td=>/^\s*(ilegível)?\s*$/.test(td.textContent)));
+        }
+      }
+    }
+  }
  }catch(err){ out.push("THREW "+(err&&err.message)); }
  document.getElementById("warn").textContent="RESULTS>> "+out.join(" | ");
 });
