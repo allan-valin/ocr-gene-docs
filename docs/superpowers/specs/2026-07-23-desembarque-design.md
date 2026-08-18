@@ -549,6 +549,47 @@ border, because the table rules are too faint at that resolution. Not disproven,
 untested: retry at 300 DPI with the border cropped first. Until that spike passes, the
 VLM-reported bands remain the plan, with proportional fallback as specified.
 
+## Where this tool actually beats reading the page yourself
+
+**Allan, 2026-08-19:** *"27 seconds per page when you might want to search hundreds is a
+tough ask, average of 10 pages per pdf, that's 5 minutes per document, but doing it
+yourself takes less than a minute if you're looking for someone specific."*
+
+That is correct and it kills one framing of the product. **For "I have this dossier, is my
+ancestor in it?", a person reading the page wins.** 4–5 minutes of machine time against
+under a minute of human time is not a trade worth making, and no amount of optimisation
+closes a 5× gap convincingly.
+
+The tool wins in four other situations, and the design should be organised around those
+rather than around the one it loses:
+
+1. **Unknown document.** Two hundred dossiers, ten pages each, is two thousand pages. A
+   person cannot scan that; the machine can, unattended. This is the actual jus sanguinis
+   problem — you know a surname and a rough year, not which ship.
+2. **Unknown spelling.** A person scanning for *João* walks straight past *Giovanni*, and
+   past the clerk's *Joam* and the OCR's *Jo o*. Fuzzy plus variant expansion does not.
+3. **Extract everything, not find one thing.** The friend's deliverable is a spreadsheet of
+   passengers with sources, not a yes/no answer. Reading the page does not produce that.
+4. **Search it again later.** Transcription is paid once per page; searching is then free
+   and instant, forever, over everything indexed so far.
+
+### Consequence: index in the background, never make anyone wait
+
+The earlier design had "select a document → transcribe → wait" as the main flow, which is
+precisely the losing case: it puts a five-minute bill in front of a one-minute task. The
+flow should instead be:
+
+* Point the app at a folder. It indexes in the background, lowest-confidence pages first,
+  showing progress, while the person keeps working or walks away.
+* Search returns instantly across everything indexed so far, and says plainly what has not
+  been indexed yet.
+* Opening a single unindexed document still offers on-demand transcription, but it is the
+  exception, not the flow the product is built around.
+
+Per-page cost is very uneven in practice — measured between **2 s and 61 s** on the same
+run, since the cropped strip depends on how many rows the page has — which matters much
+more for a progress estimate than for the total.
+
 ## Distribution: what the friend receives
 
 **Requirements (Allan, 2026-08-18):** download a zip, open something, any OS, **no
