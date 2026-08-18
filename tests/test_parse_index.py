@@ -96,6 +96,19 @@ def test_multi_file_index_numbers_every_part():
     assert urls[1].endswith("_d0002de0002.pdf")
 
 
+def test_records_source_index_page():
+    lines = [
+        "  • BR RJANRIO BS.0.RPV, ENT.13936 - relação de passageiros do vapor itaquera. - Dossiê"
+    ]
+    (e,) = parse_lines(lines, source="SP/p21.pdf")
+    assert e.source == "SP/p21.pdf"
+
+
 def test_repairs_utf8_read_as_latin1():
     assert fix_mojibake("relaÃ§Ã£o") == "relação"
     assert fix_mojibake("relação") == "relação"
+
+
+def test_splits_typographic_ligatures_in_ship_names():
+    assert fix_mojibake("soﬁa") == "sofia"
+    assert fix_mojibake("aﬄuent") == "affluent"

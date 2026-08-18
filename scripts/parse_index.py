@@ -13,6 +13,7 @@ import argparse
 import json
 import re
 import subprocess
+import unicodedata
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -40,16 +41,22 @@ class Entry:
     index: str
     ship: str | None
     rv: str | None
+    source: str | None = None  # which saved index page this row came from
 
 
 def fix_mojibake(s: str) -> str:
-    """Repair UTF-8 that was decoded as latin-1 ('relaÃ§Ã£o' -> 'relação')."""
-    if not any(ch in s for ch in "ÃÂ"):
-        return s
-    try:
-        return s.encode("latin-1").decode("utf-8")
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        return s
+    """Repair UTF-8 that was decoded as latin-1 ('relaÃ§Ã£o' -> 'relação').
+
+    Also splits the typographic ligatures the PDF text layer emits ('soﬁa'),
+    which would otherwise never match a user typing 'sofia'.
+    """
+    if any(ch in s for ch in "ÃÂ"):
+        try:
+            s = s.encode("latin-1").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    # NFKC maps ﬁ/ﬂ/ﬀ to their component letters, leaving accents intact.
+    return unicodedata.normalize("NFKC", s)
 
 
 def _clean_title(rest: str) -> tuple[str | None, str | None]:
@@ -67,7 +74,7 @@ def _clean_title(rest: str) -> tuple[str | None, str | None]:
     return (ship or None), rv
 
 
-def parse_lines(lines: list[str]) -> list[Entry]:
+def parse_lines(lines: list[str], source: str | None = None) -> list[Entry]:
     """Parse pdftotext output. Titles wrap, so an entry ends at the next entry."""
     entries: list[Entry] = []
     pending: dict | None = None
@@ -84,6 +91,7 @@ def parse_lines(lines: list[str]) -> list[Entry]:
                 index=pending["index"],
                 ship=ship,
                 rv=rv,
+                source=source,
             )
         )
         pending = None
@@ -145,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     seen: dict[tuple[str, str, str], Entry] = {}
     duplicates = 0
     for pdf in pdfs:
-        found = parse_lines(pdf_lines(pdf))
+        found = parse_lines(pdf_lines(pdf), source=str(pdf.relative_to(args.src)))
         for e in found:
             key = (e.fundo, e.series, e.index)
             if key in seen:

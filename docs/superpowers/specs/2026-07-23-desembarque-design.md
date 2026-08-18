@@ -46,9 +46,45 @@ Scans: object storage (Railway volume or Cloudflare R2) + web-optimized derivati
 | `document` | scan image ref, port, ship name, arrival_date, source archive reference, language guess, processing status |
 | `page` | FK document, image ref, raw VLM output JSON, model id + prompt version (reproducibility), name-column x-range (advisory, nullable), status |
 | `person_record` | FK page, surname, given_names, age, sex, nationality/origin, occupation, family_group_id, per-field confidence, row y-band (advisory, nullable), `verified` flag, edit history (editor, timestamp, original value) |
+| `ship` | name (normalized) + known aliases, shipping line, line nationality, home port, typical route/origin, source of the classification, confidence |
 | `name_variant` | canonical ↔ variant pairs (e.g., Giovanni↔João), source (seed list vs. manual), growable |
 
+`document` carries an FK to `ship`. The catalog bears this out: **910 unique ship names
+across 7,679 dossiers, with 7,199 of them repeat voyages** — a ship averages ~8.4
+crossings in the 1919–1924 window. Classification is therefore paid once per ship, not
+per dossier.
+
 Raw VLM JSON is stored verbatim on `page`; `person_record` rows are derived from it. Re-deriving after prompt/model changes is possible without re-calling the API.
+
+### Ship route and origin
+
+Classifying ships by line, nationality and route is not decoration — it feeds three
+things:
+
+1. **A language and layout prior for extraction.** Form language tracks the operating
+   line, and the sampled Santos dossier is exactly this: the *Gelria* sailed for
+   Koninklijke Hollandsche Lloyd, and its form is Dutch-headed. The top of the corpus
+   splits along visible lines — `principe di udine` and `tomaso di savoia` (Italian),
+   the Royal Mail `andes`/`avon`/`arlanza`/`almanzora` and `deseado`/`darro`/`desna`/
+   `demerara` classes (British), `ruy barbosa` (Lloyd Brasileiro). Knowing the line
+   before the VLM call sets the expected form language and the plausible passenger
+   nationalities, which is exactly the context that reduces mangled-name errors.
+2. **A name-normalization prior.** Route origin narrows which `name_variant` expansions
+   are likely, so an Italian-route passenger's "João" resolves toward Giovanni rather
+   than being treated as equally likely across every immigration wave.
+3. **A search facet, and the genealogical entry point.** Users often know the port or
+   country an ancestor left from but not the ship or date; filtering by route turns an
+   unusable full-corpus scan into a short list.
+
+Classification source: ship name → line is largely a lookup against public maritime
+records, done once for ~910 names and stored with its provenance and confidence. It is
+reference data, hand-checkable, and must never silently override what a document says —
+if a form's language contradicts the ship's expected line, the document wins and the
+mismatch is flagged.
+
+Also present in the index: **4,105 dossiers carry an `rv` number** (195–202 in the
+sampled range), sequential like the main index and parsed into the catalog already.
+Likely a *registro de vapores* volume; worth resolving, as it may group voyages usefully.
 
 ## Transcription pipeline
 
@@ -110,7 +146,8 @@ Full bounding boxes per field stay deferred, but "at least the name column" need
   null or implausible values, the UI falls back to the whole-page image. Selection and
   verification never depend on them being correct.
 - Derived crop = name-column x-range × row y-band → the thumbnail shown beside the
-  transcribed name in search results and export previews.
+  transcribed name in search results and export previews, for authorised users working
+  from locally held scans. The public tier substitutes a link to the archive's copy.
 
 This keeps v1 free of a layout-detection stage while making the side-by-side
 requirement satisfiable everywhere a single row is shown out of page context.
@@ -133,13 +170,23 @@ This is the feature that serves the jus sanguinis use case and the strongest int
 
 ## Access model / demo economics
 
-- **Public (read-only, zero API cost):** browse processed corpus, search, view scans, export.
+- **Public (read-only, zero API cost):** browse processed corpus, search, export
+  transcriptions. Scans are **not served publicly** — each record links out to the
+  dossier's own URL on the archive's image server, so the public tier redistributes
+  nothing. This limits the public demo's side-by-side view to what the archive itself
+  serves; see "No document hosting".
 - **Invite code unlocks:** upload, transcribe, edit. For the friend and hand-picked interviewers.
 - Claude API key lives server-side only. Spend cap via environment variable; transcription jobs refuse to run past it.
 
 ## Export
 
-xlsx generation per search result set or per document. Columns: all person fields + per-field confidence + verified flag + source image URL + row-crop URL (the name-column band), so the exported file stays independently verifiable against the scans. This file is the friend's working deliverable.
+xlsx generation per search result set or per document. Columns: all person fields +
+per-field confidence + verified flag + a link to the dossier on the archive's image
+server + the page and row it came from, so every exported row can be checked against the
+original by anyone holding the file. Row-band crops are embedded only in exports
+generated for authorised users, who already hold the scans; public exports carry the
+archive link and citation instead of image data. This file is the friend's working
+deliverable.
 
 ## Testing
 
@@ -149,6 +196,8 @@ xlsx generation per search result set or per document. Columns: all person field
 - **E2E:** Playwright smoke — browse → open review → edit a cell → export.
 - **Side-by-side invariant:** assert that review and search-result views render a scan
   image element alongside every transcribed name, including when row-band data is null.
+- **No-redistribution invariant:** assert the public (unauthenticated) tier serves no
+  scan bytes and no crops — only archive links — for both search results and exports.
 - **Scroll sync:** unit test the row-band → scroll-offset mapping (incl. null bands and
   the unlocked state); Playwright check that scrolling one pane moves the other.
 - **Find:** Ctrl/Cmd+F opens the in-app widget, matches across non-visible pages, and
@@ -220,30 +269,54 @@ catalog does not guarantee a lettered file path. The downloader needs a fallback
 (lettered → unlettered → probe increasing `total`) and must record unresolved dossiers
 for manual lookup rather than silently skipping. Affects ~70/7,679 (0.9%).
 
-**Fetching conduct:** this is a public archive on modest infrastructure. Serial or
-low-concurrency fetches, retry with backoff (the connection to it is flaky), resume via
-`-C -`, and cache aggressively — never re-fetch a dossier already on disk. Before the
-scans are rehosted on a public demo, check Arquivo Nacional's terms of use and attribute
-the source; linking back rather than rehosting is the safer default for the public tier.
+### Date scoping
 
-## Document structure (from two sampled dossiers)
+Indices are **sequential**, so the index range *is* the date range — there is no date
+field to filter on at catalog time. The saved index pages were chosen to bound the
+corpus to roughly **1919–1924**, which is the window of interest. Any later expansion
+means saving more index pages, not changing a query.
 
-The two series are **different document types**, not variants of one:
+**Fetching conduct:** this is a public archive on modest infrastructure. Serial fetches
+with a delay between requests, retry with backoff (the connection is flaky), resume via
+`-C -`, and never re-fetch a dossier already on disk.
 
-- **BS/ENT (Santos)** — printed ruled table, form model number in the footer
-  (e.g. `Mod. No. 136. 5000-6-'23`). Columns: Número, Nome e Cognomes, Nacionalidade,
-  Idade, Sexo, Estado, Profissão, Procedencia, Classe, Observações. ~26 rows/page,
-  entries mostly typewritten.
-- **OL/PRJ (Rio)** — "PARTE do Interprete" narrative form (`MODELO N. 1`), fully
-  handwritten, photographed as landscape book spreads; passenger lists are separate
-  attached pages. Page orientation varies *within* a dossier.
+**No document hosting.** Downloaded scans are gitignored and are not redistributed —
+not in the repo, not from the app. The public tier links back to the archive's own URL
+for each dossier rather than serving a copy. The side-by-side verification requirement
+is met with the locally held working copy for authorised users; it does not authorise
+republishing the archive.
+
+## Document structure
+
+*Two dossiers sampled directly; the corrections below come from Allan, who has been
+through hundreds of these files by hand.*
+
+**There is no standard form.** Layout appears to vary with the ship's country of origin
+and with the day of processing — some dossiers are typewritten on a ruled printed table,
+others are entirely handwritten, and the two series differ again from each other. The
+two samples below are illustrations, not a taxonomy, and the pipeline must not assume a
+fixed template:
+
+- **BS/ENT (Santos), sampled** — printed ruled table with a form model number in the
+  footer (`Mod. No. 136. 5000-6-'23`). Columns: Número, Nome e Cognomes, Nacionalidade,
+  Idade, Sexo, Estado, Profissão, Procedencia, Classe, Observações. ~26 rows/page.
+- **OL/PRJ (Rio), sampled** — "PARTE do Interprete" narrative form (`MODELO N. 1`),
+  handwritten, photographed as landscape book spreads. Page orientation varies *within*
+  a single dossier.
+
+Design consequence: page handling is **classification-driven, not series-driven**. The
+pipeline inspects each page and routes it, rather than selecting a prompt from the
+dossier's series. Where a printed form model number is legible it can key a template of
+known column positions; where it is absent the page falls back to generic extraction.
 
 Findings that change the pipeline:
 
-1. **Page classification is required before extraction.** Every dossier opens with a
-   cover/notation card carrying ship, date, procedência and sheet count — that is the
-   source for `document` metadata, and it is not passenger data. Pages must be typed
-   (cover / passenger table / narrative / blank) and routed to different prompts.
+1. **Page classification before extraction, and it must tolerate anything.** Many
+   dossiers open with a cover/notation card carrying ship, date, procedência and sheet
+   count — the source for `document` metadata, not passenger data. But this is a
+   function of what survived: where conservation was poor, a dossier may begin straight
+   at the passenger list with no cover at all. Classification must treat the cover as
+   optional and never assume page 1 is metadata.
 2. **The PDFs already carry an OCR text layer, and it is unusable.** Produced by "PDF
    Compressor 8.2.12.06"; the ship name GELRIA came out `GC- £R i' A` and the date as
    `0••-3.(-)?-`. This validates the VLM-only engine decision. Keep the layer as a weak
@@ -253,9 +326,12 @@ Findings that change the pipeline:
    value, or every ditto row loses its nationality.
 4. **Media is mixed per cell, not per page.** A typewritten table routinely has a
    handwritten row, and the Observações column is nearly all cursive.
-5. **The archive flags its own bad scans.** Some pages carry a printed sidebar
-   "ORIGINAL ILEGÍVEL / Original difficult to read" — worth detecting and storing as a
-   page-level quality flag feeding the review queue ordering.
+5. **The archive's own illegibility flag is not trustworthy.** Some pages carry a
+   printed sidebar "ORIGINAL ILEGÍVEL / Original difficult to read", but in practice
+   many so-flagged pages read fine — the marking reflects an operator's judgement at
+   scan time, applied inconsistently. Store it as provenance, never use it to skip a
+   page, deprioritise it, or excuse a failed extraction. Real page quality has to be
+   assessed from the image.
 6. **Image specs:** 300 DPI, ~3600×5000, grayscale or RGB, JPX/JPEG with a JBIG2 soft
    mask. Extract with `pdfimages` rather than re-rasterizing.
 
