@@ -93,7 +93,47 @@ Likely a *registro de vapores* volume; worth resolving, as it may group voyages 
 3. Validation pass: dates parseable, ages numeric and plausible, required fields present; anomalies flagged.
 4. Rows inserted as `unverified`, entering the review queue sorted by ascending confidence.
 
-Engine decision: **VLM API only.** One path handles manuscript + typewriter + multilingual + degradation. Classical OCR (Tesseract) and local models (TrOCR/Kraken) rejected for v1: weaker on degraded manuscript, more moving parts. Cost is pennies per page.
+### Engine decision — reversed 2026-08-18
+
+**Open-weight models, run locally. The Claude vision API is proof-of-feasibility only.**
+
+The original decision (2026-07-23) was VLM-API-only, on the grounds that one path handles
+manuscript + typewriter + multilingual + degradation while Tesseract/TrOCR/Kraken were
+weaker on degraded manuscript. The 2026-08-04 addendum reaffirmed it. Both are superseded,
+for two independent reasons:
+
+1. **It violated a standing constraint.** Allan's rule — open-source dependencies and
+   tooling only, explicitly covering future projects — was stated 2026-08-03, a day
+   *before* the addendum that reaffirmed the proprietary engine. A commercial API is
+   ruled out as the engine regardless of its benchmark performance.
+2. **The API is the wrong tool for the part that is actually hard.** Extraction here
+   needs *layout*: row bands and column ranges, so the review UI can put a scan beside
+   its transcription and scroll them together. A chat VLM does not return reliable pixel
+   coordinates — the original spec worked around this by asking the model to self-report
+   bands, then conceded that self-reported confidence is "poorly calibrated." Document
+   parsing models emit layout natively, and open weights additionally expose token
+   logprobs, giving real per-field confidence. For a legal-evidence corpus that is the
+   difference between a number that means something and a number that does not.
+
+**Revised pipeline shape — two stages, both local:**
+
+| Stage | Job | Candidate |
+|---|---|---|
+| Layout + text | page → regions, lines, row/column geometry, per-token logprobs | PaddleOCR-VL 1.5 (0.9B, open weights, benchmarked on handwriting and historical archives) |
+| Semantics | text + layout → person records, ditto resolution, name normalization | a local instruct model; the schema layer is ordinary structured extraction |
+
+Classical CV still earns its place for the ruled forms (see "Row-band alignment"), as the
+cheapest and most auditable source of geometry where the form has rules to measure.
+
+**Consequences to settle:** neither Vercel nor Railway offers a GPU, so inference cannot
+live in the web tier. Options are batch-ingest on Allan's own machine with only derived
+data deployed (cheapest, fits the corpus being a one-time bulk import), or a GPU host for
+on-demand transcription. Bulk ingestion is genuinely one-time here, which favours the
+former. Open question, flagged rather than assumed.
+
+**What the API is still good for:** a baseline in the evaluation below. Running the golden
+pages through it measures whether the local stack is close enough, which is evidence, not
+a dependency.
 
 ## Review/correction UI (demo centerpiece)
 
@@ -176,7 +216,8 @@ This is the feature that serves the jus sanguinis use case and the strongest int
   nothing. This limits the public demo's side-by-side view to what the archive itself
   serves; see "No document hosting".
 - **Invite code unlocks:** upload, transcribe, edit. For the friend and hand-picked interviewers.
-- Claude API key lives server-side only. Spend cap via environment variable; transcription jobs refuse to run past it.
+- No third-party API key in the serving path. If the Claude baseline is run for
+  evaluation, it runs offline during ingest, never from a request handler.
 
 ## Export
 
@@ -218,7 +259,9 @@ deliverable.
 
 ## Post-v1: open-weight OCR models
 
-*Added 2026-08-04. Does not change the v1 engine decision above (Claude vision API only).*
+*Added 2026-08-04, when these were filed as post-v1. Superseded 2026-08-18: the engine
+decision above now makes open-weight models the v1 engine rather than a later upgrade.
+The evaluation plan at the end of this section still stands, and is now a v1 gate.*
 
 Two Baidu open-weight document models are worth revisiting after v1 ships:
 
@@ -346,6 +389,23 @@ A first projection-profile attempt at 90 DPI failed — it found only the scan's
 border, because the table rules are too faint at that resolution. Not disproven, just
 untested: retry at 300 DPI with the border cropped first. Until that spike passes, the
 VLM-reported bands remain the plan, with proportional fallback as specified.
+
+## Post-v1: external genealogy data
+
+Deferred, but shapes the data model now — records should carry stable enough identifiers
+(ship, arrival date, name as transcribed *and* as normalized) to join against outside
+sources later.
+
+| Source | Access | Use |
+|---|---|---|
+| [FamilySearch API](https://www.familysearch.org/developers/) | Free, developer registration, nonprofit | Cross-reference a transcribed passenger against existing genealogical records; pull name-variant evidence to grow `name_variant` from real data rather than a seed list; give the jus sanguinis workflow a path from "found the manifest row" to "found the family". |
+| Ancestry | Paid, no access | Not viable. Noted only so it is not re-investigated. |
+
+FamilySearch is a free service rather than a commercial dependency, so it does not hit the
+open-source constraint the way a paid API would — but it is still an external service, so
+it belongs behind an interface with its results cached locally, and nothing in the core
+pipeline may depend on it being reachable. The archive transcription must stand alone as
+evidence.
 
 ## Open items (pre-implementation)
 
