@@ -31,12 +31,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from desembarque import engine as engines          # noqa: E402
+from desembarque.identity import identify          # noqa: E402
+from desembarque.jobs import JobRunner             # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / "data" / "pagecache"
 SAMPLE_ROWS = ROOT / "prototype" / "sample_rows.json"
 SAMPLE_INDEX = "017397"
 
 STATE = {"root": ROOT / "data" / "scans"}
+JOBS = JobRunner(ROOT / "data" / "transcriptions")
 
 
 def safe(path_str: str, root: Path) -> Path | None:
@@ -128,23 +134,71 @@ def corpus(folder: Path, limit: int = 0) -> dict:
         meta = manifest.get(pdf.name, {})
         is_sample = SAMPLE_INDEX in pdf.name and sample is not None
         total = pdf_pages(pdf)
+        # identity comes from the file's bytes, not its name: the person using
+        # this renames dossiers when saving them
+        ident = identify(pdf)
+        cached = JOBS.cached(ident.doc_hash)
         docs.append({
-            "id": pdf.stem,
+            "id": ident.doc_hash[:16],
+            "hash": ident.doc_hash,
             "file": pdf.name,
-            "notation": f"{meta.get('fundo','?')}.{meta.get('series','?')}.{meta.get('index','?')}"
-                        if meta else pdf.stem[:28],
-            "ship": meta.get("ship") or pdf.stem.replace("_", " ")[:34],
+            "notation": ident.notation or (meta.get("index") and
+                        f"{meta.get('fundo')}.{meta.get('series')}.{meta.get('index')}")
+                        or "sem notação",
+            "identified_by": ident.source,
+            "ship": (cached or {}).get("ship") or meta.get("ship") or "—",
             "total_pages": total,
             "pages": [{"n": n, "file": f"/api/page?pdf={pdf.name}&n={n}"} for n in range(1, total + 1)],
-            "rows": sample["rows"] if is_sample else None,
-            "geometry": sample["geometry"] if is_sample else None,
+            "rows": (cached or {}).get("rows") or (sample["rows"] if is_sample else None),
+            "geometry": (cached or {}).get("geometry") or (sample["geometry"] if is_sample else None),
             "meta": sample["document"] if is_sample else None,
-            "transcribed_page": 2 if is_sample else None,
+            "transcribed_page": (cached or {}).get("transcribed_page") or (2 if is_sample else None),
+            "transcribed": bool(cached) or is_sample,
         })
         if limit and len(docs) >= limit:
             break
     return {"documents": docs, "active": next((i for i, d in enumerate(docs) if d["rows"]), 0),
             "root": str(folder)}
+
+
+def classify(page_n: int) -> str:
+    """Placeholder classification. Real page typing is a model job; the cover
+    card is not reliably page 1 (conservation varies), so this only biases the
+    prompt and never decides what a page is."""
+    return "cover" if page_n == 1 else "list"
+
+
+def transcribe_document(pdf: Path, job) -> dict:
+    """Render each page and hand it to the active engine."""
+    eng = engines.active()
+    if not eng.available():
+        return {"unavailable": True, "message": engines.status()["detail"]}
+
+    ident = identify(pdf)
+    pages, rows, cover_text = [], [], ""
+    for n in range(1, job.total + 1):
+        job.page = n
+        img = render_page(pdf, n, dpi=200)
+        if img is None:
+            pages.append({"n": n, "error": "render failed"})
+            continue
+        res = eng.transcribe_page(img, classify(n))
+        pages.append({"n": n, "kind": res.kind, "error": res.error})
+        if res.kind == "cover" and res.text:
+            cover_text = cover_text or res.text
+        for r in res.rows:
+            r["page"] = n
+            rows.append(r)
+
+    ident = identify(pdf, cover_text=cover_text or None)
+    return {
+        "hash": ident.doc_hash,
+        "notation": ident.notation,
+        "identified_by": ident.source,
+        "engine": eng.name,
+        "pages": pages,
+        "rows": rows,
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -210,7 +264,21 @@ class Handler(BaseHTTPRequestHandler):
                                   {"Cache-Control": "max-age=86400"})
 
             if u.path == "/api/health":
-                return self._send(200, {"ok": True, "root": str(STATE["root"])})
+                return self._send(200, {"ok": True, "root": str(STATE["root"]),
+                                        **engines.status()})
+
+            if u.path == "/api/engine":
+                return self._send(200, engines.status())
+
+            if u.path == "/api/job":
+                job = JOBS.get(q.get("id", ""))
+                if not job:
+                    return self._send(404, {"error": "no such job"})
+                return self._send(200, job.as_dict())
+
+            if u.path == "/api/transcription":
+                data = JOBS.cached(q.get("hash", ""))
+                return self._send(200 if data else 404, data or {"error": "not transcribed"})
 
             return self._send(404, {"error": "not found"})
         except Exception as e:  # keep the server alive; surface the error to the UI
@@ -218,12 +286,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
+        q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
         if u.path == "/api/transcribe":
-            return self._send(501, {
-                "error": "no transcription engine wired up yet",
-                "detail": "Open-weight local models are the chosen engine; nothing is "
-                          "invented in the meantime.",
-            })
+            pdf = safe(str(Path(q.get("dir", "")) / q.get("pdf", "")), STATE["root"])
+            if not pdf or not pdf.exists():
+                return self._send(404, {"error": "no such pdf"})
+            ident = identify(pdf)
+            if JOBS.cached(ident.doc_hash):
+                return self._send(200, {"status": "done", "cached": True,
+                                        "hash": ident.doc_hash})
+            job = JOBS.submit(ident.doc_hash, pdf.name, pdf_pages(pdf),
+                              lambda j: transcribe_document(pdf, j))
+            return self._send(202, job.as_dict())
         return self._send(404, {"error": "not found"})
 
 

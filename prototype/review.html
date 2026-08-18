@@ -62,6 +62,14 @@
   #pagestrip button{padding:3px 9px;font-size:11px}
   .empty{padding:26px 18px;color:var(--muted);font-size:12.5px;line-height:1.6}
   .empty b{color:var(--ink)}
+  .empty button{margin-top:12px;padding:7px 13px;font-size:12.5px}
+  .bar{height:5px;background:var(--line);border-radius:99px;overflow:hidden;margin:12px 0 6px;max-width:320px}
+  .bar i{display:block;height:100%;background:var(--accent);transition:width .3s ease}
+  .spin{display:inline-block;width:11px;height:11px;border:2px solid var(--line);
+    border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;
+    vertical-align:-1px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .warnstate{color:var(--warn)}
   .pane{overflow:auto;position:relative;min-height:0}
   #scanPane{background:#0e0d0c;border-right:1px solid var(--line)}
   #scanInner{position:relative;width:100%}
@@ -277,7 +285,7 @@ function renderDocList(){
     <div class="doc ${i===docIdx?"on":""}" data-d="${i}">
       <b>${d.ship}</b>
       <span>${d.notation} · ${d.total_pages} p.</span>
-      ${d.rows?'<span class="badge">transcrito</span>':""}
+      ${d.transcribed||d.rows?'<span class="badge">transcrito</span>':""}
     </div>`).join("");
 }
 function renderPageStrip(){
@@ -303,14 +311,7 @@ function openDoc(i,page){
     : `<b>${D.ship}</b> · ${D.notation} · página ${D.pages[pageIdx].n} de ${D.total_pages}`;
   $("#tbl").hidden=!showRows;
   $("#empty").hidden=showRows;
-  if(!showRows){
-    $("#empty").innerHTML = D.rows
-      ? `<b>Página ${D.pages[pageIdx].n} não transcrita.</b><br>A transcrição de amostra
-         cobre apenas a página ${D.transcribed_page} deste documento.`
-      : `<b>Documento não transcrito.</b><br>Nenhum modelo está conectado ainda, e nada
-         é inventado: a lista de passageiros aparece aqui quando houver transcrição real.
-         Use a página ao lado para conferir o original.`;
-  }
+  if(!showRows) renderEmpty();
   renderDocList(); renderPageStrip(); render(); paintBand(0);
   $("#stat").textContent = showRows ? "" : "sem transcrição";
 }
@@ -361,6 +362,64 @@ $("#side").onclick=e=>{
   $("#main").classList.toggle("nosidebar",!on);
   paintBand(sel);
 };
+
+// ---- transcription state ----
+function renderEmpty(msg){
+  const e=$("#empty");
+  if(msg){ e.innerHTML=msg; return; }
+  if(D.rows && D.transcribed_page){
+    e.innerHTML=`<b>Página ${D.pages[pageIdx].n} não transcrita.</b><br>
+      A transcrição deste documento cobre a página ${D.transcribed_page}.`;
+    return;
+  }
+  const engineOK = ENGINE && ENGINE.available;
+  e.innerHTML = `<b>Documento não transcrito.</b><br>
+    ${engineOK
+      ? "Clique abaixo para transcrever. O original fica ao lado para conferência."
+      : `<span class="warnstate">${(ENGINE&&ENGINE.detail)||"Motor de transcrição indisponível."}</span>
+         <br>Nada é inventado: nenhuma linha aparece sem transcrição real.`}
+    ${SERVED ? `<br><button id="dotranscribe" ${engineOK?"":"disabled"}>Transcrever documento</button>` : ""}`;
+}
+let ENGINE=null, poll=null;
+function startTranscription(){
+  if(!SERVED||!D) return;
+  clearInterval(poll);
+  const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
+  renderEmpty(`<b><span class="spin"></span>Transcrevendo…</b><br>
+     ${D.ship||D.notation} · ${D.total_pages} páginas
+     <div class="bar"><i style="width:2%"></i></div>
+     <span id="prog">iniciando</span>`);
+  fetch(`/api/transcribe?pdf=${encodeURIComponent(D.file)}${dir}`,{method:"POST"})
+    .then(r=>r.json()).then(j=>{
+      if(j.cached||j.status==="done") return finishTranscription();
+      if(j.status==="unavailable") return renderEmpty(
+        `<b>Transcrição indisponível.</b><br><span class="warnstate">${j.message||""}</span>`);
+      poll=setInterval(()=>pollJob(j.id),600);
+    }).catch(e=>renderEmpty(`<b>Falhou.</b><br>${e}`));
+}
+function pollJob(id){
+  fetch(`/api/job?id=${id}`).then(r=>r.json()).then(j=>{
+    if(j.status==="running"||j.status==="queued"){
+      const pct=j.total?Math.max(2,Math.round(100*j.page/j.total)):5;
+      const bar=document.querySelector(".bar i"), pr=$("#prog");
+      if(bar) bar.style.width=pct+"%";
+      if(pr) pr.textContent=`página ${j.page||0} de ${j.total} · ${j.elapsed}s`;
+      return;
+    }
+    clearInterval(poll);
+    if(j.status==="done") return finishTranscription();
+    renderEmpty(`<b>${j.status==="unavailable"?"Transcrição indisponível.":"Erro na transcrição."}</b>
+      <br><span class="warnstate">${j.message||""}</span>`);
+  });
+}
+function finishTranscription(){
+  fetch(`/api/corpus?path=${encodeURIComponent(STATE.dir||"")}`).then(r=>r.json()).then(d=>{
+    DB=d; openDoc(docIdx);
+  });
+}
+document.addEventListener("click",e=>{
+  if(e.target.id==="dotranscribe") startTranscription();
+});
 
 // ---- geometry: band for row i ----
 function band(i){
@@ -507,6 +566,7 @@ function loadData(){
 loadData().then(d=>{
   DB=d;
   $("#scan").onload=()=>paintBand(sel);
+  if(SERVED) fetch("/api/engine").then(r=>r.json()).then(x=>{ENGINE=x; if(D&&!rows.length) renderEmpty();}).catch(()=>{});
   const g=(d.documents.find(x=>x.geometry)||{}).geometry;
   $("#warn").textContent="Protótipo. "+(g?g.note:"");
   openDoc(d.active||0);

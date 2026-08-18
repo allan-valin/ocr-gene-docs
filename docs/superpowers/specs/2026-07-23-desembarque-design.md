@@ -417,37 +417,56 @@ VLM-reported bands remain the plan, with proportional fallback as specified.
 
 ## Distribution: what the friend receives
 
-**Requirement (Allan, 2026-08-18):** download a zip, open a file, any OS, no installation,
-open a PDF and see it transcribed.
+**Requirements (Allan, 2026-08-18):** download a zip, open something, any OS, **no
+installation**; open a PDF and it transcribes, showing a loading state while it works.
+The friend researches **arbitrary date ranges** — 1919–1924 is Allan's window, not his —
+and **renames files** when saving them.
 
-That rules out a Python command, a local server, and a packaged desktop binary as the
-*delivery* path. Verified on 2026-08-18 that a page opened from `file://` still has:
-`webkitdirectory` (a real folder picker), the File System Access API, FileReader, blob
-URLs, WebAssembly and Workers. So the shipping build needs **no server at all** — the
-earlier "file:// can't list a directory" limit was about *fetch*, not about user-chosen
-files.
+Those three points together retire the earlier "ship precomputed transcriptions" plan: an
+unknown period means there is no fixed corpus to pre-transcribe, and on-demand
+transcription means an engine has to be present on the friend's machine. A purely static
+viewer cannot do it.
 
-**Shape of the deliverable:**
+| Requirement | What it forces |
+|---|---|
+| Transcribe on selection, with progress | An engine locally + a job runner. `scripts/serve.py` is no longer a dev tool — it is the application. |
+| No installation | Ship a **self-contained executable** (PyInstaller or Nuitka) that starts the local server and opens the UI. Unzip and double-click. Windows is the primary target. |
+| Any date range | No bundled corpus. The friend points the folder picker at dossiers he downloaded himself. |
+| Any filename | Identity from **content**, never the name. |
 
-| Piece | Where it runs | Notes |
-|---|---|---|
-| Static viewer (`index.html` + vendored [pdf.js](https://github.com/mozilla/pdf.js), Apache-2.0) | friend's browser, from disk | renders PDFs client-side from a `File`; no install, no network |
-| Transcriptions (JSON) | shipped in the zip | small; matched to PDFs by the notation embedded in the filename |
-| The PDFs | **the friend's own folder** | he points the picker at scans he already holds; the zip need not carry them, so nothing from the archive is redistributed |
-| Transcription pipeline | Allan's machine only | one-time offline batch, as settled under Hardware constraint |
+**Sizing is the open risk.** A quantized open-weight document model plus runtime is
+plausibly 0.6–1.5 GB, making for a large but downloadable zip. Model choice therefore has
+to be settled *before* packaging, not after.
 
-**The honest limit.** "Open a PDF and it shows transcribed" holds for dossiers already in
-the shipped transcription set. A PDF nobody has processed cannot be transcribed with zero
-installation — a 0.9B document model in-browser WASM is not realistic on commodity
-hardware, and bundling an engine would mean shipping an executable, which the requirement
-excludes. The workflow is therefore: Allan ingests in bulk, the friend reads, verifies and
-exports. If the friend must transcribe arbitrary new PDFs himself, that is a different
-product and needs a packaged binary — an open question, not an assumption.
+### Document identity (`desembarque/identity.py`)
 
-**`scripts/serve.py` remains a development tool**, not the delivery path: it is how Allan
-browses folders and drives ingest locally. A native window (WebKitGTK is present on his
-machine, and pywebview covers Windows/macOS with system webviews) stays optional polish
-over the same server, worth building only if the desktop feel is wanted.
+1. **SHA-256 of the PDF bytes** — the cache key. Renaming, copying or re-downloading a
+   dossier reuses its transcription. Tested: a file renamed to *"navio do meu bisavô.pdf"*
+   keeps its hash and its cached result.
+2. **The notation on the cover card** — the citable archival identity
+   (`BR.AN.RIO.OL.0.RPV.PRJ. 15992`), recovered by transcription. The parser accepts the
+   spacing and punctuation variants the archive actually uses.
+
+The filename is still read opportunistically, since archive downloads embed the notation,
+but **the cover card wins**: a wrongly renamed file must not mislabel a record. A file
+that yields nothing is labelled "sem notação" rather than guessed at.
+
+### Transcription flow (`desembarque/jobs.py`, `desembarque/engine.py`)
+
+Selecting an untranscribed document offers "Transcrever documento". The job runs on a
+worker thread while the UI polls, showing a progress bar and *"página N de M · Xs"* —
+necessary rather than decorative, since a dossier on commodity CPU is slow.
+
+**Absence is not emptiness.** With no engine installed the app says *"nenhum modelo de
+transcrição instalado"* and refuses to write a result. An empty transcription and a
+missing engine mean very different things to someone checking whether an ancestor is on a
+page, and a cached empty result would misrepresent the document. `NullEngine` is the
+current active engine and is honest about it; unavailable and failed runs are never
+cached.
+
+**`scripts/serve.py` is the product**, wrapped in an executable for delivery. A native
+window (WebKitGTK is present on Allan's machine; pywebview covers Windows/macOS with
+system webviews) remains optional polish over the same server.
 
 ## Browser support
 
