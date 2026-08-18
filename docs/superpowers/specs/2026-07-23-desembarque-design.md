@@ -335,12 +335,14 @@ date field to filter on at catalog time. The saved index pages were chosen to bo
 corpus to roughly **1919–1924**, the window of interest, and expanding it means saving
 more index pages rather than changing a query.
 
-**The approximation leaks.** A sampled dossier, OL.PRJ.15992 (*Orita*), turns out to be
-dated 04.04.1917 on its cover card — well outside the window. The archive documents this
-itself: dozens of entries carry "notação atribuída fora da ordem cronológica". So the
-index range is a coarse filter, and the *actual* arrival date has to come from the cover
-card during transcription. Date filtering in the app must use the transcribed date, never
-the notation number.
+**The approximation leaks, and the First World War is why.** A sampled dossier,
+OL.PRJ.15992 (*Orita*), is dated 04.04.1917 on its cover card. Transatlantic traffic
+nearly stopped during the war, so the archive's sequence compresses those years to very
+few arrivals and 1917 material sits immediately adjacent to 1919 — taking a whole index
+page that begins in 1919 pulls some of it in. The archive's own "notação atribuída fora da
+ordem cronológica" notes compound it. So the notation range is a coarse filter only, the
+actual arrival date has to come from the cover card during transcription, and date
+filtering in the app must use the transcribed date rather than the notation number.
 
 **Fetching conduct:** this is a public archive on modest infrastructure. Serial fetches
 with a delay between requests, retry with backoff (the connection is flaky), resume via

@@ -1,9 +1,21 @@
 const wait=(ms=60)=>new Promise(r=>setTimeout(r,ms));
+// wait for the scan to actually have layout, rather than guessing a delay:
+// served mode renders pages on demand, so the image can arrive late
+async function ready(ms=8000){
+  const t0=Date.now();
+  while(Date.now()-t0<ms){
+    const im=document.querySelector("#scan");
+    if(im && im.naturalWidth>0 && im.clientHeight>0 && document.querySelectorAll("#rows tr").length) return true;
+    await wait(100);
+  }
+  return false;
+}
+function rows_len(){ try{ return document.querySelectorAll("#rows tr").length; }catch(e){ return -1; } }
 window.addEventListener("load",async()=>{
  const out=[]; const ok=(n,c)=>out.push((c?"PASS":"FAIL")+" "+n);
  const q=s=>document.querySelector(s);
  try{
-  await wait(400);
+  ok("page and rows ready", await ready());
   ok("rows rendered=26", document.querySelectorAll("#rows tr").length===26);
   ok("scan image loaded", q("#scan").naturalWidth>0);
   ok("band painted", !q("#bandBox").hidden && parseFloat(q("#bandBox").style.height)>0);
@@ -33,15 +45,16 @@ window.addEventListener("load",async()=>{
   const sp=q("#scanPane"), rp=q("#rowPane");
   ok("scan pane scrollable", sp.scrollHeight>sp.clientHeight+10);
   const s0=sp.scrollTop;
-  rp.scrollTop=Math.max(1,(rp.scrollHeight-rp.clientHeight)*0.75); rp.dispatchEvent(new Event("scroll")); await wait();
-  ok("rows scroll drives scan pane", sp.scrollTop!==s0);
+  const rpMax=rp.scrollHeight-rp.clientHeight, spMax=sp.scrollHeight-sp.clientHeight;
+  rp.scrollTop=Math.max(1,rpMax*0.75); rp.dispatchEvent(new Event("scroll")); await wait();
+  ok(`rows scroll drives scan pane [rpMax=${Math.round(rpMax)} spMax=${Math.round(spMax)} s0=${Math.round(s0)} s1=${Math.round(sp.scrollTop)} imgH=${Math.round(q("#scan").clientHeight)} rows=${rows_len()}]`, sp.scrollTop!==s0);
   q("#lock").click(); await wait();
   const s1=sp.scrollTop; rp.scrollTop=0; rp.dispatchEvent(new Event("scroll")); await wait();
   ok("unlock stops sync", sp.scrollTop===s1);
   q("#lock").click(); await wait();
   const r0=rp.scrollTop;
   sp.scrollTop=Math.max(1,(sp.scrollHeight-sp.clientHeight)*0.9); sp.dispatchEvent(new Event("scroll")); await wait();
-  ok("scan scroll drives rows pane", rp.scrollTop!==r0);
+  ok(`scan scroll drives rows pane [r0=${Math.round(r0)} r1=${Math.round(rp.scrollTop)}]`, rp.scrollTop!==r0);
 
   q("#crop").click(); await wait();
   ok("name column box shown", !q("#nameBox").hidden && parseFloat(q("#nameBox").style.width)>0);

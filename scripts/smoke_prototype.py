@@ -102,9 +102,10 @@ def run_firefox(url: str, port: int = 4455) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--browser", choices=["chromium", "firefox", "all"], default="all")
+    ap.add_argument("--url", help="test a served URL instead of the file:// build")
     args = ap.parse_args(argv)
 
-    url = build_harness()
+    url = args.url or build_harness()
     runners = {"chromium": run_chromium, "firefox": run_firefox}
     if args.browser != "all":
         runners = {args.browser: runners[args.browser]}

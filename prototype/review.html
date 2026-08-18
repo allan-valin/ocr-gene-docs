@@ -48,7 +48,15 @@
   .doc .badge{display:inline-block;margin-top:3px;padding:0 5px;border-radius:99px;font-size:9.5px;
     background:var(--ok);color:#fff;letter-spacing:.02em}
   .sidehead{position:sticky;top:0;background:var(--panel);border-bottom:1.5px solid var(--line);
-    padding:7px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);z-index:2}
+    padding:7px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+    z-index:2;display:flex;align-items:center;gap:6px}
+  .sidehead button{margin-left:auto;padding:2px 7px;font-size:10.5px}
+  #crumb{padding:6px 10px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line);
+    word-break:break-all}
+  .dir{padding:5px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .dir:hover{background:var(--accent-soft)}
+  .dir::before{content:"📁 ";font-size:10px}
+  .dir.up::before{content:"↰ "}
   #pagestrip{display:flex;gap:4px;padding:6px;border-bottom:1px solid var(--line);
     background:var(--panel);position:sticky;top:0;z-index:3;flex-wrap:wrap}
   #pagestrip button{padding:3px 9px;font-size:11px}
@@ -126,6 +134,10 @@
 <main id="main">
   <div id="sidebar">
     <div class="sidehead" id="sidehead">Documentos</div>
+    <div id="picker" hidden>
+      <div id="crumb"></div>
+      <div id="dirlist"></div>
+    </div>
     <div id="doclist"></div>
   </div>
   <div class="pane" id="scanPane">
@@ -160,6 +172,7 @@
 <script>
 const $ = s => document.querySelector(s);
 let DB=null, D=null, docIdx=0, pageIdx=0, rows=[], sel=0, hits=[], hitAt=-1, syncing=false;
+const STATE={dir:""};
 
 // ---- fuzzy matching, standing in for the pg_trgm + phonetic + variant search ----
 const fold = s => (s||"").toString().normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
@@ -249,10 +262,17 @@ function stat(){
   $("#stat").textContent=`${v}/${rows.length} verificadas · ${lo} linhas com campo de baixa confiança`;
 }
 
+function pageURL(doc,page){
+  if(!SERVED) return page.file;
+  const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
+  return `/api/page?pdf=${encodeURIComponent(doc.file)}&n=${page.n}${dir}`;
+}
+
 // ---- documents ----
 function renderDocList(){
   const t=DB.documents.filter(d=>d.rows).length;
-  $("#sidehead").textContent=`${DB.documents.length} documentos · ${t} transcrito${t===1?"":"s"}`;
+  $("#sidehead").innerHTML=`<span>${DB.documents.length} documentos · ${t} transcrito${t===1?"":"s"}</span>`
+    + (SERVED?`<button id="pick" title="Escolher pasta">📂 Pasta</button>`:"");
   $("#doclist").innerHTML=DB.documents.map((d,i)=>`
     <div class="doc ${i===docIdx?"on":""}" data-d="${i}">
       <b>${d.ship}</b>
@@ -276,7 +296,7 @@ function openDoc(i,page){
   const showRows = !!D.rows && D.pages[pageIdx].n===D.transcribed_page;
   rows = showRows ? D.rows.map(r=>({...r,verified:false})) : [];
   sel=0; hits=[]; hitAt=-1;
-  $("#scan").src=D.pages[pageIdx].file;
+  $("#scan").src=pageURL(D,D.pages[pageIdx]);
   const m=D.meta;
   $("#docmeta").innerHTML = m
     ? `<b>${m.ship}</b> · ${m.line} · ${m.origin} → ${m.port} · ${m.arrival} · ${m.notation}`
@@ -297,6 +317,41 @@ function openDoc(i,page){
 $("#doclist").addEventListener("click",e=>{
   const d=e.target.closest(".doc"); if(d) openDoc(+d.dataset.d);
 });
+
+// ---- folder picker (only when served; file:// cannot list a directory) ----
+function showPicker(path){
+  fetch(`/api/browse?path=${encodeURIComponent(path||"")}`).then(r=>r.json()).then(b=>{
+    $("#picker").hidden=false; $("#doclist").hidden=true;
+    $("#crumb").textContent=(b.root||"")+(b.path?"/"+b.path:"");
+    const up = b.path ? `<div class="dir up" data-p="${b.parent==="."?"":b.parent}">acima</div>` : "";
+    $("#dirlist").innerHTML = up + b.dirs.map(d=>
+      `<div class="dir" data-p="${b.path?b.path+"/"+d:d}">${d}</div>`).join("")
+      + `<div class="doc" id="usehere"><b>Usar esta pasta</b>
+         <span>${b.pdfs.length} PDF${b.pdfs.length===1?"":"s"}</span></div>`;
+  });
+}
+document.addEventListener("click",e=>{
+  if(e.target.id==="pick"){ showPicker(STATE.dir); return; }
+  const d=e.target.closest("#dirlist .dir");
+  if(d){ showPicker(d.dataset.p); return; }
+  if(e.target.closest("#usehere")) loadFolder(currentRel());
+});
+function currentRel(){
+  const crumb=$("#crumb").textContent, root=(DB&&DB.root)||"";
+  return crumb.startsWith(root) ? crumb.slice(root.length).replace(/^\//,"") : "";
+}
+function loadFolder(rel){
+  fetch(`/api/corpus?path=${encodeURIComponent(rel||"")}`).then(r=>r.json()).then(d=>{
+    if(d.error) return;
+    STATE.dir=rel||""; DB=d;
+    $("#picker").hidden=true; $("#doclist").hidden=false;
+    if(!d.documents.length){
+      $("#doclist").innerHTML=`<div class="empty">Nenhum PDF nesta pasta.</div>`;
+      return;
+    }
+    openDoc(d.active||0);
+  });
+}
 $("#pagestrip").addEventListener("click",e=>{
   const b=e.target.closest("button"); if(b) openDoc(docIdx,+b.dataset.p);
 });
@@ -345,7 +400,15 @@ const locked = ()=>$("#lock").getAttribute("aria-pressed")==="true";
 // a row, which is exactly what someone verifying a page does. Sync scrolling is
 // instant for the same reason: a smooth animation keeps firing scroll events
 // after the guard clears, and the two panes start driving each other.
-function guarded(fn){ syncing=true; fn(); requestAnimationFrame(()=>{syncing=false;}); }
+function guarded(fn){
+  syncing=true; fn();
+  // Released by whichever fires first. requestAnimationFrame alone is not safe:
+  // it is throttled to zero in background tabs, so a guard set just before the
+  // tab loses focus would never clear and scroll sync would silently die.
+  const clear=()=>{ syncing=false; };
+  requestAnimationFrame(clear);
+  setTimeout(clear,0);
+}
 function scanToRow(i){
   const pane=$("#scanPane"), img=$("#scan");
   if(!img.clientHeight || !D.geometry) return;
@@ -431,11 +494,14 @@ $("#crop").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",Str
 addEventListener("resize",()=>paintBand(sel));
 
 // ---- boot ----
+// Two ways to run. Opened from disk, the payload is embedded at build time,
+// because file:// blocks fetch(). Served over http, the data comes from the
+// API and the folder picker becomes available.
+const SERVED = location.protocol.startsWith("http");
 function loadData(){
   const el=document.getElementById("payload");
   if(el && el.textContent.trim()) return Promise.resolve(JSON.parse(el.textContent));
-  // no embedded payload (template opened directly): fall back to a fetch, which
-  // only works when served over http, not from file://
+  if(SERVED) return fetch("/api/corpus").then(r=>r.json());
   return fetch("data.json").then(r=>r.json());
 }
 loadData().then(d=>{
