@@ -30,7 +30,7 @@ def test_each_band_becomes_one_row_in_order():
     geo = Band([(0.1, 0.2), (0.2, 0.3), (0.3, 0.4)])
     said = [("ROCA REBULLIDA AMPARO", 0.94), ("VAZQUEZ JOSE", 0.81), ("", 0.0)]
     rows = rows_from_bands(geo, (1000, 2000), lambda crops: said,
-                           crop=lambda box: box)
+                           crop=lambda i, box: box)
     assert [r["n"] for r in rows] == [1, 2, 3]
     assert rows[0]["surname"] == "ROCA REBULLIDA" and rows[0]["given"] == "AMPARO"
     assert rows[0]["conf"]["surname"] == 0.94
@@ -39,7 +39,7 @@ def test_each_band_becomes_one_row_in_order():
 def test_an_unread_row_is_null_not_invented():
     geo = Band([(0.1, 0.2), (0.2, 0.3)])
     rows = rows_from_bands(geo, (1000, 2000), lambda crops: [("", 0.0), ("X", 0.9)],
-                           crop=lambda box: box)
+                           crop=lambda i, box: box)
     assert rows[0]["surname"] is None and rows[0]["given"] is None
     assert rows[0]["conf"]["surname"] == 0.0
 
@@ -48,7 +48,7 @@ def test_recogniser_returning_short_falls_back_to_null_rows():
     """A truncated result must not shift every later name up by one row."""
     geo = Band([(0.1, 0.2), (0.2, 0.3), (0.3, 0.4)])
     rows = rows_from_bands(geo, (1000, 2000), lambda crops: [("A B", 0.9)],
-                           crop=lambda box: box)
+                           crop=lambda i, box: box)
     assert len(rows) == 3
     assert rows[1]["surname"] is None and rows[2]["surname"] is None
 
@@ -111,7 +111,7 @@ def test_the_printed_column_heading_is_not_a_passenger():
     from desembarque.engine_paddle import rows_from_bands
     geo = Band([(0.1, 0.2), (0.2, 0.3)])
     said = [("Nomes e Cognomes", 1.0), ("JOSE MUESSO", 0.9)]
-    rows = rows_from_bands(geo, (1000, 2000), lambda crops: said, crop=lambda b: b)
+    rows = rows_from_bands(geo, (1000, 2000), lambda crops: said, crop=lambda i, b: b)
     assert rows[0]["header"] is True
     assert rows[1].get("header") is not True
     assert rows[0]["name_raw"] == "Nomes e Cognomes"   # recorded, not discarded

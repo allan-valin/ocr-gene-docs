@@ -91,9 +91,16 @@ def split_name(text: str) -> tuple[str | None, str | None]:
     return " ".join(parts[:-1]), parts[-1]
 
 
+def name_strip_box(geo, size: tuple[int, int]) -> tuple[int, int]:
+    """The name column's x-range in pixels, with a little air either side."""
+    W, _H = size
+    nx0, nx1 = geo.name_column(0)
+    return max(0, int((nx0 - 0.004) * W)), min(W, int((nx1 + 0.004) * W))
+
+
 def rows_from_bands(geo, size: tuple[int, int],
                     recognize: Callable[[list], list[tuple[str, float]]],
-                    crop: Callable[[tuple[int, int, int, int]], object],
+                    crop: Callable[[int, tuple[int, int, int, int]], object],
                     ) -> list[dict]:
     """One row per detected band, in page order.
 
@@ -103,9 +110,7 @@ def rows_from_bands(geo, size: tuple[int, int],
     """
     W, H = size
     bands = geo.normalized_rows()
-    nx0, nx1 = geo.name_column(0)
-    x0 = max(0, int((nx0 - 0.004) * W))
-    x1 = min(W, int((nx1 + 0.004) * W))
+    x0, x1 = name_strip_box(geo, size)
 
     boxes, keep = [], []
     for i, (bt, bb) in enumerate(bands):
@@ -116,7 +121,7 @@ def rows_from_bands(geo, size: tuple[int, int],
         boxes.append((x0, a, x1, b))
         keep.append(i)
 
-    said = list(recognize([crop(box) for box in boxes])) if boxes else []
+    said = list(recognize([crop(i, box) for i, box in zip(keep, boxes)])) if boxes else []
     said += [("", 0.0)] * (len(boxes) - len(said))
     by_band = dict(zip(keep, said))
 
@@ -306,7 +311,42 @@ class PaddleEngine:
             # reading still stands, and the page is still reported
             return None
         return rows_from_bands(geo, im.size, self._recognize,
-                               lambda box: refine(im.crop(box)))
+                               self._carved_crops(im, geo))
+
+    def _carved_crops(self, im, geo) -> Callable[[int, tuple], object]:
+        """A crop function that hands each band its own ink and nobody else's.
+
+        The page is carved once: the name column is cut into rows along paths
+        of least ink rather than along the ruled line, so the tail of a `y`
+        stays with the row it was written on instead of landing inside the name
+        below it. See `desembarque.rowcut`.
+
+        Falls back to the plain rectangle if carving cannot be done, because a
+        rectangular crop is the old behaviour and still a usable one.
+        """
+        import numpy as np
+        from PIL import Image
+        from .rowcut import carve
+
+        W, H = im.size
+        bands = geo.normalized_rows()
+        x0, x1 = name_strip_box(geo, im.size)
+        try:
+            top = max(0, int(bands[0][0] * H) - PAD_PX)
+            bottom = min(H, int(bands[-1][1] * H) + PAD_PX)
+            strip = np.asarray(im.crop((x0, top, x1, bottom)).convert("L"))
+            edges = [(max(0, int(bt * H) - PAD_PX - top),
+                      min(bottom - top, int(bb * H) + PAD_PX - top))
+                     for bt, bb in bands]
+            cuts = carve(strip, edges)
+        except Exception:
+            cuts = []
+
+        def crop(i: int, box: tuple) -> object:
+            if i < len(cuts) and cuts[i].size:
+                return refine(Image.fromarray(cuts[i]))
+            return refine(im.crop(box))
+        return crop
 
     def transcribe_page(self, image: Path, kind: str = "unknown",
                         source: Path | None = None,
@@ -337,7 +377,7 @@ class PaddleEngine:
             im = Image.open(image).convert("L")
             im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
             rows = rows_from_bands(geo, im.size, self._recognize,
-                                   lambda box: refine(im.crop(box)))
+                                   self._carved_crops(im, geo))
             rows, from_render = with_fallback(
                 rows,
                 lambda: self._render_rows(source, page, geo, im.size, image.parent),
