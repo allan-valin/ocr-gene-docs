@@ -62,6 +62,7 @@
   #corpushits .hit{padding:4px 6px;border:1px solid var(--line);border-radius:4px;
     cursor:pointer;font-size:11.5px;line-height:1.3}
   #corpushits .hit b{display:block;font-weight:600}
+  #corpushits .hit.on{border-color:var(--accent,#456);background:rgba(120,150,200,.12)}
   #corpushits .hit span{color:var(--muted);font-size:10px}
   #corpushits .none{color:var(--muted);font-size:10.5px}
   #crumb{padding:6px 10px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line);
@@ -503,7 +504,8 @@ function renderHits(d){
     return;
   }
   el.innerHTML=d.hits.slice(0,25).map(h=>`
-    <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}">
+    <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
+         data-row="${h.row||0}" title="Abrir o documento nesta linha">
       <b>${h.text}</b>
       <span>${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}</span>
     </div>`).join("");
@@ -523,7 +525,16 @@ document.addEventListener("input",e=>{
 document.addEventListener("click",e=>{
   const h=e.target.closest("#corpushits .hit"); if(!h) return;
   const i=DB.documents.findIndex(d=>d.file===h.dataset.file);
-  if(i>=0) openDoc(i, +h.dataset.page||undefined);
+  if(i<0) return;
+  openDoc(i, +h.dataset.page||undefined);
+  // land on the row itself, marked against the scan. A hit the user then has to
+  // hunt for on the page is most of the work left undone — and the scan beside
+  // it is the only thing that makes a fuzzy match trustworthy.
+  const want=+h.dataset.row;
+  const k=rows.findIndex(r=>r.n===want);
+  if(k>=0) select(k);
+  document.querySelectorAll("#corpushits .hit").forEach(x=>x.classList.remove("on"));
+  h.classList.add("on");
 });
 
 // ---- folder indexing ----

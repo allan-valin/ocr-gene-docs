@@ -170,3 +170,19 @@ def test_search_declines_a_query_too_short_to_mean_anything(server, engine):
     base, _ = server
     code, body = call(f"{base}/api/search?q=jo")
     assert code == 200 and body["hits"] == []
+
+
+def test_search_can_open_documents_indexed_before_filenames_were_stored(server, engine):
+    """Early transcriptions recorded only the content hash. The file a hash
+    refers to depends on the folder being browsed anyway, so it is resolved at
+    query time rather than trusted from the record."""
+    base, folder = server
+    docs(folder, 1)
+    from desembarque.identity import identify
+    ident = identify(folder / "doc0.pdf")
+    serve.JOBS.store(ident.doc_hash, {
+        "hash": ident.doc_hash, "engine": "paddle", "notation": "BS.ENT.9",
+        "rows": [{"n": 4, "name_raw": "Guudo Camtadore", "page": 2}]})
+    code, body = call(f"{base}/api/search?q=Guido%20Contadore")
+    assert code == 200 and body["hits"]
+    assert body["hits"][0]["file"] == "doc0.pdf"

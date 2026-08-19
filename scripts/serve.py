@@ -259,6 +259,32 @@ def transcribe_document(pdf: Path, job) -> dict:
     }
 
 
+_HASH_FILES: dict[tuple[str, int], dict[str, str]] = {}
+
+
+def hash_index(folder: Path) -> dict[str, str]:
+    """Content hash -> filename, for the folder being browsed.
+
+    Transcriptions are keyed by content hash, which is the point: the file can
+    be renamed, copied or re-downloaded and keep its work. The consequence is
+    that a search hit knows *what* it found and not *where*, so the folder has
+    to answer that, and it can only answer for the folder in front of it.
+    """
+    key = (str(folder), int(folder.stat().st_mtime_ns))
+    hit = _HASH_FILES.get(key)
+    if hit is not None:
+        return hit
+    out = {}
+    for pdf in collect_pdfs(folder):
+        try:
+            out[identify(pdf).doc_hash] = pdf.name
+        except OSError:
+            continue
+    _HASH_FILES.clear()          # one folder's worth is enough to keep
+    _HASH_FILES[key] = out
+    return out
+
+
 class _BatchJob:
     """What transcribe_document needs from a job, without the UI job machinery.
 
@@ -394,6 +420,9 @@ class Handler(BaseHTTPRequestHandler):
                 rows = searchlib.load_index(JOBS.cache, engine_only=False)
                 hits = searchlib.search(rows, q.get("q", ""),
                                         limit=int(q.get("limit", 50)))
+                names = hash_index(STATE["root"])
+                for h in hits:
+                    h["file"] = h.get("file") or names.get(h.get("doc") or "")
                 return self._send(200, {"query": q.get("q", ""),
                                         "indexed": len(rows), "hits": hits})
 

@@ -145,6 +145,27 @@ window.addEventListener("load",async()=>{
               || !!document.querySelector("#corpushits .none");
     }
     ok("corpus search answers, with hits or with a plain 'nothing' line", answered);
+    const hit=document.querySelector("#corpushits .hit");
+    if(hit){
+      const want=+hit.dataset.row;
+      hit.click();
+      // the document's page image is fetched on demand, so wait for the state
+      // rather than for a guessed delay
+      let selRow=null;
+      for(let i=0;i<40;i++){
+        await wait(150);
+        selRow=document.querySelector("#rows tr.sel");
+        if(selRow && (!want || selRow.querySelector(".num").textContent.trim()===String(want))) break;
+      }
+      ok("clicking a hit opens its document and selects that row",
+         !!selRow && (!want || selRow.querySelector(".num").textContent.trim()===String(want)));
+      let banded=false;
+      for(let i=0;i<40 && !banded;i++){
+        await wait(150);
+        banded=!document.getElementById("bandBox").hidden;
+      }
+      ok("the scan band follows the hit", banded);
+    }
     cq.value=""; cq.dispatchEvent(new Event("input",{bubbles:true}));
   }
 
