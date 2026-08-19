@@ -6,7 +6,9 @@ next actions.
 
 ## 2026-08-19 — daytime session (Allan at work)
 
-Everything below is committed and pushed. Nothing is running; no background jobs left.
+Everything below is committed and pushed to https://github.com/allan-valin/ocr-gene-docs — nothing is running, no background
+jobs, no servers left up. The local corpus in `data/scans` is fully indexed, so
+search works the moment the server starts.
 
 ### The headline
 
@@ -83,6 +85,21 @@ The first hand-read ground truth for a handwritten page is now in
 `data/truth/`, versioned. Until today the only truth in the repository was a *typed*
 page, which is why none of this was visible.
 
+### Also fixed, after the corpus run showed them
+
+* **Search hits now land on the row**, at the right page, with the band drawn on
+  the scan. A hit that only opened the document left the user hunting the page for
+  the name they searched for.
+* **The printed column heading was indexed as a passenger.** "Nomes e Cognomes"
+  scored 1.0 against anyone searching a name containing "nome". Exact matching
+  caught almost none of them, because the recogniser reads the caption differently
+  on every page, so multi-word captions are matched loosely. 24 rows left the index,
+  no real name did.
+* **Filenames are resolved from the content hash at query time.** Transcriptions are
+  keyed by hash so a renamed dossier keeps its work, which means a hit knows what it
+  found and not where — and the 57 records indexed this morning have no filename in
+  them at all.
+
 ### Built today
 
 * `/api/index` — folder indexing: start, progress with a plain-language estimate,
@@ -94,7 +111,7 @@ page, which is why none of this was visible.
   `scripts/spike_vl.py`, `docs/HOSTING.md`.
 * Rows now follow the page being read; fields the engine never attempted are blank
   rather than "ilegível".
-* **109 Python tests, 33 browser assertions, all passing in Chromium and Firefox.**
+* **113 Python tests, 35 browser assertions, all passing in Chromium and Firefox.**
 
 ### Next, in order
 
@@ -103,11 +120,9 @@ page, which is why none of this was visible.
 2. **Row-level accuracy on handwriting.** Per-row upscaling did nothing once the
    width bug was fixed; the remaining lever is a recogniser trained on handwriting,
    or fine-tuning one on this hand.
-3. **Search results need the page image beside them.** Clicking a hit opens the
-   document, but the reason to trust the hit is the scan, and confirming still means
-   reading the row by eye.
-4. **The header row is indexed as a passenger** ("Nomes e Cognomes" scores 1.0).
-   Harmless in ranking, sloppy in a corpus meant as evidence.
+3. **Re-index to pick up the header flag.** The 57 documents were transcribed
+   before headings were marked, so search filters them by text instead. Harmless,
+   but the flag is the cleaner path once anything else forces a re-run.
 5. **Geometry is now the floor on speed** at 1.8 s of the 4 s page. Untouched so far.
 6. **`data/transcriptions/` has no schema version.** It will need one before the row
    shape changes again.
@@ -210,8 +225,8 @@ content-hash cache, stop, and a surfaced failure list. Seven tests, all on failu
 # the engine venv runs the app too, and is the one to use for indexing
 .venv-ocr/bin/python scripts/serve.py --root data/scans
 .venv/bin/python scripts/serve.py          # app only; engine reads "não instalado"
-.venv/bin/python -m pytest tests/ -q       # 109 tests
-python3 scripts/smoke_prototype.py --url http://127.0.0.1:8799/selftest   # 33 assertions
+.venv/bin/python -m pytest tests/ -q       # 113 tests
+python3 scripts/smoke_prototype.py --url http://127.0.0.1:8799/selftest   # 35 assertions
 
 # measurements
 .venv-ocr/bin/python scripts/spike_speed.py            # per-variant speed and CER
