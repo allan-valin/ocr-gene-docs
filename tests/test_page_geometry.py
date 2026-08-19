@@ -215,3 +215,98 @@ def test_a_document_is_extracted_once_for_all_its_pages(tmp_path, monkeypatch):
     second = pg._extract_candidates(pdf, 3, work)
     assert first and second and first != second
     assert len(calls) == 1
+
+
+# --- the comb must sit on the writing, not on the blank ruled paper ----------
+#
+# BS_ENT_013990 p2 lists eighteen passengers; the engine read three. The table's
+# top came from `rule_extent`, the longest *unbroken* vertical run of ink at
+# each column rule — and handwriting shatters those rules precisely where people
+# are listed, into 17-21 short runs, none longer than 5% of the page. Where the
+# table is empty the rules print cleanly, so the longest run is always the blank
+# region: the top came out at 0.559 of the page and the comb fitted the ruled
+# emptiness below the list.
+#
+# Raising the gap tolerance is not the fix; measured over three pages, the value
+# that recovers 013990 (250 px) drags the two working pages up into their
+# letterheads. The extent has to come from where the writing actually is.
+
+def half_written_table(rows=18, pitch=100, w=1200, h=3000, blanks=14):
+    """A table written in its top half and ruled-but-empty in its bottom half,
+    with the column rules broken wherever writing crosses them — the shape that
+    defeats a longest-unbroken-run bound."""
+    from PIL import Image, ImageDraw
+    im = Image.new("L", (w, h), 255)
+    d = ImageDraw.Draw(im)
+    x0, x1, y0 = 100, w - 100, 300
+    total = rows + blanks
+    for c in (x0, 400, 700, x1):
+        for r in range(total):
+            top = y0 + r * pitch
+            # written rows break the rule; empty ones print it whole
+            if r < rows:
+                # a break wider than the detector's gap tolerance, which is what
+                # real handwriting does: 17-21 runs per rule, none of them long
+                d.line([(c, top + 46), (c, top + pitch - 46)], fill=0, width=3)
+            else:
+                d.line([(c, top), (c, top + pitch)], fill=0, width=3)
+    for r in range(total + 1):
+        y = y0 + r * pitch
+        d.line([(x0, y), (x1, y)], fill=0, width=2)
+    for r in range(rows):
+        cy = y0 + r * pitch + pitch // 2
+        d.rectangle([x0 + 30, cy - 12, 380, cy + 12], fill=0)
+        d.rectangle([420, cy - 12, 680, cy + 12], fill=0)
+    return im
+
+
+def written_span(geo, h, rows=18, pitch=100, y0=300):
+    """How much of the written area the comb covers, 0..1."""
+    if not geo.rows:
+        return 0.0
+    bands = geo.normalized_rows()
+    top, bottom = bands[0][0] * h, bands[-1][1] * h
+    lo, hi = y0, y0 + rows * pitch
+    overlap = max(0.0, min(bottom, hi) - max(top, lo))
+    return overlap / (hi - lo)
+
+
+def test_the_comb_covers_rows_whose_rules_are_broken_by_writing():
+    im = half_written_table()
+    geo = detect_rules(ink_mask(im))
+    assert written_span(geo, im.height) > 0.8, (
+        "the comb sat on the blank ruled half instead of the written rows")
+
+
+def test_a_fully_written_table_is_unchanged():
+    """The straightforward case must not be disturbed by fixing the hard one."""
+    im = synthetic_table(rows=20, pitch=100)
+    geo = detect_rules(ink_mask(im))
+    assert 18 <= len(geo.normalized_rows()) <= 23
+
+
+def test_writing_above_the_table_does_not_drag_the_comb_into_it():
+    """A letterhead is a few irregular lines, not a periodic run, and must not
+    extend the comb upward — the failure the original bound existed to stop."""
+    from PIL import ImageDraw
+    im = half_written_table()
+    d = ImageDraw.Draw(im)
+    d.rectangle([150, 60, 900, 110], fill=0)      # a title
+    d.rectangle([150, 150, 700, 185], fill=0)     # a subtitle
+    geo = detect_rules(ink_mask(im))
+    bands = geo.normalized_rows()
+    assert bands, "still detects the table"
+    assert bands[0][0] * im.height > 200, "comb reached up into the letterhead"
+
+
+def test_blank_rows_inside_the_table_do_not_cut_the_comb_short():
+    """Clerks leave a line unwritten; that is a row with nothing in it, not the
+    end of the table."""
+    from PIL import Image, ImageDraw
+    im = half_written_table(rows=18, blanks=6)
+    d = ImageDraw.Draw(im)
+    for r in (5, 6, 11):                           # erase three written rows
+        cy = 300 + r * 100 + 50
+        d.rectangle([120, cy - 20, 900, cy + 20], fill=255)
+    geo = detect_rules(ink_mask(im))
+    assert written_span(geo, im.height) > 0.7

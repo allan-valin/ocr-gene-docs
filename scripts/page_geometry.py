@@ -307,6 +307,123 @@ def _columns(mask: np.ndarray, vth: float | None) -> list[int]:
     return cols
 
 
+def _rule_support(mask: np.ndarray, cols: list[int], y0: int, y1: int,
+                  halfw: int = 3) -> float:
+    """Share of the column rules with any ink between y0 and y1.
+
+    This tells a row of the table apart from a line of the letterhead without
+    assuming where either is. Inside the table every column rule passes through
+    every row, even where writing has broken it into short segments; above the
+    table there are no vertical rules to pass through at all.
+    """
+    if not cols or y1 <= y0:
+        return 0.0
+    hits = 0
+    for c in cols:
+        strip = mask[max(0, y0):y1, max(0, c - halfw):c + halfw + 1]
+        if strip.size and strip.any():
+            hits += 1
+    return hits / len(cols)
+
+
+def _ruled_run(mask: np.ndarray, cols: list[int], pitch: float, intercept: float,
+               first: int, last: int, floor: float = 0.75) -> tuple[int, int] | None:
+    """The longest stretch of rows the table's own rules vouch for.
+
+    A pitch fitted over the whole page can reach a letterhead line that happens
+    to land near a multiple of the pitch, and on a scan whose rules are broken
+    there is no continuous bound left to stop it. Asking whether the column
+    rules run through each band answers that per row, on the evidence of the
+    page rather than an assumed layout.
+    """
+    ok = []
+    for i in range(first, last + 1):
+        c = intercept + i * pitch
+        if _rule_support(mask, cols, int(c - pitch / 2), int(c + pitch / 2)) > floor:
+            ok.append(i)
+    if not ok:
+        return None
+    best = cur = (ok[0], ok[0])
+    for a, b in zip(ok, ok[1:]):
+        if b - a <= 2:
+            cur = (cur[0], b)
+        else:
+            if cur[1] - cur[0] > best[1] - best[0]:
+                best = cur
+            cur = (b, b)
+    if cur[1] - cur[0] > best[1] - best[0]:
+        best = cur
+    return best
+
+
+def _comb_span(centres: list[int], pitch: float, intercept: float,
+               tol: float = 0.18, gap: int = 3) -> tuple[int, int] | None:
+    """Which multiples of the pitch the detected lines actually occupy.
+
+    The longest run of consecutive row positions, tolerating a few empty ones,
+    since a clerk leaving a line unwritten is a row with nothing in it and not
+    the end of the table.
+    """
+    if not centres:
+        return None
+    C = np.asarray(sorted(centres), dtype=float)
+    idx = np.round((C - intercept) / pitch)
+    resid = np.abs(C - (intercept + idx * pitch))
+    inl = sorted({int(i) for i, r in zip(idx, resid) if r < pitch * tol})
+    if not inl:
+        return None
+    best = cur = (inl[0], inl[0])
+    for a, b in zip(inl, inl[1:]):
+        if b - a <= gap + 1:
+            cur = (cur[0], b)
+        else:
+            if cur[1] - cur[0] > best[1] - best[0]:
+                best = cur
+            cur = (b, b)
+    if cur[1] - cur[0] > best[1] - best[0]:
+        best = cur
+    return best
+
+
+def _edges_for(pitch: float, intercept: float, first: int, last: int) -> list[float]:
+    """Band boundaries for rows `first`..`last`.
+
+    The comb sits on the text centres, so it is shifted half a pitch: a band has
+    to bracket its line, not bisect it.
+    """
+    if last < first:
+        return []
+    centres = [intercept + i * pitch for i in range(first, last + 1)]
+    return [c - pitch / 2 for c in centres] + [centres[-1] + pitch / 2]
+
+
+def _comb_score(edges: list[float], lines: list[int], floor: float = 0.5) -> int:
+    """How many lines of writing a comb accounts for, or -1 if it is mostly air.
+
+    Two wrong measures were tried against ninety pages before this one. Counting
+    the lines inside the comb rewards whichever comb is longer, and picked the
+    wider candidate every time (54 pages regressed). Lines *per band* rewards
+    whichever comb is shortest, so a comb trimmed back to two bands sitting on
+    two lines beat a comb over thirty rows (39 pages regressed).
+
+    What is wanted is the comb that accounts for the most writing while still
+    being mostly writing: the count, with a floor on how much of the comb has to
+    be writing at all.
+
+    The floor is only ever applied to the challenger. Rows a clerk left blank
+    are rows all the same — unknown information is left blank on these forms —
+    so a correct comb over thirty rows may only have fifteen detected lines in
+    it. Holding the default to the floor disqualified exactly those pages and
+    handed them to a three-band comb sitting on the letterhead.
+    """
+    if not edges or len(edges) < 2 or not lines:
+        return -1
+    lo, hi = edges[0], edges[-1]
+    inside = sum(1 for y in lines if lo <= y < hi)
+    bands = len(edges) - 1
+    return inside if inside / bands >= floor else -1
+
+
 def detect_rules(mask: np.ndarray, vth: float | None = None) -> Geometry:
     """Recover the table grid: column rules, table extent, and row bands."""
     h, w = mask.shape
@@ -329,20 +446,72 @@ def detect_rules(mask: np.ndarray, vth: float | None = None) -> Geometry:
     if bottom - top < 20:
         return geo
 
-    centres = _text_lines(mask, cols[0], cols[-1], top, bottom)
-    fit = _best_pitch(centres)
-    if not fit:
-        return geo
-    pitch, intercept = fit
-    geo.row_pitch = pitch
+    # The bound below comes from `rule_extent`, the longest *unbroken* vertical
+    # run of ink at each rule. That is the right question for where a table ends
+    # and the wrong one for where it begins: writing crosses the rules, so where
+    # people are actually listed a rule survives only as short segments. On
+    # BS_ENT_013990 the longest run was therefore always the *empty* half, the
+    # table's top came out at 0.559 of the page, and the comb was fitted to
+    # blank ruled paper below a list of eighteen passengers, three of whom were
+    # read.
+    #
+    # Two things were tried and rejected on measurement. Widening the gap
+    # tolerance recovers that page at 250 px and drags working pages up into
+    # their letterheads. Refitting the pitch over the whole page regressed 54 of
+    # 89 pages, because it changed the fit on pages that were already right.
+    #
+    # So the narrow fit is still computed first and still wins ties, and a wider
+    # one is only *considered* — the two are compared by how much writing each
+    # actually covers, which is the question that matters and can be asked of
+    # the page itself.
+    all_lines = _text_lines(mask, cols[0], cols[-1], by0, bottom)
 
-    # The comb sits on the text centres, so shift it half a pitch to get the
-    # boundaries *between* rows — a band has to bracket its line, not bisect it.
-    first = int(np.ceil((top - intercept) / pitch))
-    last = int(np.floor((bottom - intercept) / pitch))
-    centres = [intercept + i * pitch for i in range(first, last + 1)]
-    edges = [c - pitch / 2 for c in centres] + [centres[-1] + pitch / 2] if centres else []
-    geo.row_edges = [e for e in edges if top - pitch <= e <= bottom + pitch]
+    def comb(lo: int) -> tuple[list[float], float] | None:
+        lines = _text_lines(mask, cols[0], cols[-1], lo, bottom)
+        fit = _best_pitch(lines)
+        if not fit:
+            return None
+        pitch, intercept = fit
+        if lo >= top:
+            first = int(np.ceil((top - intercept) / pitch))
+            last = int(np.floor((bottom - intercept) / pitch))
+        else:
+            span = _comb_span(lines, pitch, intercept)
+            if span is None:
+                return None
+            span = _ruled_run(mask, [int(c) for c in cols], pitch, intercept,
+                              *span)
+            if span is None:
+                return None
+            first, last = span
+        edges = _edges_for(pitch, intercept, first, last)
+        return ([e for e in edges if lo - pitch <= e <= bottom + pitch], pitch)
+
+    narrow = comb(top)
+    wider = comb(by0)
+    best = narrow
+    # The narrow fit is the default and the better-tested path, so the wider one
+    # has to earn the swap rather than win by a hair. Without the margin the two
+    # traded places on pages where neither was clearly right and fifteen of
+    # eighty-nine got worse; with it, only a comb that has found substantially
+    # more of the page's writing displaces one that already works.
+    if wider and wider[0]:
+        # The wider comb may only *extend* the table upward, never relocate to
+        # some other part of the sheet. On BS_ENT_015953 the page carries two
+        # separate blocks of ruled lines; the rules put the table in the lower
+        # one, the narrow comb sat on it correctly, and an unconstrained wider
+        # fit moved wholesale to the upper block and lost half the coverage.
+        # Overlapping the rule-derived extent is what makes this the same table.
+        # within a row of the table's top counts as reaching it: a comb that
+        # ends exactly at the first ruled line is the same table, not another one
+        reaches = wider[0][-1] >= top - wider[1] and wider[0][0] <= bottom
+        ns = _comb_score(best[0], all_lines, floor=0.0) if best else -1
+        ws = _comb_score(wider[0], all_lines)
+        if reaches and (ns < 0 or ws > max(ns * 1.5, ns + 3)):
+            best = wider
+    if best is None:
+        return geo
+    geo.row_edges, geo.row_pitch = best
     return geo
 
 
