@@ -147,3 +147,71 @@ def test_a_normal_scan_is_left_untouched(tmp_path):
     p = tmp_path / "pos.png"
     pos.save(p)
     assert positive(p) == p
+
+
+def test_a_page_image_is_extracted_once_and_then_reused(tmp_path, monkeypatch):
+    """Extraction is the most expensive step on these scans — 11.6 s for a 23 MP
+    page, against 2.3 s of geometry. It was being redone on every call: once to
+    index, again to display, again on the next run."""
+    from PIL import Image
+    import page_geometry as pg
+
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n")
+    work = tmp_path / "work"
+    work.mkdir()
+
+    runs = []
+
+    def fake_extract(pdf_path, n, workdir):
+        runs.append(n)
+        out = workdir / f"{pdf_path.stem}-p{n}-img-000.png"
+        im = Image.new("1", (700, 900), 1)
+        for x in range(100, 400):
+            for y in range(300, 340):
+                im.putpixel((x, y), 0)
+        im.save(out)
+        return [out]
+
+    monkeypatch.setattr(pg, "_extract_candidates", fake_extract)
+
+    first = pg.page_image(pdf, 2, work)
+    second = pg.page_image(pdf, 2, work)
+    assert first == second
+    assert runs == [2]          # extracted once, not twice
+
+
+def test_a_document_is_extracted_once_for_all_its_pages(tmp_path, monkeypatch):
+    """pdfimages re-parses the whole PDF on every call, so asking page by page
+    made a five-page dossier five full parses — 11.3 s a page against 4.8 s when
+    the document is done in one go."""
+    import page_geometry as pg
+
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n")
+    work = tmp_path / "work"
+    work.mkdir()
+
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        from PIL import Image
+        stem = Path(cmd[-1])
+        for page in (1, 2, 3):
+            im = Image.new("1", (700, 900), 1)
+            for x in range(100, 400):
+                for y in range(300, 340):
+                    im.putpixel((x, y), 0)
+            im.save(stem.parent / f"{stem.name}-{page:03d}-000.png")
+        class R:
+            returncode = 0
+        return R()
+
+    monkeypatch.setattr(pg.shutil, "which", lambda name: "/usr/bin/pdfimages")
+    monkeypatch.setattr(pg.subprocess, "run", fake_run)
+
+    first = pg._extract_candidates(pdf, 2, work)
+    second = pg._extract_candidates(pdf, 3, work)
+    assert first and second and first != second
+    assert len(calls) == 1

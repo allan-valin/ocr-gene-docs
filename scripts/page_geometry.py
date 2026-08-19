@@ -25,6 +25,8 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import shutil
+
 import numpy as np
 from PIL import Image
 
@@ -419,10 +421,40 @@ def positive(path: Path) -> Path:
             if out.exists() and out.stat().st_size:
                 return out
             arr = 255 - np.asarray(im.convert("L"), dtype=np.uint8)
-            Image.fromarray(arr).save(out)
+            Image.fromarray(arr).save(out, compress_level=1)
             return out
     except Exception:
         return path
+
+
+def _extract_candidates(pdf: Path, n: int, workdir: Path) -> list[Path]:
+    """Every image on page `n`, as files on disk.
+
+    pdfium decodes image objects but does not expose an MRC soft mask as a
+    usable image — those come back 1x1 — so when poppler's pdfimages happens to
+    be installed we use it, purely as a quality accelerator. It is never
+    required and is not shipped, so the distributable stays free of GPL.
+
+    The whole document is extracted in one call, because pdfimages re-parses
+    the PDF each time it runs: page by page a five-page dossier cost 11.3 s a
+    page, and 4.8 s done in one go. Indexing reads every page anyway.
+    """
+    from desembarque import pdf as pdflib
+
+    if shutil.which("pdfimages"):
+        stem = workdir / f"{pdf.stem}-pi"
+        marker = workdir / f"{pdf.stem}-pi.done"
+        if not marker.exists():
+            subprocess.run(["pdfimages", "-p", "-png", str(pdf), str(stem)],
+                           capture_output=True)
+            try:
+                marker.write_text("", encoding="utf-8")
+            except OSError:
+                pass
+        found = sorted(stem.parent.glob(f"{stem.name}-{n:03d}-*.png"))
+        if found:
+            return found
+    return pdflib.extract_images(pdf, n, workdir)
 
 
 def page_image(pdf: Path, n: int, workdir: Path, dpi: int = 300) -> Path | None:
@@ -435,25 +467,24 @@ def page_image(pdf: Path, n: int, workdir: Path, dpi: int = 300) -> Path | None:
     rules from the mask and two or three from a render. So prefer the embedded
     layer, and fall back to rendering for PDFs that have none.
     """
-    import shutil
-    import subprocess
-
-    from desembarque import pdf as pdflib
+    from desembarque import pdf as pdflib   # noqa: F401  (render fallback)
 
     workdir.mkdir(parents=True, exist_ok=True)
 
-    # pdfium decodes image objects but does not expose an MRC soft mask as a
-    # usable image — those come back 1x1 — so when poppler's pdfimages happens
-    # to be installed we use it, purely as a quality accelerator. It is never
-    # required and is not shipped, so the distributable stays free of GPL.
-    candidates: list[Path] = []
-    if shutil.which("pdfimages"):
-        stem = workdir / f"{pdf.stem}-p{n}-pi"
-        subprocess.run(["pdfimages", "-f", str(n), "-l", str(n), "-png",
-                        str(pdf), str(stem)], capture_output=True)
-        candidates = sorted(stem.parent.glob(f"{stem.name}-*.png"))
-    if not candidates:
-        candidates = pdflib.extract_images(pdf, n, workdir)
+    # Extraction is the expensive step on these scans — 11.6 s for a 23 MP page,
+    # against 2.3 s of geometry — and it was being redone every time the page
+    # was touched: to index it, to display it, and again on the next run. The
+    # chosen image is recorded, so the work survives.
+    chosen = workdir / f"{pdf.stem}-p{n}-chosen.txt"
+    if chosen.exists():
+        try:
+            kept = Path(chosen.read_text(encoding="utf-8").strip())
+            if kept.exists() and kept.stat().st_size:
+                return kept
+        except OSError:
+            pass
+
+    candidates = _extract_candidates(pdf, n, workdir)
 
     best, best_px, best_bilevel = None, 0, False
     for cand in candidates:
@@ -474,13 +505,23 @@ def page_image(pdf: Path, n: int, workdir: Path, dpi: int = 300) -> Path | None:
             continue
         if (bilevel, px) > (best_bilevel, best_px):
             best, best_px, best_bilevel = cand, px, bilevel
+    def keep(path: Path | None) -> Path | None:
+        if path is None:
+            return None
+        final = positive(path)
+        try:
+            chosen.write_text(str(final), encoding="utf-8")
+        except OSError:
+            pass
+        return final
+
     if best is not None and best_bilevel:
-        return positive(best)
+        return keep(best)
 
     out = workdir / f"{pdf.stem}-p{n}-render.png"
     if pdflib.render_page(pdf, n, out, dpi=dpi, grayscale=True):
-        return positive(out)
-    return positive(best) if best is not None else None
+        return keep(out)
+    return keep(best)
 
 
 def analyze_pdf_page(pdf: Path, n: int, workdir: Path) -> Geometry | None:
