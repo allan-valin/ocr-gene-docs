@@ -12,30 +12,46 @@ search works the moment the server starts.
 
 ### The headline
 
-**The whole local corpus — 57 dossiers — now indexes in 17 minutes with no failures,
-and search finds people in it.** Before today a single page took 37 s and there was no
-folder flow at all.
+**The corpus is 168 dossiers now — 865 pages — and all of it is indexed, with no
+failures.** 110 more dossiers were downloaded this afternoon to answer the question
+the morning's numbers could not: does search still work when the pool gets bigger?
 
-### The numbers, and what they are worth
+It does for typed pages. **It is starting to fail for handwritten ones**, exactly as
+the margins predicted.
 
-| | before | after |
+| pool | typed page: ranked first | typed: top five | handwritten: ranked first | handwritten margin |
+|---|---|---|---|---|
+| 147 rows | 26/26 | 26/26 | — | — |
+| 1,081 rows | 23/26 | 26/26 | 5/6 | +0.114 |
+| **3,430 rows** | **20/26** | **26/26** | **4/6** | **+0.043** |
+
+"CEZARIO SAMMAMED" is now lost entirely: at 3,494 rows the word "SUMMARIO", printed
+on some other page, outranks the row it belongs to. A twentyfold larger pool is
+coming, and this is what it will do.
+
+So the ranking is clear: **handwriting recognition is the thing worth money now.**
+Speed is solved, indexing is solved, search is solved for typescript.
+
+### Throughput, re-measured on the harder half
+
+The morning's "35 hours for 7,000 dossiers" came from the first 57 dossiers, which
+are small. The dossiers downloaded this afternoon are two to five times larger, and
+on those the rate collapsed to about one dossier a minute — until profiling found the
+cost was not recognition at all:
+
+| step, per page | before | after |
 |---|---|---|
-| one page | 37 s | **4 s** (1.8 s geometry + 2.4 s recognition) |
-| 57 dossiers | never run | **17.3 min, 0 failures, 50 transcribed + 7 already cached** |
-| 7,000 dossiers (Allan's real case) | ~720 CPU-hours | **~35 h on this laptop**, four workers |
+| extract the page image | 11.6 s | 4.8 s first time, then free |
+| geometry | 2.3 s | 2.3 s |
+| recognise the rows | 2.6 s | 2.6 s |
 
-Retrieval, which is the measure that matters — can a person find their ancestor:
+`pdfimages` re-parses the whole PDF on every call, so a five-page dossier was five
+full parses, and the chosen image was recomputed every time the page was touched.
+Extracting each document once and recording the result **roughly quadrupled indexing
+throughput**: the final pass did 90 dossiers in 26.6 minutes, ~17.7 s each.
 
-* **typed page, 1,081-row pool: 23/26 ranked first, 26/26 in the top five.**
-  (The same queries scored 26/26 first against a 147-row pool, so the loss is the
-  pool growing, exactly as expected. A 70,000-row pool will be worse again.)
-* **handwritten page, 1,081-row pool: 5/6 ranked first, 5/6 in the top five.**
-  The sixth, "A. VIEIRA MIRANDA", was beaten to first place by a real "Joaquim
-  Miranda" in another dossier — a fair loss, not a broken index.
-
-Caveat worth keeping: the typed check counts *any* row of the right dossier as
-correct, so it is slightly generous. The handwritten check is against known row
-numbers and is not.
+At that rate 7,000 dossiers is **about 34 hours** on this laptop — the earlier figure
+survives, but for a different reason than it was first arrived at.
 
 ### What made it ten times faster
 
@@ -128,109 +144,41 @@ session, because the geometry currently works on the other 92%.
 
 ### Next, in order
 
-1. **Re-check retrieval as the pool grows.** The margins above are thin. The cheapest
-   real test is Allan's own folder, if it is larger than 57 dossiers.
-2. **Row-level accuracy on handwriting.** Per-row upscaling did nothing once the
-   width bug was fixed; the remaining lever is a recogniser trained on handwriting,
-   or fine-tuning one on this hand.
-3. **Re-index to pick up the header flag.** The 57 documents were transcribed
-   before headings were marked, so search filters them by text instead. Harmless,
-   but the flag is the cleaner path once anything else forces a re-run.
-5. **Geometry is now the floor on speed** at 1.8 s of the 4 s page. Untouched so far.
-6. **`data/transcriptions/` has no schema version.** It will need one before the row
-   shape changes again.
+1. **Handwriting recognition.** This is now the only thing standing between the tool
+   and its purpose. The printed-text recogniser reads `GUIDO CONTADORE` as
+   `Guudo Camtadore`, which fuzzy search rescues at three thousand rows and will not
+   rescue at seventy thousand. Options, cheapest first: a recogniser trained on
+   handwriting; fine-tuning this one on a few hundred hand-read rows from this
+   archive; a vision-language model on a machine with a GPU.
+2. **The layout the geometry cannot read** (above). 8% of documents yield nothing,
+   silently.
+3. **Search ranking should use more than the name.** A person searching knows the
+   ship, or the year, or the port. Nothing in the index is used for that yet, and it
+   is the cheapest way to cut the pool a name is compared against — which is exactly
+   the problem the table above describes.
+4. **Re-index to pick up the header flag and the schema stamp.** Records written this
+   morning have neither; search compensates by matching heading text instead.
+5. **Geometry is the floor on speed** at 2.3 s of a ~10 s page, now that extraction is
+   cached. Untouched.
+6. **`data/transcriptions/` will outgrow memory.** Search loads every row; at 7,000
+   dossiers that is roughly a million rows. It wants SQLite before then, not a bigger
+   dictionary.
 
 ### Open questions for Allan
 
-* Is 35 h for 7,000 dossiers acceptable, or should this run on something bigger?
-  Four workers on this laptop use ~7 GB and leave it usable; more workers would cut
-  the wall clock and make the machine unpleasant.
-* The hosting note (`docs/HOSTING.md`) recommends keeping local-only as the shipped
-  default and treating hosting as a separate deployment. Worth reading and arguing with.
-* The hand-read truth in `data/truth/` is my reading of a cursive hand. If any of
-  those six names are wrong, the retrieval number is wrong too.
-
-## 2026-08-19 — session ended deliberately (laptop noise; Allan sleeping)
-
-Heavy work stopped on request. Nothing is running. **Resume from "Next, in order" below.**
-
-### State of the machine
-
-* No background processes left (`spike_*`, `serve.py` all stopped; load back to ~1.0).
-* Two virtualenvs: `.venv` (app: pypdfium2, Pillow, numpy) and `.venv-ocr` (optional
-  engine: paddlepaddle, paddleocr). Model weights cached in `~/.paddlex/official_models/`.
-* Everything committed and pushed to https://github.com/allan-valin/ocr-gene-docs
-* 76 Python tests, 29 browser assertions, all passing at the last run.
-
-### The one result that is NOT valid
-
-`scripts/spike_scale.py` reported **0/26 retrieval at scale. Ignore that number.** The
-script took the first fourteen dossiers by filename, which stop at `015652A`, so the
-ground-truth dossier `017397` was never in the pool — every query searched for names that
-were not indexed at all. The script now refuses to run unless the ground-truth dossier is
-present, but **the measurement has not been redone**.
-
-What the run does legitimately show: **13 pages OCR'd in 484 s, so ~37 s per page**
-including geometry, on CPU. And per-page cost is very uneven — 2 s to 61 s — because the
-cropped strip tracks the row count.
-
-So the honest position on accuracy is still the single-page result: **26/26 ranked first
-with 25 distractors**, and *no* evidence yet about behaviour against a large pool.
-
-### Also built tonight, not yet wired up
-
-`desembarque/batch.py` — folder indexer with per-document isolation, resume from the
-content-hash cache, stop, and a surfaced failure list. Seven tests, all on failure paths.
-**Not connected to an endpoint and never run against the corpus.**
-
-## 2026-08-19 — overnight session
-
-### Done
-
-* **Engine benchmarked, twice.** PaddleOCR's lightweight recogniser on CPU: full page
-  110.7 s / mean name CER 0.31; geometry-guided (crop the name column, assign boxes to row
-  bands) **27.0 s / CER 0.205**. The measure that matters for a search product is
-  retrieval, and there it is **26/26 correct row ranked first** on that page.
-* **Table structure without a model.** Grid detection works — deskew, adaptive column
-  rules, table extent from the vertical rules, row comb fitted to the *written lines*.
-  33 bands, 9 columns on Gelria p2, verified by drawing it back onto the scan. Exposed as
-  `/api/grid` and a "Gerar tabela vazia" button.
-* **Poppler removed.** `desembarque/pdf.py` on pypdfium2 (BSD-3). Clears the only GPL
-  dependency from anything that would ship.
-* **Confidence as semaphore dots.** Replaced the wavy underline, which read as a
-  spellchecker complaint rather than a statement about trust.
-* **Identity by content hash**, so renaming a dossier keeps its transcription.
-* **Licensing settled**: AGPL-3.0-or-later, keeping commercial dual-licensing open.
-  Published at https://github.com/allan-valin/ocr-gene-docs
-
-### Next, in order
-
-0. **Redo retrieval at scale** with the fixed script (`.venv-ocr/bin/python
-   scripts/spike_scale.py`). ~10 min of loud CPU. This is the number that decides whether
-   the small recogniser is enough or a larger model is needed. Everything else is
-   downstream of it.
-1. **Wire `batch.py` to an endpoint and the UI** — background folder indexing with
-   progress, which is now the product's main flow rather than per-document transcription.
-2. **Retrieval at scale (old item, superseded by 0).** The 26/26 result is a closed set with 25 distractors. Rerun the
-   same queries against the whole catalogue, where near-misses are far more numerous. This
-   is the number that decides whether the small recogniser is enough.
-2. **Per-row crops and 2× upscaling.** Residual errors are on small degraded type
-   (`FRAICISCA A2D`). Cheap to test, likely the largest remaining accuracy win.
-3. **Wire the engine in properly** behind `desembarque/engine.py`, replacing `NullEngine`,
-   with per-field confidence from the recogniser rather than invented numbers.
-4. **Manual transcription UX** on the generated grid: keyboard-first entry, autosave,
-   export. Valuable even if no engine ever ships.
-5. **Local thresholding on the render path**, to close the geometry gap on machines
-   without poppler.
-6. **Hosted deployment note** — the shape, the costs, and the privacy consequences of
-   users uploading scans to a server.
-7. **PaddleOCR-VL comparison**, only if 1 and 2 leave the small model short.
-
-### Open questions for Allan
-
-* Is ~27 s/page tolerable, given it should fall further with per-row crops?
-* For a hosted version: are users uploading their scans to your server acceptable, and
-  should that be written up with the privacy implications spelled out?
+* **How much does handwriting matter to you?** For the jus sanguinis work, an ancestor
+  on a handwritten list is currently findable only if you already know roughly which
+  dossier to look in. That is the decision that shapes the next stretch of work.
+* Is ~34 h for 7,000 dossiers acceptable? Four workers use ~7 GB and leave the laptop
+  usable; more workers would cut the wall clock and make it unpleasant to use.
+* `docs/HOSTING.md` recommends local-only as the shipped default, with hosting as a
+  separate deployment. You said hosted is fine "as long as it is intuitive" — that
+  document is where I wrote down what intuitive has to mean if scans are uploaded.
+* The hand-read ground truth in `data/truth/` is my reading of a cursive hand. If any
+  of those six names are wrong, the handwriting numbers above are wrong too.
+* 110 dossiers were downloaded from the archive this afternoon (serial, 1.5 s apart,
+  the repo's own polite downloader) to get these numbers. Say if you would rather that
+  did not happen unattended.
 
 ### Running it
 

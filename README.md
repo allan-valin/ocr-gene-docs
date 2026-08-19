@@ -31,7 +31,8 @@ Working:
   can fill in by hand.
 * **Transcription**, with an open-weight recogniser run locally on CPU. The measured grid
   tells it where each row is, so it recognises the row bands directly instead of detecting
-  text a second time: about 4 s a page, and 57 dossiers indexed in 17 minutes.
+  text a second time. 168 dossiers — 865 pages — index in well under an hour on a
+  laptop, with no failures.
 * **Folder indexing** — point it at a folder and leave it. Progress with an estimate in
   hours, failures named rather than counted, and a run resumes from the cache having redone
   nothing. This is the flow the tool is for: nobody knows which dossier holds their
@@ -44,9 +45,13 @@ Working:
 Honest about the limits:
 
 * **Handwriting is read badly**, and is most of the archive. `GUIDO CONTADORE` comes back
-  as `Guudo Camtadore` — wrong as a transcription, still findable by search. On a hand-read
-  page, five of six names ranked first in a pool of a thousand rows; on a typed page,
-  23 of 26. Those margins narrow as the pool grows, and that is the number to watch.
+  as `Guudo Camtadore` — wrong as a transcription, and findable by search only while the
+  pool is small. Measured at three pool sizes, typed pages hold (26/26 in the top five at
+  3,430 rows) and handwritten ones erode: 5 of 6 names ranked first at a thousand rows,
+  4 of 6 at three thousand, with one lost to an unrelated word printed on another page.
+  A recogniser that reads handwriting is the next thing this needs.
+* **About 8% of documents yield nothing** — a layout whose rows the geometry cannot find.
+  The run reports success, which is the part that needs fixing first.
 * **No engine installed is a supported state.** The application says so and writes nothing,
   rather than showing empty rows that could be mistaken for an empty page.
 
@@ -74,8 +79,8 @@ It binds `127.0.0.1` only and reads nothing outside the folder you point it at.
 Tests:
 
 ```sh
-.venv/bin/python -m pytest tests/ -q      # 115 library and pipeline tests
-python3 scripts/smoke_prototype.py        # 38 assertions, in Chromium and Firefox
+.venv/bin/python -m pytest tests/ -q      # 122 library and pipeline tests
+python3 scripts/smoke_prototype.py        # drives the real UI in Chromium and Firefox
 ```
 
 ## Documents
