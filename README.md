@@ -29,11 +29,26 @@ Working:
 * **Table structure without a model** — the grid of a ruled page is *measured* (deskew,
   rule detection, comb fitting), producing an empty table aligned to the scan that a person
   can fill in by hand.
+* **Transcription**, with an open-weight recogniser run locally on CPU. The measured grid
+  tells it where each row is, so it recognises the row bands directly instead of detecting
+  text a second time: about 4 s a page, and 57 dossiers indexed in 17 minutes.
+* **Folder indexing** — point it at a folder and leave it. Progress with an estimate in
+  hours, failures named rather than counted, and a run resumes from the cache having redone
+  nothing. This is the flow the tool is for: nobody knows which dossier holds their
+  ancestor, which is the whole problem.
+* **Search across everything indexed** — matching is deliberately forgiving, because the
+  names came out of a cursive hand through a recogniser. Someone typing "Guido Contadore"
+  finds the row read as "Guudo Camtadore". Clicking a result opens the document at that row
+  with the scan beside it, which is the only thing that makes a fuzzy match trustworthy.
 
-Not working yet:
+Honest about the limits:
 
-* **Automatic transcription.** No engine is installed. The application says so and writes
-  nothing, rather than showing empty rows that could be mistaken for an empty page.
+* **Handwriting is read badly**, and is most of the archive. `GUIDO CONTADORE` comes back
+  as `Guudo Camtadore` — wrong as a transcription, still findable by search. On a hand-read
+  page, five of six names ranked first in a pool of a thousand rows; on a typed page,
+  23 of 26. Those margins narrow as the pool grows, and that is the number to watch.
+* **No engine installed is a supported state.** The application says so and writes nothing,
+  rather than showing empty rows that could be mistaken for an empty page.
 
 ## Running it
 
@@ -47,21 +62,30 @@ Optional transcription engine (large, and the app works without it):
 
 ```sh
 python3 -m venv .venv-ocr && .venv-ocr/bin/pip install -r requirements-ocr.txt
+.venv-ocr/bin/python scripts/serve.py        # same app, with transcription available
 ```
+
+The engine venv runs the whole application, so it is the one to use for indexing a
+folder. Without it the app still browses, measures grids and accepts typing — it just
+says plainly that no model is installed.
 
 It binds `127.0.0.1` only and reads nothing outside the folder you point it at.
 
 Tests:
 
 ```sh
-.venv/bin/python -m pytest tests/ -q      # library and pipeline
-python3 scripts/smoke_prototype.py        # drives the real UI in Chromium and Firefox
+.venv/bin/python -m pytest tests/ -q      # 115 library and pipeline tests
+python3 scripts/smoke_prototype.py        # 38 assertions, in Chromium and Firefox
 ```
 
 ## Documents
 
 * [Design specification](docs/superpowers/specs/2026-07-23-desembarque-design.md) — the
   decisions, including the ones that were reversed and why.
+* [Progress](docs/PROGRESS.md) — the running checkpoint: what was measured, and what the
+  measurements do *not* show.
+* [Hosting](docs/HOSTING.md) — what a hosted version would cost in privacy, and why local
+  stays the default.
 * [Licensing](LICENSING.md) — AGPL-3.0-or-later, and what that allows.
 
 ## Licence
