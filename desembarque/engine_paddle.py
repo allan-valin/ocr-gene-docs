@@ -18,6 +18,7 @@ on the page still matches the page.
 from __future__ import annotations
 
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Callable
@@ -74,6 +75,72 @@ def refine(im, margin: int = INK_MARGIN):
                     min(a.shape[0], int(ys[-1]) + 1 + margin)))
 
 
+# A line number on these forms runs to three digits, and arrives with whatever
+# punctuation the clerk used or the recogniser invented: ".9", "1I", "12.", "10".
+_ORDINAL = re.compile(r"^[\s.,;:'`\-]*\d{1,3}[\s.,;:'`\-]+")
+_ONLY_ORDINAL = re.compile(r"^[\s.,;:'`\-]*\d{1,3}[\s.,;:'`\-]*$")
+
+
+def strip_ordinal(text: str) -> str:
+    """The name without the line number the crop swept up with it.
+
+    Where the Numero divider does not print clearly enough to be detected as a
+    column, the ordinal sits inside the name crop: 28.2% of indexed rows begin
+    with a digit, and the split then files ".9" as part of a surname.
+
+    A cell holding *only* a number has no name in it, and comes back empty
+    rather than filing a passenger called "14". Letters are never touched, and a
+    run of more than three digits is not a line number, so it is left alone.
+    """
+    t = (text or "").strip()
+    if not t:
+        return ""
+    if _ONLY_ORDINAL.match(t):
+        return ""
+    return _ORDINAL.sub("", t, count=1).strip()
+
+
+def list_breaks(ordinals: list[str], lookback: int = 3) -> list[int]:
+    """Row indices where the numbering restarts, i.e. where a new list begins.
+
+    A dossier can carry more than one list — Allan reports the same passengers
+    written twice, once in German with the surname first and again in pt-BR with
+    it last — and the numbering restarts between them. Rows either side of a
+    restart are not one list, and the surname order may differ across it.
+
+    Two things make this less simple than comparing neighbours. The numbering is
+    clerk shorthand: 1-9, 10, 1-9, 20, 1-9, 30, with only the tens written in
+    full, so a drop from 9 to 1 is ordinary counting. And most ordinals read
+    badly or not at all, so a gap is silence, not a boundary.
+
+    So a break is only called when a number is lower than the recent run *and*
+    the count continues from the lower number afterwards. A single stray low
+    reading between two rows that carry on counting is a misread.
+    """
+    seen: list[tuple[int, int]] = []          # (row index, value)
+    for i, raw in enumerate(ordinals):
+        digits = "".join(c for c in (raw or "") if c.isdigit())
+        if not digits or len(digits) > 3:
+            continue
+        seen.append((i, int(digits)))
+
+    breaks: list[int] = []
+    run: list[int] = []                       # values since the last break only
+    for k, (i, v) in enumerate(seen):
+        recent = run[-lookback:]
+        if recent and v < max(recent) and not (v % 10 == 0 or max(recent) % 10 == 0):
+            nxt = [w for _, w in seen[k + 1:k + 1 + lookback]]
+            carries_on = nxt and all(w > v for w in nxt) and nxt[0] - v <= lookback
+            if carries_on or not nxt:
+                # a new list starts here, and the rows before it are no longer
+                # anything to compare against
+                breaks.append(i)
+                run = [v]
+                continue
+        run.append(v)
+    return breaks
+
+
 def split_name(text: str) -> tuple[str | None, str | None]:
     """Split a manifest name into surname and given name.
 
@@ -128,6 +195,8 @@ def rows_from_bands(geo, size: tuple[int, int],
     rows = []
     for i in range(len(bands)):
         text, score = by_band.get(i, ("", 0.0))
+        # the line number belongs to the Numero column, not to anybody's surname
+        text = strip_ordinal(text)
         surname, given = split_name(text)
         row = {
             "n": i + 1,

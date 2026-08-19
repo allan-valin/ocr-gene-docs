@@ -326,3 +326,95 @@ def test_a_failure_that_is_not_onednn_still_raises():
     eng._build_page = lambda mkldnn: Broken()
     with pytest.raises(RuntimeError):
         eng._page_text(Path("cover.png"))
+
+
+# --- the line number is not part of the surname ------------------------------
+#
+# Where the Numero divider does not print clearly enough to be detected, the
+# ordinal sits inside the name crop and arrives glued to the front of the name:
+# 28.2% of indexed rows begin with a digit, and `split_name` then treats ".9" as
+# part of the surname. Measured samples: ".9 tharia. Stanziola.",
+# ".10 Amalia Stangiola.", "1I alfredode Oliviera bezar."
+
+def test_a_leading_ordinal_is_taken_off_the_name():
+    from desembarque.engine_paddle import strip_ordinal
+    assert strip_ordinal(".9 tharia. Stanziola.") == "tharia. Stanziola."
+    assert strip_ordinal(".10 Amalia Stangiola.") == "Amalia Stangiola."
+    assert strip_ordinal("12 alicia S ihelan") == "alicia S ihelan"
+    assert strip_ordinal("1. JOSE MUESSO") == "JOSE MUESSO"
+
+
+def test_a_name_without_an_ordinal_is_untouched():
+    from desembarque.engine_paddle import strip_ordinal
+    assert strip_ordinal("ROCA REBULLIDA AMPARO") == "ROCA REBULLIDA AMPARO"
+    assert strip_ordinal("") == ""
+
+
+def test_a_cell_holding_only_a_number_keeps_nothing():
+    """A row whose name column read as an ordinal and nothing else has no name
+    in it. Returning the digits would file a passenger called "14"."""
+    from desembarque.engine_paddle import strip_ordinal
+    assert strip_ordinal("14") == ""
+    assert strip_ordinal(" 7. ") == ""
+
+
+def test_a_number_joined_to_a_letter_is_not_an_ordinal():
+    """"2a" is 2ª — second class — and is data, not a line number. An ordinal
+    is followed by space or punctuation, never by a letter."""
+    from desembarque.engine_paddle import strip_ordinal
+    assert strip_ordinal("2a CLASSE MARIA") == "2a CLASSE MARIA"
+    assert strip_ordinal("Oliveira 2") == "Oliveira 2"
+
+
+def test_a_long_number_is_not_an_ordinal():
+    """Line numbers run to three digits at most on these forms; a longer run is
+    something else and is left where it is."""
+    from desembarque.engine_paddle import strip_ordinal
+    assert strip_ordinal("12345 SILVA") == "12345 SILVA"
+
+
+# --- line numbers mark where one list ends and the next begins ---------------
+#
+# Allan: the numbering can restart when the port changes, and a dossier may
+# carry the same passengers twice — once in German with the surname first, then
+# again in pt-BR with the surname last. So a restart is a real boundary, and the
+# rows on either side of it must not be treated as one list.
+#
+# The numbering is clerk shorthand, not a plain sequence. On BS_ENT_017290 it
+# runs 1-9, 10, 1-9, 20, 1-9, 30: only the tens are written in full.
+
+def test_a_plain_sequence_is_one_list():
+    from desembarque.engine_paddle import list_breaks
+    assert list_breaks(["1", "2", "3", "4", "5"]) == []
+
+
+def test_a_restart_begins_a_new_list():
+    from desembarque.engine_paddle import list_breaks
+    assert list_breaks(["1", "2", "3", "1", "2", "3"]) == [3]
+
+
+def test_the_tens_shorthand_is_not_a_restart():
+    """1-9, 10, 1-9, 20 is one list counted the way the clerk wrote it."""
+    from desembarque.engine_paddle import list_breaks
+    seq = ["1","2","3","4","5","6","7","8","9","10",
+           "1","2","3","4","5","6","7","8","9","20"]
+    assert list_breaks(seq) == []
+
+
+def test_unreadable_numbers_do_not_invent_a_break():
+    """Most ordinals read badly or not at all. A gap is not a boundary."""
+    from desembarque.engine_paddle import list_breaks
+    assert list_breaks(["1", "", "3", "", "", "6"]) == []
+    assert list_breaks(["", "", ""]) == []
+
+
+def test_a_restart_after_unreadable_rows_is_still_found():
+    from desembarque.engine_paddle import list_breaks
+    assert list_breaks(["8", "9", "", "1", "2"]) == [3]
+
+
+def test_a_single_misread_number_is_not_a_break():
+    """A stray low reading in the middle of a run is a misread, not a restart:
+    the count picks up where it left off straight after."""
+    from desembarque.engine_paddle import list_breaks
+    assert list_breaks(["5", "6", "1", "8", "9"]) == []
