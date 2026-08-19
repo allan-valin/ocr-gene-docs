@@ -70,6 +70,7 @@ def main(argv=None) -> int:
     print(f"pool: {len(pool)} rows from {len({p['doc'] for p in pool})} documents\n")
 
     total = rank1 = top5 = 0
+    margins: list[float] = []
     for tf in sorted(args.truth.glob("*.json")):
         truth = json.loads(tf.read_text(encoding="utf-8"))
         names = truth.get("names") or []
@@ -92,10 +93,22 @@ def main(argv=None) -> int:
             if pos < 5:
                 top5 += 1
             best_s, best = scored[0]
+            # the margin is the number that decides whether this survives a
+            # bigger pool: how far ahead of the best *wrong* row the right one
+            # sits. A win by 0.01 is a win that more rows will take away.
+            right = scored[pos][0] if pos < len(scored) else 0.0
+            wrong = next((sc for k, (sc, pp) in enumerate(scored) if k != pos), 0.0)
+            margin = round(right - wrong, 3)
+            margins.append(margin)
             place = "1st" if pos == 0 else (f"#{pos+1}" if pos < 999 else "lost")
-            print(f"   {place:5} {n!r:26} -> {best['text']!r} ({best_s:.2f})")
+            print(f"   {place:5} {n!r:26} -> {best['text']!r} "
+                  f"({best_s:.2f}, margem {margin:+.2f})")
 
     print(f"\nranked first: {rank1}/{total}    in top 5: {top5}/{total}")
+    if margins:
+        thin = sum(1 for m in margins if m < 0.05)
+        print(f"margin over the best wrong row: mean {sum(margins)/len(margins):+.3f}, "
+              f"worst {min(margins):+.3f}, thin (<0.05) {thin}/{len(margins)}")
     return 0
 
 
