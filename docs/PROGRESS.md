@@ -113,6 +113,19 @@ page, which is why none of this was visible.
   rather than "ilegível".
 * **113 Python tests, 35 browser assertions, all passing in Chromium and Firefox.**
 
+### The layout the geometry cannot read
+
+`BR_RJANRIO_OL_0_RPV_PRJ_15992` page 2 is a clean passenger list — 24 handwritten
+rows, printed column captions, a wide "Nome" column — and geometry returns **zero
+rows** on it, then picks the 1.4%-wide "No. de ordem" strip as the name column. The
+row comb is fitted to the written lines, and on this layout it finds none.
+
+Across the corpus this is a minority: **8% of indexed documents come back with no
+readable row at all.** But a dossier that yields nothing is a ship nobody can search,
+and the failure is silent — the run reports success. It is the most valuable thing
+left to fix, and it is deliberately *not* being attempted in a rush at the end of a
+session, because the geometry currently works on the other 92%.
+
 ### Next, in order
 
 1. **Re-check retrieval as the pool grows.** The margins above are thin. The cheapest
