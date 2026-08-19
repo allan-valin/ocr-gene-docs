@@ -115,3 +115,35 @@ def test_bands_are_normalized_and_ordered():
     bands = g.normalized_rows()
     assert all(0.0 <= t < b <= 1.0 for t, b in bands)
     assert bands == sorted(bands)
+
+
+def test_negative_scans_are_turned_the_right_way_round(tmp_path):
+    """Fourteen of the first twenty dossiers store their ink mask with 1 = ink,
+    so the extracted layer is white writing on black paper. Recognition on that
+    returns fluent-looking nonsense, which is worse than returning nothing."""
+    from PIL import Image
+    from page_geometry import positive
+    neg = Image.new("L", (600, 800), 8)
+    for x in range(100, 500):
+        for y in range(300, 340):
+            neg.putpixel((x, y), 250)
+    p = tmp_path / "neg.png"
+    neg.save(p)
+
+    out = positive(p)
+    with Image.open(out) as im:
+        arr = np.asarray(im.convert("L"))
+    assert arr.mean() > 128            # paper is light again
+    assert arr[320, 300] < 60          # and the writing is dark
+
+
+def test_a_normal_scan_is_left_untouched(tmp_path):
+    from PIL import Image
+    from page_geometry import positive
+    pos = Image.new("L", (600, 800), 240)
+    for x in range(100, 500):
+        for y in range(300, 340):
+            pos.putpixel((x, y), 10)
+    p = tmp_path / "pos.png"
+    pos.save(p)
+    assert positive(p) == p

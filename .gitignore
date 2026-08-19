@@ -8,7 +8,7 @@ __pycache__/
 indices/
 
 # Downloaded scans and derivatives
-data/
+data/*
 scans/
 
 # ...but the parsed catalog is the corpus manifest and is versioned, since the
@@ -26,3 +26,8 @@ prototype/build/
 data/transcriptions/
 data/pagecache/
 data/spike_*.json
+
+# ...and hand-read ground truth is versioned: it is the only check on whether
+# the engine can be trusted on handwriting, and it took eyes to make.
+!data/truth/
+!data/truth/*.json

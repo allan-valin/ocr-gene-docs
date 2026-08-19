@@ -1,0 +1,16 @@
+{
+  "source": "hand-read from the scan, page 2 name column",
+  "caution": "Read by eye from a cursive hand and may itself contain errors, particularly on the surnames. It exists because the only ground truth in this repository was a *typed* page, which hid how the engine behaves on the handwritten majority of the corpus.",
+  "pdf": "BR_RJANRIO_BS_0_RPV_ENT_014541_d0001de0001.pdf",
+  "page": 2,
+  "names": [
+    "GUIDO CONTADORE",
+    "EMMA CONTADORE",
+    "EMILI MUESSO",
+    "JOSE MUESSO",
+    "CEZARIO SAMMAMED",
+    "A. VIEIRA MIRANDA"
+  ],
+  "first_row": 4,
+  "note_rows": "The engine numbers every detected band; rows 1-3 are the header and its rules, so name i of this list is row first_row + i."
+}

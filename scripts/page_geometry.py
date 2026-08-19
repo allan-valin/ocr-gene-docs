@@ -396,6 +396,35 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
+def positive(path: Path) -> Path:
+    """Ink dark on light paper, whatever the PDF stored.
+
+    These archive PDFs keep the page as an MRC ink mask, and most of them use
+    the convention 1 = ink, so the extracted layer comes out as white writing
+    on black paper — fourteen of the first twenty dossiers. Geometry survives
+    that, because a projection does not care which way the contrast runs, but
+    recognition does not: it returns fluent-looking nonsense, which is worse
+    for a legal-evidence corpus than returning nothing at all.
+
+    Paper is mostly paper, so the mean settles the question. The corrected
+    image is written alongside and reused.
+    """
+    import numpy as np
+    try:
+        with Image.open(path) as im:
+            small = im.convert("L").resize((160, 200))
+            if np.asarray(small).mean() >= 128:
+                return path
+            out = path.with_name(path.stem + "-pos.png")
+            if out.exists() and out.stat().st_size:
+                return out
+            arr = 255 - np.asarray(im.convert("L"), dtype=np.uint8)
+            Image.fromarray(arr).save(out)
+            return out
+    except Exception:
+        return path
+
+
 def page_image(pdf: Path, n: int, workdir: Path, dpi: int = 300) -> Path | None:
     """Best image of page `n` for geometry work.
 
@@ -446,10 +475,12 @@ def page_image(pdf: Path, n: int, workdir: Path, dpi: int = 300) -> Path | None:
         if (bilevel, px) > (best_bilevel, best_px):
             best, best_px, best_bilevel = cand, px, bilevel
     if best is not None and best_bilevel:
-        return best
+        return positive(best)
 
     out = workdir / f"{pdf.stem}-p{n}-render.png"
-    return out if pdflib.render_page(pdf, n, out, dpi=dpi, grayscale=True) else best
+    if pdflib.render_page(pdf, n, out, dpi=dpi, grayscale=True):
+        return positive(out)
+    return positive(best) if best is not None else None
 
 
 def analyze_pdf_page(pdf: Path, n: int, workdir: Path) -> Geometry | None:
