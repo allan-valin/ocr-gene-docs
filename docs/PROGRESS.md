@@ -4,6 +4,139 @@ Running checkpoint. Newest first. The design record is
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
 next actions.
 
+## 2026-08-19 — evening session
+
+Three fixes committed and one large defect found and not yet fixed. The corpus
+was re-indexed once (167 done, 1 skipped, 0 failed, 44.7 min).
+
+### Pretrained handwriting models are not the answer
+
+Allan's question was reasonable: handwriting recognition is the first example in
+every ML course, so why build anything? Measured on the cursive Gelria page,
+against the recogniser that ships (CER 0.205, ~0.06 s/row):
+
+| model | CER | s/row |
+|---|---|---|
+| PP-OCRv6_medium_rec (ships) | **0.205** | **0.06** |
+| microsoft/trocr-base-handwritten | 0.785 | 7.74 |
+| microsoft/trocr-large-handwritten | 0.607 | 8.09 |
+
+Three times worse and ~130x slower. The failure mode is the whole argument:
+TrOCR read `EMMA CONTADORE` as `VERSION Constadvice`, `EMILI MUESSO` as
+`Israeli Meteor`, `A. VIEIRA MIRANDA` as `A.P. Disufflements`. Its decoder is a
+RoBERTa language model, and a language prior is *harmful* when every target is a
+proper noun it has never seen: it reads the strokes, then corrects them into
+English words. The recogniser that ships is CTC with no language model, which is
+exactly why it wins here. Allan: "using a language model is asking for errors."
+Scale is not the issue — the large model fails the same way. `scripts/spike_htr.py`.
+
+### The ink mask was destroying faint pages  (fixed, 8b56f65)
+
+`page_image` prefers the PDF's embedded MRC mask because geometry needs it
+(nine column rules against three from a render). The mask is one bit deep, so
+faint strokes fall below its threshold and are gone before recognition runs. On
+BS_ENT_015741 p2 the recogniser read 7 of 39 bands from the mask and 26 from a
+grayscale render — an entire family (BLOCH ALEXANDRE, HENRIETTE, LINE,
+JACQUELINE, MADELON, FRANÇOISE) was missing from the index and is legible to the
+eye.
+
+Not a blanket win, which is why it is a fallback: over ten pages the mask read
+63.3% of bands and the render 68.2% — seven pages unchanged, one gained
+nineteen rows, and BS_ENT_017053 *lost* five. A page is read from the mask; only
+if that comes back under half-read is it read again from a render, and the
+second reading is kept only if it found more names. Corpus-wide the re-index
+moved rows-with-text from 60.0% to **61.7%**, well below the sample's +4.9
+points because the sample was chosen partly *because* those pages failed.
+
+### Re-indexing could not reach the corpus  (fixed, 258a69a)
+
+Any record an engine had written counted as finished, so no engine improvement
+could ever be applied: a re-run skipped all 168 documents and reported success.
+`is_indexed` now requires the current schema stamp for engine-written records,
+still never redoes a record a person typed, and still refuses to treat an empty
+manual note as an index. SCHEMA is 2.
+
+### Rows are cut along the paper now  (fixed, d67b8d4)
+
+Allan, reading ITAPEMA 013990: the leg of the `y` in row 1 "Raymundo Cassaudi"
+lands inside row 2 "Alfredo C. Tavares", between the `l` and the `f`. A straight
+cut corrupts both rows, and `refine()` made it worse, since trimming to ink
+*expands* a crop toward whatever intruded. Boundaries are now found as paths of
+least ink across the column (`desembarque/rowcut.py`), shared between
+neighbours so a stroke lands on exactly one side. The same seam does columns —
+Allan reports names bleeding sideways past the rule too. The limit is tested,
+not hidden: a tail reaching further than the seam's margin needs the stroke
+traced, which is a different technique.
+
+Measured on 013990 it changed eight rows and improved none of them, because
+that page fails for a much larger reason (below).
+
+### THE BIG ONE, NOT FIXED: the row comb fits the wrong half of the page
+
+BS_ENT_013990 p2 has **18 numbered passengers**. The engine produced text for 9
+rows, and the three real names among them were passengers 16, 17 and 18. Rows
+1–15 were never looked at, and what looked like mangled names (`Crallleeros NM`,
+`1rEreeeteei vr 2`) were the tally block at the foot of the page.
+
+`detect_rules` bounds the table with `rule_extent`, the longest *continuous*
+vertical run of ink per column, tolerating gaps of 40 px. Where passengers are
+written, the handwriting shatters each rule into 17–21 short runs, none longer
+than 5% of the page. Where the table is empty the rules print cleanly. So the
+longest run is always the blank region, the table top comes out at **0.559** of
+the page, and the comb fits the empty ruled area below the list.
+
+This is very likely a large share of the corpus-wide 38.3% blank rows — not
+clerks skipping lines, not ditto marks, not faint ink, but geometry measuring
+the wrong half of the page.
+
+Raising the gap tolerance is not the fix, measured:
+
+| page | gap 40 | gap 80 | gap 150 | gap 250 |
+|---|---|---|---|---|
+| 013990 (broken) | 0.559 | 0.559 | 0.559 | **0.083** |
+| 016739 (working) | 0.208 | 0.194 | 0.135 | **0.030** |
+| 015106 (working) | 0.257 | 0.226 | 0.207 | **0.065** |
+
+013990 only recovers at 250, which overshoots into the letterhead on the pages
+that currently work. The table's top has to stop being derived from rule
+continuity alone: find text lines across the full page between the outer column
+rules, fit the pitch to those, and use the rules for the bottom bound only. The
+risk is the failure already recorded in the code — letterhead and signature
+lines giving "37 rows for a 26-row table" — so the pitch fit has to reject
+outliers, and it needs testing across many pages.
+
+### Also found, not fixed
+
+* **`enable_mkldnn=True` crashes the full-page OCR path.** 167 of 168 documents
+  (99%) failed page 1 with `NotImplementedError: (Unimplemented)
+  ConvertPirAttribute2RuntimeAttribute`. With mkldnn off the same page reads
+  fine. That path produces the cover text `identify()` uses, which is why every
+  record fell back to filename identity. One-line fix, high value, untested yet.
+* **Confidence is not calibrated.** `conf.surname` is Paddle's raw decode score,
+  shown in the UI as if it meant trustworthiness; Allan saw a green label on
+  `Brges. iuig`. For an evidence tool it should be hidden or calibrated against
+  hand-read truth.
+* **Ditto marks are real**, confirmed by Allan on 013990's Nação column. My
+  168-dossier sample surfaced none, which was a sampling limit and not evidence
+  of absence. 013990 is the fixture when this is built.
+* **Blank means "unknown"**, per Allan: clerks leave a cell blank when the
+  information is not known. Blanks must not be counted as recognition failures.
+* **The name column is picked by rule index, not width**, and lands on the
+  Numero strip when the divider is detected. Measured at ~7% of pages, so real
+  but small. `scripts/spike_columns.py`.
+* **German-line ships are ~3.7% of the catalog** and their forms are Portuguese
+  Brazilian port documents, so Kurrent/Sütterlin risk is lower than feared —
+  n=2, unconfirmed.
+
+### Next, in order
+
+1. **The row comb fitting the wrong half of the page.** Everything else is
+   smaller than this.
+2. **mkldnn off for the full-page path** — 99% of documents, one line.
+3. Re-index and re-measure; the 38.3% blank figure means little until 1 is done.
+4. Ditto inheritance, stored beside the verbatim text rather than replacing it.
+5. Confidence: hide or calibrate.
+
 ## 2026-08-19 — daytime session (Allan at work)
 
 Everything below is committed and pushed to https://github.com/allan-valin/ocr-gene-docs — nothing is running, no background
