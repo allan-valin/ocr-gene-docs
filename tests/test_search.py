@@ -125,3 +125,49 @@ def test_index_skips_a_record_from_a_future_schema(tmp_path):
         "hash": "c", "engine": "paddle", "schema": 99,
         "rows": [{"n": 1, "name_raw": "JOSE MUESSO", "page": 2}]}))
     assert load_index(tmp_path) == []
+
+
+def test_index_is_reread_only_where_it_changed(tmp_path, monkeypatch):
+    """At seven thousand dossiers the cache is ~100 MB, and re-reading it on
+    every keystroke would make search unusable exactly when it matters."""
+    import json
+    from desembarque import search as sl
+
+    def write(name, text):
+        (tmp_path / name).write_text(json.dumps({
+            "hash": name, "engine": "paddle",
+            "rows": [{"n": 1, "name_raw": text, "page": 2}]}))
+
+    write("a.json", "JOSE MUESSO")
+    write("b.json", "MARIA SILVA")
+
+    reads = []
+    real = Path.read_text
+    def counting(self, *a, **k):
+        reads.append(self.name)
+        return real(self, *a, **k)
+    monkeypatch.setattr(Path, "read_text", counting)
+
+    first = sl.load_index(tmp_path)
+    assert len(first) == 2 and len(reads) == 2
+
+    reads.clear()
+    again = sl.load_index(tmp_path)
+    assert len(again) == 2 and reads == []          # nothing changed, nothing read
+
+    reads.clear()
+    write("c.json", "GUIDO CONTADORE")
+    third = sl.load_index(tmp_path)
+    assert len(third) == 3
+    assert reads == ["c.json"]                       # only the new document
+
+
+def test_a_deleted_document_leaves_the_index(tmp_path):
+    import json
+    from desembarque.search import load_index
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "a", "engine": "paddle",
+        "rows": [{"n": 1, "name_raw": "JOSE MUESSO", "page": 2}]}))
+    assert len(load_index(tmp_path)) == 1
+    (tmp_path / "a.json").unlink()
+    assert load_index(tmp_path) == []
