@@ -51,6 +51,11 @@
     padding:7px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
     z-index:2;display:flex;align-items:center;gap:6px}
   .sidehead button{margin-left:auto;padding:2px 7px;font-size:10.5px}
+  #indexbar{padding:7px 10px;border-bottom:1.5px solid var(--line);display:flex;
+    flex-direction:column;align-items:flex-start;gap:5px;background:var(--panel)}
+  #indexbar button{padding:3px 9px;font-size:11.5px}
+  #indexbar .hint{font-size:10.5px;color:var(--muted);line-height:1.35}
+  #indexbar .bar{width:100%}
   #crumb{padding:6px 10px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line);
     word-break:break-all}
   .dir{padding:5px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--line)}
@@ -152,6 +157,7 @@
 <main id="main">
   <div id="sidebar">
     <div class="sidehead" id="sidehead">Documentos</div>
+    <div id="indexbar"></div>
     <div id="picker" hidden>
       <div id="crumb"></div>
       <div id="dirlist"></div>
@@ -303,6 +309,7 @@ function renderDocList(){
   const t=DB.documents.filter(d=>d.rows).length;
   $("#sidehead").innerHTML=`<span>${DB.documents.length} documentos · ${t} transcrito${t===1?"":"s"}</span>`
     + (SERVED?`<button id="pick" title="Escolher pasta">📂 Pasta</button>`:"");
+  renderIndexBar(idxState);
   $("#doclist").innerHTML=DB.documents.map((d,i)=>`
     <div class="doc ${i===docIdx?"on":""}" data-d="${i}">
       <b>${d.ship}</b>
@@ -373,6 +380,10 @@ function loadFolder(rel){
       return;
     }
     openDoc(d.active||0);
+  if(SERVED) fetch("/api/index").then(r=>r.json()).then(st=>{
+    renderIndexBar(st);
+    if(st.status==="running"){ clearInterval(idxPoll); idxPoll=setInterval(pollIndex,1200); }
+  }).catch(()=>{});
   });
 }
 $("#pagestrip").addEventListener("click",e=>{
@@ -443,6 +454,75 @@ function finishTranscription(){
 document.addEventListener("click",e=>{
   if(e.target.id==="dotranscribe") startTranscription();
   if(e.target.id==="dogrid") buildGrid();
+});
+
+// ---- folder indexing ----
+// Reading one dossier is something a person does better than a machine. The
+// machine wins over a folder nobody has time to read, so indexing a whole
+// folder is the main action, and it says plainly how long it will take and
+// lets you stop.
+let idxPoll=null, idxState=null;
+function humanTime(s){
+  if(s==null||!isFinite(s)) return "";
+  if(s<90) return `${Math.round(s)} s`;
+  if(s<5400) return `${Math.round(s/60)} min`;
+  const h=Math.floor(s/3600), m=Math.round((s%3600)/60);
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+function renderIndexBar(st){
+  idxState=st;
+  const el=$("#indexbar"); if(!el) return;
+  if(!SERVED){ el.innerHTML=""; return; }
+  const engineOK = ENGINE && ENGINE.available;
+  const total=DB && DB.documents ? DB.documents.length : 0;
+  if(!st || st.status==="idle"){
+    el.innerHTML = `<button id="doindex" ${engineOK?"":"disabled"}>Indexar esta pasta</button>
+      <span class="hint">${engineOK
+        ? `Lê os ${total} documentos e deixa todos pesquisáveis. Demora, e roda sozinho — pode parar quando quiser.`
+        : ((ENGINE&&ENGINE.detail)||"Motor de transcrição indisponível.")}</span>`;
+    return;
+  }
+  const seen=(st.done||0)+(st.skipped||0);
+  const pct=st.total?Math.max(2,Math.round(100*seen/st.total)):2;
+  const fails=(st.failed||[]).length;
+  if(st.status==="running"){
+    el.innerHTML = `<div class="bar"><i style="width:${pct}%"></i></div>
+      <span class="hint"><b>${seen} de ${st.total}</b>${st.skipped?` · ${st.skipped} já feitos`:""}
+      ${fails?` · <span class="warnstate">${fails} com erro</span>`:""}
+      ${st.eta_s?` · faltam cerca de ${humanTime(st.eta_s)}`:""}</span>
+      <span class="hint">${st.current||""}</span>
+      <button id="stopindex">Parar</button>`;
+    return;
+  }
+  const word = st.status==="stopped" ? "Parado" : "Pasta indexada";
+  el.innerHTML = `<span class="hint"><b>${word}:</b> ${seen} de ${st.total} documentos.
+    ${fails?`<span class="warnstate">${fails} não puderam ser lidos:</span> `
+        +(st.failed.slice(0,3).map(f=>f.file).join(", "))+(fails>3?"…":""):""}</span>
+    <button id="doindex">${st.status==="stopped"?"Continuar":"Indexar de novo"}</button>`;
+}
+function pollIndex(){
+  fetch("/api/index").then(r=>r.json()).then(st=>{
+    renderIndexBar(st);
+    if(st.status!=="running"){
+      clearInterval(idxPoll); idxPoll=null;
+      if(st.status==="finished"||st.status==="stopped") finishTranscription();
+    }
+  }).catch(()=>{ clearInterval(idxPoll); idxPoll=null; });
+}
+function startIndexing(){
+  if(!SERVED) return;
+  const dir=STATE.dir?`?dir=${encodeURIComponent(STATE.dir)}`:"?dir=";
+  fetch(`/api/index${dir}`,{method:"POST"}).then(r=>r.json()).then(st=>{
+    if(st.error){ renderIndexBar(null); $("#indexbar").innerHTML=
+      `<span class="warnstate">${st.error}</span>`; return; }
+    renderIndexBar(st);
+    clearInterval(idxPoll); idxPoll=setInterval(pollIndex,1200);
+  });
+}
+document.addEventListener("click",e=>{
+  if(e.target.id==="doindex") startIndexing();
+  if(e.target.id==="stopindex")
+    fetch("/api/index/stop",{method:"POST"}).then(r=>r.json()).then(renderIndexBar);
 });
 
 // Structure without recognition: the table's rules and written lines are
@@ -646,7 +726,7 @@ function loadData(){
 loadData().then(d=>{
   DB=d;
   $("#scan").onload=()=>paintBand(sel);
-  if(SERVED) fetch("/api/engine").then(r=>r.json()).then(x=>{ENGINE=x; if(D&&!rows.length) renderEmpty();}).catch(()=>{});
+  if(SERVED) fetch("/api/engine").then(r=>r.json()).then(x=>{ENGINE=x; renderIndexBar(idxState); if(D&&!rows.length) renderEmpty();}).catch(()=>{});
   const g=(d.documents.find(x=>x.geometry)||{}).geometry;
   $("#warn").textContent="Protótipo. "+(g?g.note:"");
   openDoc(d.active||0);

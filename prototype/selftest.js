@@ -121,6 +121,23 @@ window.addEventListener("load",async()=>{
       }
     }
   }
+
+  // folder indexing: the main action must be visible and must explain itself
+  if(location.pathname==="/selftest" || document.querySelector("#indexbar")){
+    const bar=document.getElementById("indexbar");
+    ok("index bar present", !!bar);
+    if(bar){
+      for(let i=0;i<20 && !bar.textContent.trim();i++) await wait(150);
+      ok("index bar says something", bar.textContent.trim().length>0);
+      const btn=document.getElementById("doindex");
+      ok("index button offered", !!btn);
+      if(btn && btn.disabled){
+        ok("disabled index button explains why",
+           /model|motor|indispon/i.test(bar.textContent));
+      }
+    }
+  }
+
  }catch(err){ out.push("THREW "+(err&&err.message)); }
  document.getElementById("warn").textContent="RESULTS>> "+out.join(" | ");
 });
