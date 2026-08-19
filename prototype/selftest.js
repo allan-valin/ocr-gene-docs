@@ -145,6 +145,8 @@ window.addEventListener("load",async()=>{
               || !!document.querySelector("#corpushits .none");
     }
     ok("corpus search answers, with hits or with a plain 'nothing' line", answered);
+    ok("search says how much was searched",
+       /linhas indexadas/.test(document.getElementById("corpushits").textContent));
     const hit=document.querySelector("#corpushits .hit");
     if(hit){
       const want=+hit.dataset.row;

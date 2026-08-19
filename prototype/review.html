@@ -503,11 +503,18 @@ function renderHits(d){
       : "Nada indexado ainda — use “Indexar esta pasta”."}</div>`;
     return;
   }
-  el.innerHTML=d.hits.slice(0,25).map(h=>`
+  const shown=Math.min(25,d.hits.length);
+  el.innerHTML=`<div class="none">${d.hits.length>shown
+      ? `${shown} de ${d.hits.length} resultados` : `${d.hits.length} resultado${d.hits.length===1?"":"s"}`}
+      · ${d.indexed} linhas indexadas</div>`
+    + d.hits.slice(0,25).map(h=>`
     <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
          data-row="${h.row||0}" title="Abrir o documento nesta linha">
       <b>${h.text}</b>
-      <span>${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}</span>
+      <span>${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
+        ${h.conf==null?"":`<span class="dot ${h.conf<0.5?"lo":h.conf<0.8?"mid":"hi"}"
+          role="img" aria-label="confiança da leitura: ${Math.round(h.conf*100)}%"
+          title="confiança da leitura: ${Math.round(h.conf*100)}%"></span>`}</span>
     </div>`).join("");
 }
 function corpusSearch(q){
