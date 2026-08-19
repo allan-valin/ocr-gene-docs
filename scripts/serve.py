@@ -39,6 +39,7 @@ from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify          # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import BatchIndexer, collect_pdfs  # noqa: E402
+from desembarque import search as searchlib          # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
 
@@ -249,6 +250,7 @@ def transcribe_document(pdf: Path, job) -> dict:
     ident = identify(pdf, cover_text=cover_text or None)
     return {
         "hash": ident.doc_hash,
+        "file": pdf.name,
         "notation": ident.notation,
         "identified_by": ident.source,
         "engine": eng.name,
@@ -281,7 +283,19 @@ def index_folder(folder: Path):
     pdfs = collect_pdfs(folder)
 
     def is_cached(pdf: Path) -> bool:
-        return JOBS.cached(identify(pdf).doc_hash) is not None
+        """Already indexed — as opposed to merely having a note against it.
+
+        Someone can open a document, type nothing, and leave an empty manual
+        record behind. Treating that as done would drop the document out of
+        every future run silently, which for an archive index is the worst
+        kind of failure: nothing is reported and the person is simply never
+        found."""
+        data = JOBS.cached(identify(pdf).doc_hash)
+        if not data:
+            return False
+        if data.get("engine"):
+            return True                       # an engine ran; blank is an answer
+        return bool(data.get("rows"))         # or a person actually typed rows
 
     def transcribe(pdf: Path) -> None:
         data = transcribe_document(pdf, _BatchJob(pdf_pages(pdf)))
@@ -373,6 +387,15 @@ class Handler(BaseHTTPRequestHandler):
                 if not job:
                     return self._send(404, {"error": "no such job"})
                 return self._send(200, job.as_dict())
+
+            if u.path == "/api/search":
+                # across everything indexed, not the open document: the whole
+                # point is that the user does not know which dossier to open
+                rows = searchlib.load_index(JOBS.cache, engine_only=False)
+                hits = searchlib.search(rows, q.get("q", ""),
+                                        limit=int(q.get("limit", 50)))
+                return self._send(200, {"query": q.get("q", ""),
+                                        "indexed": len(rows), "hits": hits})
 
             if u.path == "/api/index":
                 st = BATCH.state

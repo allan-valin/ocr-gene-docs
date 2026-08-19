@@ -56,6 +56,14 @@
   #indexbar button{padding:3px 9px;font-size:11.5px}
   #indexbar .hint{font-size:10.5px;color:var(--muted);line-height:1.35}
   #indexbar .bar{width:100%}
+  #corpusfind{padding:7px 10px;border-bottom:1.5px solid var(--line);background:var(--panel)}
+  #corpusq{width:100%;padding:4px 7px;font-size:12px}
+  #corpushits{margin-top:6px;display:flex;flex-direction:column;gap:4px}
+  #corpushits .hit{padding:4px 6px;border:1px solid var(--line);border-radius:4px;
+    cursor:pointer;font-size:11.5px;line-height:1.3}
+  #corpushits .hit b{display:block;font-weight:600}
+  #corpushits .hit span{color:var(--muted);font-size:10px}
+  #corpushits .none{color:var(--muted);font-size:10.5px}
   #crumb{padding:6px 10px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line);
     word-break:break-all}
   .dir{padding:5px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--line)}
@@ -158,6 +166,11 @@
   <div id="sidebar">
     <div class="sidehead" id="sidehead">Documentos</div>
     <div id="indexbar"></div>
+    <div id="corpusfind">
+      <input id="corpusq" placeholder="Buscar em toda a pasta…" autocomplete="off"
+             spellcheck="false" title="Procura em todos os documentos já indexados">
+      <div id="corpushits"></div>
+    </div>
     <div id="picker" hidden>
       <div id="crumb"></div>
       <div id="dirlist"></div>
@@ -263,6 +276,11 @@ function dot(r,f){
            title="${CONF_LABEL[k]}${pct}"></span>`;
 }
 function cell(r,f,txt){
+  // absent and null are different claims: the engine reads the name column
+  // only, so the other fields were never attempted. Marking those "ilegível"
+  // would report a failure that never happened.
+  if(!(f in r)) return `<td class="cellwrap"><span contenteditable="true"
+      data-f="${f}" title="não transcrito"></span></td>`;
   const isNull = txt==null;
   const d = r.ditto&&r.ditto.includes(f);
   const cls = [isNull?"null":"", d?"ditto":""].filter(Boolean).join(" ");
@@ -319,19 +337,33 @@ function renderDocList(){
 }
 function renderPageStrip(){
   $("#pagestrip").innerHTML = D.pages.map(p=>{
-    const isT = D.transcribed_page===p.n;
+    const isT = rowsForPage(D,p.n).length>0;
     return `<button data-p="${p.n}" aria-pressed="${p.n===D.pages[pageIdx].n}"
       title="${isT?'página transcrita':''}">p.${p.n}${isT?" ✓":""}</button>`;
   }).join("") + (D.total_pages>D.pages.length
     ? `<span style="align-self:center;color:var(--muted);font-size:11px">
         de ${D.total_pages} (as demais não foram renderizadas)</span>` : "");
 }
+// A document indexed by the engine has rows on every page it could read, so
+// the table follows the page being looked at. Manually transcribed documents
+// predate that and carry a single transcribed_page instead.
+function rowsForPage(doc,n){
+  const all = doc.rows || [];
+  if(!all.length) return [];
+  if(all.some(r=>r.page!=null)) return all.filter(r=>r.page===n);
+  return doc.transcribed_page===n ? all : [];
+}
+function firstPageWithRows(doc){
+  const p = (doc.pages||[]).find(pg=>rowsForPage(doc,pg.n).length);
+  return p ? p.n : (doc.transcribed_page ?? (doc.pages[0]||{}).n);
+}
 function openDoc(i,page){
   docIdx=i; D=DB.documents[i];
-  pageIdx=Math.max(0, D.pages.findIndex(p=>p.n===(page ?? D.transcribed_page ?? D.pages[0].n)));
+  pageIdx=Math.max(0, D.pages.findIndex(p=>p.n===(page ?? firstPageWithRows(D))));
   if(pageIdx<0) pageIdx=0;
-  const showRows = !!D.rows && D.pages[pageIdx].n===D.transcribed_page;
-  rows = showRows ? D.rows.map(r=>({...r,verified:false})) : [];
+  const pageRows = rowsForPage(D, D.pages[pageIdx].n);
+  const showRows = pageRows.length>0;
+  rows = pageRows.map(r=>({...r,verified:false}));
   sel=0; hits=[]; hitAt=-1;
   $("#scan").src=pageURL(D,D.pages[pageIdx]);
   const m=D.meta;
@@ -454,6 +486,44 @@ function finishTranscription(){
 document.addEventListener("click",e=>{
   if(e.target.id==="dotranscribe") startTranscription();
   if(e.target.id==="dogrid") buildGrid();
+});
+
+// ---- search across everything indexed ----
+// Searching the open document assumes the user already knows which dossier to
+// open. They do not — that is the problem the index exists to solve — so this
+// searches every row that has been transcribed, in any document.
+let corpusTimer=null;
+function renderHits(d){
+  const el=$("#corpushits"); if(!el) return;
+  if(!d){ el.innerHTML=""; return; }
+  if(!d.hits.length){
+    el.innerHTML=`<div class="none">${d.indexed
+      ? `Nada parecido entre ${d.indexed} linhas indexadas.`
+      : "Nada indexado ainda — use “Indexar esta pasta”."}</div>`;
+    return;
+  }
+  el.innerHTML=d.hits.slice(0,25).map(h=>`
+    <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}">
+      <b>${h.text}</b>
+      <span>${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}</span>
+    </div>`).join("");
+}
+function corpusSearch(q){
+  if(!SERVED) return;
+  if(!q || q.trim().length<3){ renderHits(null); return; }
+  fetch(`/api/search?q=${encodeURIComponent(q)}`)
+    .then(r=>r.json()).then(renderHits).catch(()=>renderHits(null));
+}
+document.addEventListener("input",e=>{
+  if(e.target.id!=="corpusq") return;
+  clearTimeout(corpusTimer);
+  const v=e.target.value;
+  corpusTimer=setTimeout(()=>corpusSearch(v),250);
+});
+document.addEventListener("click",e=>{
+  const h=e.target.closest("#corpushits .hit"); if(!h) return;
+  const i=DB.documents.findIndex(d=>d.file===h.dataset.file);
+  if(i>=0) openDoc(i, +h.dataset.page||undefined);
 });
 
 // ---- folder indexing ----

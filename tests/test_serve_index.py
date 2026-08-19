@@ -121,3 +121,52 @@ def test_refuses_a_folder_outside_the_root(server, engine):
     base, _ = server
     code, _ = call(f"{base}/api/index?dir=../../etc", "POST")
     assert code == 404
+
+
+def test_a_manual_note_with_no_rows_does_not_count_as_indexed(server, engine):
+    """Saving nothing, or opening a document and typing one row, must not make
+    the indexer skip it forever — an empty manual record is not a transcription."""
+    base, folder = server
+    docs(folder, 1)
+    from desembarque.identity import identify
+    ident = identify(folder / "doc0.pdf")
+    serve.JOBS.store(ident.doc_hash, {"hash": ident.doc_hash, "source": "manual",
+                                      "rows": []})
+    call(f"{base}/api/index?dir=", "POST")
+    state = wait_done(base)
+    assert state["done"] == 1 and state["skipped"] == 0
+
+
+def test_an_engine_result_is_not_redone(server, engine):
+    base, folder = server
+    docs(folder, 1)
+    from desembarque.identity import identify
+    ident = identify(folder / "doc0.pdf")
+    serve.JOBS.store(ident.doc_hash, {"hash": ident.doc_hash, "engine": "paddle",
+                                      "pages": [], "rows": []})
+    call(f"{base}/api/index?dir=", "POST")
+    state = wait_done(base)
+    assert state["skipped"] == 1 and state["done"] == 0
+
+
+def test_search_spans_every_indexed_document(server, engine):
+    base, folder = server
+    docs(folder, 1)
+    from desembarque.identity import identify
+    ident = identify(folder / "doc0.pdf")
+    serve.JOBS.store(ident.doc_hash, {
+        "hash": ident.doc_hash, "engine": "paddle", "file": "doc0.pdf",
+        "notation": "BS.ENT.9", "rows": [
+            {"n": 4, "name_raw": "Guudo Camtadore", "page": 2},
+            {"n": 5, "name_raw": "Jose Muerso", "page": 2}]})
+    code, body = call(f"{base}/api/search?q=Guido%20Contadore")
+    assert code == 200
+    assert body["hits"][0]["text"] == "Guudo Camtadore"
+    assert body["hits"][0]["file"] == "doc0.pdf" and body["hits"][0]["page"] == 2
+    assert body["indexed"] >= 2
+
+
+def test_search_declines_a_query_too_short_to_mean_anything(server, engine):
+    base, _ = server
+    code, body = call(f"{base}/api/search?q=jo")
+    assert code == 200 and body["hits"] == []

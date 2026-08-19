@@ -15,6 +15,17 @@ window.addEventListener("load",async()=>{
  const out=[]; const ok=(n,c)=>out.push((c?"PASS":"FAIL")+" "+n);
  const q=s=>document.querySelector(s);
  try{
+  // The corpus used to hold one transcribed document, so whatever opened first
+  // was the sample. Now the folder indexer transcribes everything, so the
+  // sample has to be asked for by name before the assertions about its content.
+  for(let i=0;i<60;i++){                     // the corpus arrives after load
+    if(typeof DB!=="undefined" && DB && DB.documents) break;
+    await wait(100);
+  }
+  if(typeof DB!=="undefined" && DB && DB.documents){
+    const i=DB.documents.findIndex(d=>(d.file||"").includes("017397") && d.rows);
+    if(i>=0 && typeof openDoc==="function"){ openDoc(i); await wait(600); }
+  }
   ok("page and rows ready", await ready());
   ok("rows rendered=26", document.querySelectorAll("#rows tr").length===26);
   ok("scan image loaded", q("#scan").naturalWidth>0);
@@ -120,6 +131,21 @@ window.addEventListener("load",async()=>{
         }
       }
     }
+  }
+
+  // search across the index: the control exists and answers, even when empty
+  const cq=document.getElementById("corpusq");
+  ok("corpus search box present", !!cq);
+  if(cq){
+    cq.value="amparo"; cq.dispatchEvent(new Event("input",{bubbles:true}));
+    let answered=false;
+    for(let i=0;i<24 && !answered;i++){
+      await wait(200);
+      answered = document.querySelectorAll("#corpushits .hit").length>0
+              || !!document.querySelector("#corpushits .none");
+    }
+    ok("corpus search answers, with hits or with a plain 'nothing' line", answered);
+    cq.value=""; cq.dispatchEvent(new Event("input",{bubbles:true}));
   }
 
   // folder indexing: the main action must be visible and must explain itself

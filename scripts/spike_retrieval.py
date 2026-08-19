@@ -44,6 +44,10 @@ def load_pool(cache: Path) -> list[dict]:
             d = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
+        if not d.get("engine"):
+            # manually typed rows are perfect by construction and would flatter
+            # the engine they are meant to be measuring
+            continue
         for r in d.get("rows", []):
             text = r.get("name_raw") or " ".join(
                 x for x in (r.get("surname"), r.get("given")) if x)
