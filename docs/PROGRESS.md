@@ -4,6 +4,106 @@ Running checkpoint. Newest first. The design record is
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
 next actions.
 
+## 2026-08-19 — night session (Allan away)
+
+Four fixes, all committed and pushed. The corpus is downloading toward ~570
+dossiers; ~525 on disk at the time of writing.
+
+### The comb now finds the rows  (875087e, 43049eb)
+
+BS_ENT_013990 p2 lists eighteen passengers. The engine read three. It now reads
+**all eighteen**, in the right rows:
+
+| row | engine | on the page |
+|---|---|---|
+| 1 | `Nayomgo Cassaudii` | Raymundo Cassaudi |
+| 2 | `Alfiedo J. ravares` | Alfredo J. Tavares |
+| 3 | `Jain E. Gil` | Jaim C. Gil |
+| 8 | `Sctomio as dr Auida` | Victorio Dias de Almeida |
+| 18 | `Eig Burges.` | Luiz Borges |
+
+Wrong as transcription, findable as search, and — the point — *present at all*.
+Rows 23-28 are the tally block at the foot, kept separate from the passengers.
+
+Three things were wrong, each hiding the next.
+
+**The table's top came from rule continuity.** `rule_extent` takes the longest
+*unbroken* vertical run of ink at each column rule. Writing crosses the rules,
+so where people are listed a rule survives only as short segments — 17 to 21 per
+column here. The longest run is therefore always the emptiest stretch: the top
+came out at 0.559 of the page and the comb was fitted to blank ruled paper below
+the list.
+
+**The line detector could not see the rows.** At the 70th percentile it reported
+ten lines for about fifteen written rows. That hand is light. No choice of
+bounds could have found rows the detector never reported.
+
+**Rule support selects emptiness.** The obvious guard — "is this band inside the
+table? do the column rules run through it?" — is backwards. Support is *highest*
+where nobody has written. On 013990 it measures 0.00-0.09 across the whole
+passenger block and 0.64-0.82 on the blank paper below. As a quality gate it cut
+the comb back to the empty strip: the same failure, one level up.
+
+What holds now: the old fit is computed unchanged and stays the default. A wider
+fit is only *considered*, looks harder (55th percentile), and must beat the
+default by a margin on how much writing it covers, be at least half writing
+itself, and overlap the table the rules did find — so it extends that table
+rather than relocating to another block of ruled lines, which is what it did on
+BS_ENT_015953 before the constraint.
+
+Measured on 89 pages with `scripts/bench_geometry.py`, which scores what share of
+the name column's ink falls inside a band:
+
+| attempt | improved | regressed | mean coverage |
+|---|---|---|---|
+| refit pitch over whole page | 17 | 54 | 0.379 → 0.284 |
+| score by lines per band | 16 | 39 | 0.379 → 0.316 |
+| score by count, with floor | 18 | 15 | 0.379 → 0.376 |
+| + margin, floor on challenger only | 12 | 1 | 0.379 → 0.402 |
+| + overlap constraint (875087e) | 7 | 0 | 0.379 → 0.393 |
+| + looser detection, unified scoring (43049eb) | **21** | **0** | **0.379 → 0.457** |
+
+`BR_RJANRIO_OL_0_RPV_PRJ_15992` — recorded in the last checkpoint as a layout
+geometry could not read at all, zero rows — now comes back at 0.285.
+
+The known limit is in its test: a letterhead butted directly against the first
+row *and* sharing the ruling's pitch is not separable by anything measured here.
+Real forms leave a gap; 013990's comb starts below its header block.
+
+### Every cover card was being lost  (22ce7b8)
+
+167 of 168 documents failed page 1 with `NotImplementedError: (Unimplemented)
+ConvertPirAttribute2RuntimeAttribute`, and the run reported success. oneDNN
+refuses the detection pipeline — which builds fine and dies on use, so the retry
+has to wrap the call, not the construction. That path produces the cover text
+`identify()` reads, which is why every record fell back to filename identity.
+oneDNN is kept for the row recogniser, which is happy with it.
+
+### Corpus properties from Allan, to design around
+
+* **Ditto marks are real** — confirmed on 013990's Nação column. My sample
+  surfaced none, which was a sampling limit, not evidence of absence.
+* **Blank means "unknown"**, not "the engine failed". This is why the density
+  floor is never applied to the default comb: a correct comb over thirty rows
+  may hold only fifteen detected lines.
+* **Do not assume fixed geometry** — scans are misaligned and faulty. Every
+  bound above is derived from the page in front of it.
+* White-on-black pages are first or last and carry nothing needed.
+
+### Next, in order
+
+1. **Re-index and re-measure.** Every number about blank rows predates the comb
+   fix and means little now.
+2. **Ditto inheritance**, stored beside the verbatim text rather than replacing
+   it. 013990 is the fixture.
+3. **Confidence is not calibrated** — `conf.surname` is Paddle's raw decode
+   score, shown as if it meant trustworthiness. Allan saw a green label on
+   `Brges. iuig`. Hide it or calibrate it against hand-read truth.
+4. **Rows that are not passengers** — the `/36` line and the tally block are
+   read as people. Same class of problem as the column heading flag.
+5. Handwriting recognition, still the ceiling, and still the thing pretrained
+   models do not solve (see the daytime entry).
+
 ## 2026-08-19 — evening session
 
 Three fixes committed and one large defect found and not yet fixed. The corpus
