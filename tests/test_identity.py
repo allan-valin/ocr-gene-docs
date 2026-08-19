@@ -71,3 +71,28 @@ def test_cover_parser_returns_none_on_unrelated_text():
 def test_filename_parser_handles_dashes_and_spaces(tmp_path):
     p = _pdf(tmp_path, "BR-RJANRIO-OL-0-RPV-PRJ-15992.pdf")
     assert from_filename(p, "h").notation == "OL.PRJ.15992"
+
+
+def test_hashing_a_file_twice_reads_it_once(tmp_path, monkeypatch):
+    """Resolving a search hit to a filename hashes the folder. At seven thousand
+    dossiers that is 25 GB of reading, and it must not happen per query."""
+    from desembarque import identity as ident
+    p = tmp_path / "a.pdf"
+    p.write_bytes(b"%PDF-1.7\nhello")
+
+    calls = []
+    real = ident.hash_file
+    monkeypatch.setattr(ident, "hash_file", lambda q: (calls.append(q), real(q))[1])
+
+    first = ident.cached_hash(p)
+    second = ident.cached_hash(p)
+    assert first == second and len(calls) == 1
+
+
+def test_a_changed_file_is_hashed_again(tmp_path, monkeypatch):
+    from desembarque import identity as ident
+    p = tmp_path / "a.pdf"
+    p.write_bytes(b"%PDF-1.7\nhello")
+    first = ident.cached_hash(p)
+    p.write_bytes(b"%PDF-1.7\nhello there, different bytes entirely")
+    assert ident.cached_hash(p) != first

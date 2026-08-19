@@ -58,6 +58,28 @@ def hash_file(path: Path) -> str:
     return h.hexdigest()
 
 
+# Hashing is cheap once and expensive per query: resolving search hits to
+# filenames hashes the whole folder, which at seven thousand dossiers is tens of
+# gigabytes of reading. Keyed by mtime and size, so a file edited in place is
+# still noticed.
+_HASHES: dict[str, tuple[tuple[int, int], str]] = {}
+
+
+def cached_hash(path: Path) -> str:
+    """hash_file, memoised on the file's mtime and size."""
+    try:
+        st = path.stat()
+    except OSError:
+        return hash_file(path)
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _HASHES.get(str(path))
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    digest = hash_file(path)
+    _HASHES[str(path)] = (stamp, digest)
+    return digest
+
+
 def _pack(m: re.Match, source: str, doc_hash: str) -> Identity:
     fundo = m.group("fundo").upper()
     series = m.group("series").upper()

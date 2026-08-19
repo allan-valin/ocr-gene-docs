@@ -36,7 +36,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desembarque import engine as engines          # noqa: E402
-from desembarque.identity import identify          # noqa: E402
+from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import BatchIndexer, collect_pdfs  # noqa: E402
 from desembarque import search as searchlib          # noqa: E402
@@ -260,9 +260,6 @@ def transcribe_document(pdf: Path, job) -> dict:
     }
 
 
-_HASH_FILES: dict[tuple[str, int], dict[str, str]] = {}
-
-
 def hash_index(folder: Path) -> dict[str, str]:
     """Content hash -> filename, for the folder being browsed.
 
@@ -271,18 +268,12 @@ def hash_index(folder: Path) -> dict[str, str]:
     that a search hit knows *what* it found and not *where*, so the folder has
     to answer that, and it can only answer for the folder in front of it.
     """
-    key = (str(folder), int(folder.stat().st_mtime_ns))
-    hit = _HASH_FILES.get(key)
-    if hit is not None:
-        return hit
     out = {}
     for pdf in collect_pdfs(folder):
         try:
-            out[identify(pdf).doc_hash] = pdf.name
+            out[cached_hash(pdf)] = pdf.name
         except OSError:
             continue
-    _HASH_FILES.clear()          # one folder's worth is enough to keep
-    _HASH_FILES[key] = out
     return out
 
 
