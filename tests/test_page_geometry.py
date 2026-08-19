@@ -286,13 +286,24 @@ def test_a_fully_written_table_is_unchanged():
 
 
 def test_writing_above_the_table_does_not_drag_the_comb_into_it():
-    """A letterhead is a few irregular lines, not a periodic run, and must not
-    extend the comb upward — the failure the original bound existed to stop."""
+    """A letterhead sits on unruled paper above the table, separated from it by
+    a clear strip — the shape every real form in this corpus has, and the
+    failure the original rule bound existed to stop.
+
+    The limit is that separation. A banner butted directly against the first
+    row, with no blank paper between, is not distinguishable from a row by
+    anything measured here: on BS_ENT_013990 the vertical rules score 0.00 to
+    0.09 through the entire passenger block, so "is this inside the table?"
+    cannot be answered from the rules either. What saves the real pages is that
+    the gap exists — 013990's comb starts at 0.28, below its header block.
+    """
     from PIL import ImageDraw
     im = half_written_table()
     d = ImageDraw.Draw(im)
-    d.rectangle([150, 60, 900, 110], fill=0)      # a title
-    d.rectangle([150, 150, 700, 185], fill=0)     # a subtitle
+    # off the table's pitch as well as clear of it: a printed letterhead has no
+    # reason to share the ruling's spacing, and 013990's does not
+    d.rectangle([150, 75, 900, 115], fill=0)      # a title
+    d.rectangle([150, 170, 700, 205], fill=0)     # a subtitle
     geo = detect_rules(ink_mask(im))
     bands = geo.normalized_rows()
     assert bands, "still detects the table"

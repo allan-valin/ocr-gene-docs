@@ -211,7 +211,8 @@ def rule_extent(mask: np.ndarray, x: int, halfw: int = 3, gap: int = 40
 
 
 def _text_lines(mask: np.ndarray, x0: int, x1: int, y0: int, y1: int,
-                smooth: int = 9, min_width: int | None = None) -> list[int]:
+                smooth: int = 9, min_width: int | None = None,
+                pct: float = 70) -> list[int]:
     """Centres of the inked lines between y0 and y1 — the written rows.
 
     Detecting the *text* rather than the horizontal rules is what makes this
@@ -225,7 +226,7 @@ def _text_lines(mask: np.ndarray, x0: int, x1: int, y0: int, y1: int,
     prof = np.convolve(prof, np.ones(smooth) / smooth, mode="same")
     if not prof.size or prof.max() <= 0:
         return []
-    th = np.percentile(prof, 70)
+    th = np.percentile(prof, pct)
     idx = np.where(prof > th)[0]
     groups: list[list[int]] = []
     for i in idx:
@@ -464,10 +465,20 @@ def detect_rules(mask: np.ndarray, vth: float | None = None) -> Geometry:
     # one is only *considered* — the two are compared by how much writing each
     # actually covers, which is the question that matters and can be asked of
     # the page itself.
-    all_lines = _text_lines(mask, cols[0], cols[-1], by0, bottom)
+    # Both combs are scored against the same, more sensitive, line detection.
+    # Scoring them against the default's sparser view counted none of the rows
+    # the challenger had found, so a comb sitting correctly on fifteen light
+    # rows failed the density floor and lost to one on blank paper.
+    all_lines = _text_lines(mask, cols[0], cols[-1], by0, bottom, pct=55)
 
+    # The challenger looks harder than the default does. At the 70th percentile
+    # BS_ENT_013990 reports ten lines for about fifteen written rows -- that hand
+    # is light, and no choice of bounds can find rows the detector never
+    # reported. At the 55th it reports sixteen. The default keeps its own
+    # threshold, so pages it already reads are fitted exactly as before.
     def comb(lo: int) -> tuple[list[float], float] | None:
-        lines = _text_lines(mask, cols[0], cols[-1], lo, bottom)
+        lines = _text_lines(mask, cols[0], cols[-1], lo, bottom,
+                            pct=70 if lo >= top else 55)
         fit = _best_pitch(lines)
         if not fit:
             return None
@@ -479,10 +490,14 @@ def detect_rules(mask: np.ndarray, vth: float | None = None) -> Geometry:
             span = _comb_span(lines, pitch, intercept)
             if span is None:
                 return None
-            span = _ruled_run(mask, [int(c) for c in cols], pitch, intercept,
-                              *span)
-            if span is None:
-                return None
+            # No rule-support gate here. On BS_ENT_013990 the vertical rules do
+            # not survive at all where the passengers are written -- support
+            # measured 0.00 to 0.09 across that whole stretch -- while it is
+            # highest on the blank ruled paper below them. As a quality gate it
+            # therefore selects emptiness, which is the very failure being
+            # fixed. The challenger is held instead by what it covers, by the
+            # margin it must win by, and by having to overlap the table the
+            # rules did find.
             first, last = span
         edges = _edges_for(pitch, intercept, first, last)
         return ([e for e in edges if lo - pitch <= e <= bottom + pitch], pitch)
