@@ -103,3 +103,15 @@ def test_predictors_are_per_thread(monkeypatch):
     for t in ts: t.join()
     assert len({id(x) for x in seen}) == 3
     assert eng._recogniser() is eng._recogniser()
+
+
+def test_the_printed_column_heading_is_not_a_passenger():
+    """The row comb includes the header band, so "Nomes e Cognomes" was being
+    indexed as a person — and scoring 1.0 against anyone searching "nome"."""
+    from desembarque.engine_paddle import rows_from_bands
+    geo = Band([(0.1, 0.2), (0.2, 0.3)])
+    said = [("Nomes e Cognomes", 1.0), ("JOSE MUESSO", 0.9)]
+    rows = rows_from_bands(geo, (1000, 2000), lambda crops: said, crop=lambda b: b)
+    assert rows[0]["header"] is True
+    assert rows[1].get("header") is not True
+    assert rows[0]["name_raw"] == "Nomes e Cognomes"   # recorded, not discarded

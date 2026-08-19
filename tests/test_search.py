@@ -75,3 +75,28 @@ def test_load_index_keeps_manual_rows_when_asked(tmp_path):
         "rows": [{"n": 1, "surname": "SILVA", "given": "MARIA", "page": 2}]}))
     rows = load_index(tmp_path, engine_only=False)
     assert rows and "SILVA" in rows[0]["text"]
+
+
+def test_column_headings_are_not_searchable_rows():
+    from desembarque.search import load_index
+    import json, tempfile
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        (P(d) / "a.json").write_text(json.dumps({
+            "hash": "a", "engine": "paddle", "rows": [
+                {"n": 2, "name_raw": "Nomes e Cognomes", "header": True, "page": 2},
+                {"n": 4, "name_raw": "JOSE MUESSO", "page": 2}]}))
+        rows = load_index(P(d))
+    assert [r["text"] for r in rows] == ["JOSE MUESSO"]
+
+
+def test_a_misread_column_heading_is_still_a_heading():
+    """The recogniser reads the printed caption differently on every page —
+    "Nome e Cognomes", "Nomes e Cognome" — so exact matching missed most of
+    them and they came back as passengers."""
+    from desembarque.search import is_heading
+    assert is_heading("Nome e Cognomes")
+    assert is_heading("Nomes e Cognomes")
+    assert is_heading("NOMES E COGNOME")
+    assert not is_heading("JOSE MUESSO")
+    assert not is_heading("Guudo Camtadore")

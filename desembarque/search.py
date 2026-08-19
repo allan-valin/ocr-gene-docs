@@ -17,6 +17,11 @@ import json
 import unicodedata
 from pathlib import Path
 
+# The row comb is fitted to the written lines, and the printed column heading is
+# one of them. Left alone it is indexed as a passenger and scores 1.0 against
+# anyone searching for "nome".
+COLUMN_HEADINGS = ("NOMES E COGNOMES", "NOME E COGNOME", "NOMES", "COGNOMES",
+                   "NOME", "NOMES E SOBRENOMES")
 MIN_QUERY = 3
 MIN_SCORE = 0.10
 
@@ -25,6 +30,23 @@ def fold(s: str) -> str:
     """Upper case, no diacritics — how two spellings of a name are compared."""
     s = unicodedata.normalize("NFD", s or "")
     return "".join(c for c in s if not unicodedata.combining(c)).upper().strip()
+
+
+def is_heading(text: str) -> bool:
+    """The printed caption of the name column, not a person.
+
+    The caption is recognised differently on every page — "Nome e Cognomes",
+    "Nomes e Cognome" — so exact matching caught almost none of them. Multi-word
+    captions are matched loosely, which is safe because no passenger's name is
+    half-way similar to "NOMES E COGNOMES"; the one-word ones stay exact, since
+    at four letters a loose match starts catching real names.
+    """
+    t = fold(" ".join((text or "").split()))
+    if not t:
+        return False
+    if t in COLUMN_HEADINGS:
+        return True
+    return any(similarity(t, h) >= 0.55 for h in COLUMN_HEADINGS if " " in h)
 
 
 def trigrams(s: str) -> set[str]:
@@ -65,6 +87,10 @@ def load_index(cache: Path, engine_only: bool = True) -> list[dict]:
             continue
         for r in d.get("rows", []):
             text = row_text(r)
+            # the flag covers documents indexed since this was noticed; the text
+            # check covers everything indexed before it
+            if r.get("header") or is_heading(text):
+                continue
             if len(fold(text)) < 4:
                 continue
             out.append({

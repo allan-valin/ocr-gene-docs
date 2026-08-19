@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Callable
 
 from .engine import PageResult
+from .search import is_heading
 
 # Recogniser choice and threading are set by measurement, not taste — see
 # scripts/spike_speed.py and docs/PROGRESS.md for the numbers behind these.
@@ -118,13 +119,18 @@ def rows_from_bands(geo, size: tuple[int, int],
     for i in range(len(bands)):
         text, score = by_band.get(i, ("", 0.0))
         surname, given = split_name(text)
-        rows.append({
+        row = {
             "n": i + 1,
             "surname": surname,
             "given": given,
             "name_raw": text or "",
             "conf": {"surname": round(float(score), 3)},
-        })
+        }
+        if is_heading(text):
+            # kept in the transcription, since it is genuinely on the page, but
+            # marked so it is not offered as a person
+            row["header"] = True
+        rows.append(row)
     return rows
 
 
