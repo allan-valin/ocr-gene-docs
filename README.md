@@ -57,22 +57,43 @@ Honest about the limits:
 
 ## Running it
 
-```sh
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python scripts/serve.py            # browse ./data/scans
-.venv/bin/python scripts/serve.py --root ~/Documents/manifestos
-```
-
-Optional transcription engine (large, and the app works without it):
+Install once:
 
 ```sh
 python3 -m venv .venv-ocr && .venv-ocr/bin/pip install -r requirements-ocr.txt
-.venv-ocr/bin/python scripts/serve.py        # same app, with transcription available
 ```
 
-The engine venv runs the whole application, so it is the one to use for indexing a
-folder. Without it the app still browses, measures grids and accepts typing — it just
-says plainly that no model is installed.
+Start it, and open the address it prints:
+
+```sh
+.venv-ocr/bin/python scripts/serve.py --root data/scans
+```
+
+    http://127.0.0.1:8765          # --port to change it
+
+The browser opens by itself unless you pass `--no-open`.
+
+**Searching finds nothing until a folder has been indexed.** Indexing is what runs the
+engine over every page and stores what it read; browsing a document does not do it. Press
+*Indexar* in the sidebar, or:
+
+```sh
+curl -X POST 'http://127.0.0.1:8765/api/index?dir='
+curl 'http://127.0.0.1:8765/api/index'        # progress, failures, estimate
+```
+
+It resumes: a document already read by the current engine is skipped, so stopping and
+starting again costs nothing. When the engine improves, `SCHEMA` in `desembarque/search.py`
+is raised and the next run re-reads everything — **until that happens the app shows what
+was stored when the page was last read, not what the engine would say today.**
+
+Without the engine venv the app still runs, browses, measures grids and accepts typing —
+it just says plainly that no model is installed:
+
+```sh
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python scripts/serve.py --root ~/Documents/manifestos
+```
 
 It binds `127.0.0.1` only and reads nothing outside the folder you point it at.
 
