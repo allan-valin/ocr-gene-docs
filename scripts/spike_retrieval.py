@@ -17,6 +17,9 @@ import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from desembarque.search import similarity   # noqa: E402
 
 
 def fold(s: str) -> str:
@@ -30,11 +33,8 @@ def tri(s: str) -> set[str]:
 
 
 def sim(a: str, b: str) -> float:
-    A, B = tri(a), tri(b)
-    if not A or not B:
-        return 0.0
-    n = len(A & B)
-    return n / (len(A) + len(B) - n)
+    """The application's own scorer, so the measurement describes the product."""
+    return similarity(a, b)
 
 
 def load_pool(cache: Path) -> list[dict]:

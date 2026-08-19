@@ -171,3 +171,14 @@ def test_a_deleted_document_leaves_the_index(tmp_path):
     assert len(load_index(tmp_path)) == 1
     (tmp_path / "a.json").unlink()
     assert load_index(tmp_path) == []
+
+
+def test_matching_the_whole_name_beats_matching_one_word_of_it():
+    """Measured, not assumed: scoring each word separately and taking the best
+    was tried and made retrieval worse — an exact hit on "EMMA" in an unrelated
+    "Nina Emma Lundqwist" outranked a fuzzy hit on the whole right name. The
+    shape of the whole name carries more signal than any word of it."""
+    from desembarque.search import similarity
+    right = similarity("EMMA CONTADORE", "Nemma Comtadiie")
+    lucky = similarity("EMMA CONTADORE", "Nina Emma Lundqwist")
+    assert right > lucky
