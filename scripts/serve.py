@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
-from desembarque.batch import BatchIndexer, collect_pdfs  # noqa: E402
+from desembarque.batch import BatchIndexer, collect_pdfs, is_indexed  # noqa: E402
 from desembarque import search as searchlib          # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
@@ -301,19 +301,9 @@ def index_folder(folder: Path):
     pdfs = collect_pdfs(folder)
 
     def is_cached(pdf: Path) -> bool:
-        """Already indexed — as opposed to merely having a note against it.
-
-        Someone can open a document, type nothing, and leave an empty manual
-        record behind. Treating that as done would drop the document out of
-        every future run silently, which for an archive index is the worst
-        kind of failure: nothing is reported and the person is simply never
-        found."""
-        data = JOBS.cached(identify(pdf).doc_hash)
-        if not data:
-            return False
-        if data.get("engine"):
-            return True                       # an engine ran; blank is an answer
-        return bool(data.get("rows"))         # or a person actually typed rows
+        """Already indexed by the engine that ships now — see `is_indexed`."""
+        return is_indexed(JOBS.cached(identify(pdf).doc_hash),
+                          schema=searchlib.SCHEMA)
 
     def transcribe(pdf: Path) -> None:
         data = transcribe_document(pdf, _BatchJob(pdf_pages(pdf)))

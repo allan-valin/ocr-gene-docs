@@ -138,15 +138,32 @@ def test_a_manual_note_with_no_rows_does_not_count_as_indexed(server, engine):
 
 
 def test_an_engine_result_is_not_redone(server, engine):
+    """A document already read by the engine that ships now is left alone."""
+    base, folder = server
+    docs(folder, 1)
+    from desembarque.identity import identify
+    from desembarque.search import SCHEMA
+    ident = identify(folder / "doc0.pdf")
+    serve.JOBS.store(ident.doc_hash, {"hash": ident.doc_hash, "engine": "paddle",
+                                      "schema": SCHEMA, "pages": [], "rows": []})
+    call(f"{base}/api/index?dir=", "POST")
+    state = wait_done(base)
+    assert state["skipped"] == 1 and state["done"] == 0
+
+
+def test_a_result_from_an_older_engine_is_redone(server, engine):
+    """The other half of the rule. A page the ink mask ruined was stored as an
+    engine result with no rows; if that counts as done, no improvement to the
+    engine can ever reach the corpus and the run reports success anyway."""
     base, folder = server
     docs(folder, 1)
     from desembarque.identity import identify
     ident = identify(folder / "doc0.pdf")
     serve.JOBS.store(ident.doc_hash, {"hash": ident.doc_hash, "engine": "paddle",
-                                      "pages": [], "rows": []})
+                                      "schema": 1, "pages": [], "rows": []})
     call(f"{base}/api/index?dir=", "POST")
     state = wait_done(base)
-    assert state["skipped"] == 1 and state["done"] == 0
+    assert state["done"] == 1 and state["skipped"] == 0
 
 
 def test_search_spans_every_indexed_document(server, engine):

@@ -18,6 +18,28 @@ from pathlib import Path
 from typing import Callable
 
 
+def is_indexed(data: dict | None, schema: int) -> bool:
+    """Whether this document has already been read by the engine that ships now.
+
+    Two things are being told apart. A record an *engine* wrote is only current
+    if it carries the present schema stamp: when the engine learns to read
+    something it previously could not — a faint page the ink mask destroyed,
+    say — every record written before that is stale, and a run that skips them
+    reports success while leaving the corpus exactly as wrong as it was.
+
+    A record a *person* typed is not the engine's to redo, whatever its age.
+    But an empty note is not a transcription: someone opens a document, types
+    nothing, and leaves, and treating that as done drops the document out of
+    every future run with nobody told — the worst failure an archive index has,
+    because the person is simply never found.
+    """
+    if not data:
+        return False
+    if data.get("engine"):
+        return int(data.get("schema", 0)) >= schema
+    return bool(data.get("rows"))
+
+
 def collect_pdfs(folder: Path, recursive: bool = True) -> list[Path]:
     """Every PDF under a folder, in a stable order.
 

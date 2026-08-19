@@ -153,3 +153,42 @@ def test_parallel_run_stops_on_request(tmp_path):
     b.stop()
     assert wait(st, timeout=5) == "stopped"
     assert st.done < 200
+
+
+# --- re-indexing after the engine changes ------------------------------------
+#
+# `is_cached` treated any record an engine had written as finished, so once the
+# corpus was indexed no engine improvement could ever reach it: the run skipped
+# all 168 documents and reported success. The stored schema stamp is what
+# distinguishes "read by the engine that ships now" from "read by an older one".
+
+def test_a_record_from_the_current_engine_is_indexed():
+    from desembarque.batch import is_indexed
+    assert is_indexed({"engine": "paddle", "schema": 2, "rows": []}, schema=2) is True
+
+
+def test_a_record_from_an_older_schema_is_reindexed():
+    """A page the mask ruined was stored as blank rows and an engine name. It
+    must be read again once the engine learns to fall back to a render."""
+    from desembarque.batch import is_indexed
+    assert is_indexed({"engine": "paddle", "schema": 1, "rows": []}, schema=2) is False
+
+
+def test_a_record_with_no_schema_stamp_is_reindexed():
+    """The earliest records predate the stamp entirely."""
+    from desembarque.batch import is_indexed
+    assert is_indexed({"engine": "paddle", "rows": []}, schema=2) is False
+
+
+def test_a_typed_record_is_kept_whatever_its_schema():
+    """A person's own transcription is not the engine's to redo."""
+    from desembarque.batch import is_indexed
+    assert is_indexed({"rows": [{"surname": "BLOCH"}], "schema": 1}, schema=2) is True
+
+
+def test_an_empty_manual_note_is_not_an_index():
+    """Someone opens a document, types nothing, and leaves. Treating that as
+    done drops the document out of every future run, and nobody is told."""
+    from desembarque.batch import is_indexed
+    assert is_indexed({"rows": [], "notes": ""}, schema=2) is False
+    assert is_indexed(None, schema=2) is False
