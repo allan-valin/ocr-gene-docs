@@ -413,11 +413,18 @@ function loadFolder(rel){
       return;
     }
     openDoc(d.active||0);
-  if(SERVED) fetch("/api/index").then(r=>r.json()).then(st=>{
+  });
+}
+// Asked for on its own, and first. While a folder is being indexed the engine
+// holds the machine and /api/corpus can take half a minute, so hanging the
+// index bar off that response meant the one thing able to explain the wait was
+// the one thing that could not appear until the wait was over.
+function bootIndexBar(){
+  if(!SERVED) return;
+  fetch("/api/index").then(r=>r.json()).then(st=>{
     renderIndexBar(st);
     if(st.status==="running"){ clearInterval(idxPoll); idxPoll=setInterval(pollIndex,1200); }
   }).catch(()=>{});
-  });
 }
 $("#pagestrip").addEventListener("click",e=>{
   const b=e.target.closest("button"); if(b) openDoc(docIdx,+b.dataset.p);
@@ -578,6 +585,10 @@ function renderIndexBar(st){
       <span class="hint"><b>${seen} de ${st.total}</b>${st.skipped?` · ${st.skipped} já feitos`:""}
       ${fails?` · <span class="warnstate">${fails} com erro</span>`:""}
       ${st.eta_s?` · faltam cerca de ${humanTime(st.eta_s)}`:""}</span>
+      <span class="hint" id="idxslow"><span class="warnstate">A leitura ocupa a máquina:</span>
+      abrir documentos e pesquisar fica lento até terminar, e o que já foi lido
+      só aparece depois de recarregar a página. Pode parar e continuar depois —
+      nada do que já foi lido se perde.</span>
       <span class="hint">${st.current||""}</span>
       <button id="stopindex">Parar</button>`;
     return;
@@ -585,7 +596,9 @@ function renderIndexBar(st){
   const word = st.status==="stopped" ? "Parado" : "Pasta indexada";
   el.innerHTML = `<span class="hint"><b>${word}:</b> ${seen} de ${st.total} documentos.
     ${fails?`<span class="warnstate">${fails} não puderam ser lidos:</span> `
-        +(st.failed.slice(0,3).map(f=>f.file).join(", "))+(fails>3?"…":""):""}</span>
+        +(st.failed.slice(0,3).map(f=>f.file).join(", "))+(fails>3?"…":""):""}
+    Recarregue a página para ver o que foi lido.</span>
+    <button id="reloadpage">Recarregar</button>
     <button id="doindex">${st.status==="stopped"?"Continuar":"Indexar de novo"}</button>`;
 }
 function pollIndex(){
@@ -611,6 +624,7 @@ document.addEventListener("click",e=>{
   if(e.target.id==="doindex") startIndexing();
   if(e.target.id==="stopindex")
     fetch("/api/index/stop",{method:"POST"}).then(r=>r.json()).then(renderIndexBar);
+  if(e.target.id==="reloadpage") location.reload();
 });
 
 // Structure without recognition: the table's rules and written lines are
@@ -811,6 +825,12 @@ function loadData(){
   if(SERVED) return fetch("/api/corpus").then(r=>r.json());
   return fetch("data.json").then(r=>r.json());
 }
+// The index bar is asked for before the corpus, and shown while it loads.
+// Listing a folder reads every file in it, and during indexing the engine has
+// the machine, so that listing can take half a minute — long enough for the
+// page to look broken with nothing on it to say why.
+bootIndexBar();
+if(SERVED) $("#warn").textContent="Carregando a pasta…";
 loadData().then(d=>{
   DB=d;
   $("#scan").onload=()=>paintBand(sel);
@@ -819,7 +839,9 @@ loadData().then(d=>{
   $("#warn").textContent="Protótipo. "+(g?g.note:"");
   openDoc(d.active||0);
 }).catch(e=>{
-  $("#warn").textContent="Sem dados. Gere com: python3 scripts/make_prototype.py   ("+e+")";
+  $("#warn").textContent = (idxState && idxState.status==="running")
+    ? "A pasta não pôde ser lida enquanto a indexação ocupa a máquina. Espere terminar e recarregue."
+    : "Sem dados. Gere com: python3 scripts/make_prototype.py   ("+e+")";
 });
 </script>
 </body>

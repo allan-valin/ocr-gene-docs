@@ -187,6 +187,22 @@ window.addEventListener("load",async()=>{
     }
   }
 
+  // Indexing takes the machine, so listing a folder can take half a minute and
+  // the page looks broken with nothing on it to say why. The bar has to be
+  // asked for on its own, before the folder, or the one thing able to explain
+  // the wait is the one thing that cannot appear until it is over.
+  {
+    const src = document.documentElement.innerHTML;
+    ok("index bar is booted before the folder listing",
+       /bootIndexBar\(\);/.test(src));
+    ok("index bar is booted before the folder is asked for",
+       src.indexOf("bootIndexBar();") < src.lastIndexOf("loadData()"));
+    ok("a running index warns that the app will be slow",
+       /ocupa a m|fica lento/i.test(src));
+    ok("a finished index says to reload",
+       /Recarregue a p|reloadpage/i.test(src));
+  }
+
  }catch(err){ out.push("THREW "+(err&&err.message)); }
  document.getElementById("warn").textContent="RESULTS>> "+out.join(" | ");
 });
