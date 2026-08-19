@@ -100,3 +100,28 @@ def test_a_misread_column_heading_is_still_a_heading():
     assert is_heading("NOMES E COGNOME")
     assert not is_heading("JOSE MUESSO")
     assert not is_heading("Guudo Camtadore")
+
+
+def test_index_tolerates_records_from_before_versioning(tmp_path):
+    """Records written today have no schema version. Reading must not depend on
+    one, or the first schema change silently drops everything already indexed."""
+    import json
+    from desembarque.search import load_index
+    (tmp_path / "old.json").write_text(json.dumps({
+        "hash": "a", "engine": "paddle",
+        "rows": [{"n": 1, "name_raw": "JOSE MUESSO", "page": 2}]}))
+    (tmp_path / "new.json").write_text(json.dumps({
+        "hash": "b", "engine": "paddle", "schema": 1,
+        "rows": [{"n": 1, "name_raw": "MARIA SILVA", "page": 2}]}))
+    assert sorted(r["text"] for r in load_index(tmp_path)) == ["JOSE MUESSO", "MARIA SILVA"]
+
+
+def test_index_skips_a_record_from_a_future_schema(tmp_path):
+    """A newer version of the app may write rows this one cannot read. Skipping
+    them loudly-in-the-logs is safer than mis-reading them into search results."""
+    import json
+    from desembarque.search import load_index
+    (tmp_path / "future.json").write_text(json.dumps({
+        "hash": "c", "engine": "paddle", "schema": 99,
+        "rows": [{"n": 1, "name_raw": "JOSE MUESSO", "page": 2}]}))
+    assert load_index(tmp_path) == []

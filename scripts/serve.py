@@ -249,6 +249,7 @@ def transcribe_document(pdf: Path, job) -> dict:
 
     ident = identify(pdf, cover_text=cover_text or None)
     return {
+        "schema": searchlib.SCHEMA,
         "hash": ident.doc_hash,
         "file": pdf.name,
         "notation": ident.notation,

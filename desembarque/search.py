@@ -22,6 +22,10 @@ from pathlib import Path
 # anyone searching for "nome".
 COLUMN_HEADINGS = ("NOMES E COGNOMES", "NOME E COGNOME", "NOMES", "COGNOMES",
                    "NOME", "NOMES E SOBRENOMES")
+# Stored transcriptions carry a schema number from now on. Records written
+# before this have none, and are read as version 1 — the first schema change
+# must not silently drop everything already indexed.
+SCHEMA = 1
 MIN_QUERY = 3
 MIN_SCORE = 0.10
 
@@ -83,6 +87,8 @@ def load_index(cache: Path, engine_only: bool = True) -> list[dict]:
             d = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
+        if int(d.get("schema", 1)) > SCHEMA:
+            continue      # written by a newer version than this one can read
         if engine_only and not d.get("engine"):
             continue
         for r in d.get("rows", []):
