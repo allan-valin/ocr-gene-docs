@@ -203,3 +203,53 @@ def test_search_can_open_documents_indexed_before_filenames_were_stored(server, 
     code, body = call(f"{base}/api/search?q=Guido%20Contadore")
     assert code == 200 and body["hits"]
     assert body["hits"][0]["file"] == "doc0.pdf"
+
+
+# --- one shape for the geometry, whoever produced it -------------------------
+#
+# The empty-grid endpoint returns `row_bands` and `name_column`; the engine
+# stored `rows` and `columns` for the same thing. The review UI paints the band
+# for the selected row from `row_bands`, so on every engine-transcribed page it
+# fell through to a pitch that was never stored, computed NaN, and painted
+# nothing — clicking a name simply stopped highlighting it.
+
+def test_a_stored_transcription_is_served_in_the_shape_the_ui_paints(server, engine):
+    base, folder = server
+    docs(folder, 1)
+    from desembarque.identity import identify
+    from desembarque.search import SCHEMA
+    ident = identify(folder / "doc0.pdf")
+    serve.JOBS.store(ident.doc_hash, {
+        "hash": ident.doc_hash, "engine": "paddle", "schema": SCHEMA,
+        "pages": [{"n": 2, "kind": "list",
+                   "geometry": {"rows": [[0.1, 0.2], [0.2, 0.3]],
+                                "columns": [0.08, 0.35, 0.5],
+                                "skew": -0.06, "read_from": "mask"}}],
+        "rows": [{"n": 1, "name_raw": "BLOCH LINE", "page": 2}],
+    })
+    status, got = call(f"{base}/api/transcription?hash={ident.doc_hash}")
+    assert status == 200
+    geo = got["pages"][0]["geometry"]
+    assert geo["row_bands"] == [[0.1, 0.2], [0.2, 0.3]], "bands under the name the UI reads"
+    assert geo["name_column"] == [0.08, 0.35], "the widest column, as a pair"
+    assert geo["rows"] == [[0.1, 0.2], [0.2, 0.3]], "and the original key is kept"
+
+
+def test_geometry_already_in_ui_shape_is_left_alone():
+    from desembarque.serve_shapes import ui_geometry
+    g = {"row_bands": [[0.1, 0.2]], "name_column": [0.1, 0.4], "bands_source": "detected"}
+    assert ui_geometry(g) == g
+
+
+def test_geometry_without_columns_still_gets_its_bands():
+    """A page whose columns were not measurable still has rows to highlight."""
+    from desembarque.serve_shapes import ui_geometry
+    out = ui_geometry({"rows": [[0.1, 0.2]]})
+    assert out["row_bands"] == [[0.1, 0.2]]
+    assert out.get("name_column") is None
+
+
+def test_empty_geometry_is_not_invented():
+    from desembarque.serve_shapes import ui_geometry
+    assert ui_geometry(None) is None
+    assert ui_geometry({}) == {}

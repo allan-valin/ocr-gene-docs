@@ -39,6 +39,7 @@ from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import BatchIndexer, collect_pdfs, is_indexed  # noqa: E402
+from desembarque.serve_shapes import ui_transcription  # noqa: E402
 from desembarque import search as searchlib          # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
@@ -414,7 +415,8 @@ class Handler(BaseHTTPRequestHandler):
 
             if u.path == "/api/transcription":
                 data = JOBS.cached(q.get("hash", ""))
-                return self._send(200 if data else 404, data or {"error": "not transcribed"})
+                return self._send(200 if data else 404,
+                                  ui_transcription(data) or {"error": "not transcribed"})
 
             return self._send(404, {"error": "not found"})
         except Exception as e:  # keep the server alive; surface the error to the UI

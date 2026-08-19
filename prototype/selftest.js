@@ -203,6 +203,37 @@ window.addEventListener("load",async()=>{
        /Recarregue a p|reloadpage/i.test(src));
   }
 
+  // The engine and the grid endpoint named the same measurement differently,
+  // and nothing here noticed because these assertions run against the
+  // hand-fitted sample, which has always carried `row_bands`. So the engine's
+  // shape is fed in explicitly: without it, both sides pass while disagreeing,
+  // and clicking a name silently stops highlighting it on every page that was
+  // actually read.
+  {
+    const src = document.documentElement.innerHTML;
+    ok("band() reads the engine's key as well as the grid's",
+       /row_bands\s*\|\|\s*g\.rows/.test(src));
+    ok("an unmeasured band hides the box instead of painting NaN",
+       /isFinite\(bnd\[0\]\)/.test(src));
+    ok("the name column is derived when only columns were stored",
+       /function nameColumn\(\)/.test(src));
+
+    if(typeof band === "function" && typeof D !== "undefined"){
+      const keep = D;
+      try{
+        D = {geometry:{rows:[[0.1,0.2],[0.2,0.3]], columns:[0.08,0.35,0.5]}};
+        const b0 = band(0);
+        ok("engine-shaped geometry yields a real band",
+           !!b0 && isFinite(b0[0]) && isFinite(b0[1]) && b0[0]===0.1);
+        const nc = nameColumn();
+        ok("engine-shaped geometry yields a name column",
+           !!nc && nc[0]===0.08 && nc[1]===0.35);
+        D = {geometry:{}};
+        ok("geometry with nothing measured yields no band", band(0)===null);
+      } finally { D = keep; }
+    }
+  }
+
  }catch(err){ out.push("THREW "+(err&&err.message)); }
  document.getElementById("warn").textContent="RESULTS>> "+out.join(" | ");
 });

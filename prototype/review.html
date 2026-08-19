@@ -649,24 +649,49 @@ function buildGrid(){
 }
 
 // ---- geometry: band for row i ----
+// Both names for the same measurement are accepted. `/api/grid` calls it
+// `row_bands`; the engine stored it as `rows`. Reading only one of them meant
+// every engine-transcribed page fell through to a pitch that was never stored,
+// computed NaN, and painted nothing — clicking a name stopped highlighting it,
+// silently, on exactly the pages that had been read successfully. The server
+// now normalises this too; the UI accepts both so the two cannot drift apart
+// again without something noticing.
 function band(i){
-  const g=D.geometry;
-  // detected geometry gives a band per row; the hand-fitted sample gives a pitch
-  if(g.row_bands && g.row_bands[i]) return g.row_bands[i];
-  const top=g.first_row_top + i*g.row_pitch;
-  return [top, top+g.row_height];
+  const g=(D && D.geometry) || {};
+  const bands=g.row_bands || g.rows;
+  if(bands && bands[i]) return bands[i];
+  if(typeof g.first_row_top==="number" && typeof g.row_pitch==="number"){
+    const top=g.first_row_top + i*g.row_pitch;
+    return [top, top+(g.row_height!=null?g.row_height:g.row_pitch)];
+  }
+  return null;   // nothing measured: say so rather than paint a NaN box
+}
+function nameColumn(){
+  const g=(D && D.geometry) || {};
+  if(g.name_column) return g.name_column;
+  const c=g.columns||[];
+  let best=null;
+  for(let i=0;i+1<c.length;i++)
+    if(!best || c[i+1]-c[i] > best[1]-best[0]) best=[c[i],c[i+1]];
+  return best;
 }
 function paintBand(i){
   const img=$("#scan");
   if(!img.clientHeight || !D.geometry || !rows.length){
     $("#bandBox").hidden=true; $("#nameBox").hidden=true; return;
   }
-  const [t,b]=band(i), H=img.clientHeight, W=img.clientWidth;
+  const bnd=band(i);
+  if(!bnd || !isFinite(bnd[0]) || !isFinite(bnd[1])){
+    $("#bandBox").hidden=true; $("#nameBox").hidden=true; return;
+  }
+  const [t,b]=bnd, H=img.clientHeight, W=img.clientWidth;
   const bb=$("#bandBox"); bb.hidden=false;
   bb.style.top=(t*H)+"px"; bb.style.height=((b-t)*H)+"px";
   const nb=$("#nameBox");
   if($("#crop").getAttribute("aria-pressed")==="true"){
-    const [x0,x1]=D.geometry.name_column;
+    const nc=nameColumn();
+    if(!nc){ nb.hidden=true; return; }
+    const [x0,x1]=nc;
     nb.hidden=false; nb.style.top=(t*H)+"px"; nb.style.height=((b-t)*H)+"px";
     nb.style.left=(x0*W)+"px"; nb.style.width=((x1-x0)*W)+"px";
   } else nb.hidden=true;
