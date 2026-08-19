@@ -251,3 +251,78 @@ def test_a_page_read_from_the_render_says_so(monkeypatch):
                                   lambda: rows_with(["ANNA", "JOSE", "MARIA"]))
     assert used is True
     assert [r["name_raw"] for r in rows] == ["ANNA", "JOSE", "MARIA"]
+
+
+# --- oneDNN refuses the full-page pipeline -----------------------------------
+#
+# 167 of 168 indexed documents failed page 1 with
+#   NotImplementedError: (Unimplemented) ConvertPirAttribute2RuntimeAttribute
+#     not support [pir::ArrayAttribute<pir::DoubleAttribute>]
+# and the run reported success anyway. The row recogniser is fine with oneDNN;
+# only the detection pipeline behind `_page_text` trips on it. That path reads
+# the archive cover card, which is what `identify()` uses -- which is why every
+# stored record fell back to identifying itself by filename.
+#
+# The flag is not simply turned off, because oneDNN is worth having where it
+# works. The pipeline is built once with it, and if that build or its first use
+# raises, it is rebuilt without and the choice remembered for the page.
+
+class FakePipeline:
+    """Stands in for PaddleOCR: oneDNN builds happily and dies on use."""
+    def __init__(self, mkldnn):
+        self.mkldnn = mkldnn
+        self.calls = 0
+
+    def predict(self, path):
+        self.calls += 1
+        if self.mkldnn:
+            raise NotImplementedError(
+                "(Unimplemented) ConvertPirAttribute2RuntimeAttribute not support")
+        return [type("R", (), {"json": {"res": {"rec_texts": ["ARQUIVO NACIONAL"]}}})()]
+
+
+def test_onednn_is_tried_first():
+    from desembarque.engine_paddle import PaddleEngine
+    eng = PaddleEngine(mkldnn=True)
+    built = []
+    eng._build_page = lambda mkldnn: built.append(mkldnn) or FakePipeline(mkldnn)
+    eng._page_text(Path("cover.png"))
+    assert built[0] is True, "oneDNN is worth having where it works"
+
+
+def test_a_pipeline_that_dies_on_use_is_rebuilt_without_onednn():
+    """The failure is at predict, not at build: both pipelines construct."""
+    from desembarque.engine_paddle import PaddleEngine
+    eng = PaddleEngine(mkldnn=True)
+    built = []
+    eng._build_page = lambda mkldnn: built.append(mkldnn) or FakePipeline(mkldnn)
+    text = eng._page_text(Path("cover.png"))
+    assert built == [True, False]
+    assert "ARQUIVO NACIONAL" in text
+
+
+def test_the_fallback_is_remembered_rather_than_rediscovered():
+    """Rebuilding costs seconds, and every page of every document would pay it
+    again -- 167 of 168 documents took this path."""
+    from desembarque.engine_paddle import PaddleEngine
+    eng = PaddleEngine(mkldnn=True)
+    built = []
+    eng._build_page = lambda mkldnn: built.append(mkldnn) or FakePipeline(mkldnn)
+    for _ in range(3):
+        eng._page_text(Path("cover.png"))
+    assert built == [True, False], "rebuilt once, not once per page"
+
+
+def test_a_failure_that_is_not_onednn_still_raises():
+    """Falling back must not turn every other fault into a silent empty page."""
+    import pytest
+    from desembarque.engine_paddle import PaddleEngine
+    eng = PaddleEngine(mkldnn=False)
+
+    class Broken:
+        def predict(self, path):
+            raise RuntimeError("no engine at all")
+
+    eng._build_page = lambda mkldnn: Broken()
+    with pytest.raises(RuntimeError):
+        eng._page_text(Path("cover.png"))

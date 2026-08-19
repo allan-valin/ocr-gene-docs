@@ -219,6 +219,7 @@ class PaddleEngine:
         self.threads = threads
         self._local = threading.local()
         self._page = None
+        self._page_plain = False
 
     # ---- model loading ------------------------------------------------------
     def _import(self):
@@ -248,17 +249,48 @@ class PaddleEngine:
             rec = self._local.rec = self._make_recogniser()
         return rec
 
+    def _build_page(self, mkldnn: bool):
+        from paddleocr import PaddleOCR
+        kw = dict(use_doc_orientation_classify=False, use_doc_unwarping=False,
+                  use_textline_orientation=False, enable_mkldnn=mkldnn,
+                  lang="pt", text_detection_model_name=self.det_model,
+                  text_recognition_model_name=self.rec_model)
+        if self.threads:
+            kw["cpu_threads"] = self.threads
+        return PaddleOCR(**kw)
+
     def _full_page(self):
         if self._page is None:
-            from paddleocr import PaddleOCR
-            kw = dict(use_doc_orientation_classify=False, use_doc_unwarping=False,
-                      use_textline_orientation=False, enable_mkldnn=self.mkldnn,
-                      lang="pt", text_detection_model_name=self.det_model,
-                      text_recognition_model_name=self.rec_model)
-            if self.threads:
-                kw["cpu_threads"] = self.threads
-            self._page = PaddleOCR(**kw)
+            self._page = self._build_page(self.mkldnn and not self._page_plain)
         return self._page
+
+    def _predict_page(self, image: Path):
+        """Run the detection pipeline, dropping oneDNN if oneDNN refuses.
+
+        This path reads the archive cover card, and `identify()` reads that, so
+        when it fails a document loses the notation it should be filed under.
+        It was failing on 167 of 168 indexed documents with
+
+            NotImplementedError: (Unimplemented)
+            ConvertPirAttribute2RuntimeAttribute not support
+            [pir::ArrayAttribute<pir::DoubleAttribute>]
+
+        and the run reported success regardless. The pipeline *builds* fine
+        either way -- it dies on use -- so the retry has to wrap the call, not
+        the construction.
+
+        The row recogniser is happy with oneDNN and keeps it; the flag is
+        dropped here and only here, and the choice is remembered, since
+        rebuilding costs seconds and every page would otherwise pay it.
+        """
+        try:
+            return self._full_page().predict(str(image))
+        except Exception:
+            if not self.mkldnn or self._page_plain:
+                raise
+            self._page_plain = True
+            self._page = self._build_page(False)
+            return self._page.predict(str(image))
 
     # ---- recognition --------------------------------------------------------
     def _recognize(self, crops: list) -> list[tuple[str, float]]:
@@ -275,7 +307,7 @@ class PaddleEngine:
         return out
 
     def _page_text(self, image: Path) -> str:
-        res = self._full_page().predict(str(image))
+        res = self._predict_page(image)
         parts = []
         for r in res:
             d = r.json.get("res", r.json) if hasattr(r, "json") else {}
