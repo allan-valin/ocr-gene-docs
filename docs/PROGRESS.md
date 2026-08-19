@@ -6,34 +6,121 @@ next actions.
 
 ## 2026-08-19 — daytime session (Allan at work)
 
-### Retrieval at scale: the number is good
+Everything below is committed and pushed. Nothing is running; no background jobs left.
 
-Rerun with the fixed script: **26/26 correct rows ranked #1**, and 26/26 in the top 5,
-against a pool of **147 rows from 12 dossiers** — not the 25 distractors of the
-single-page result. The small recogniser is accurate enough for search. The earlier
-0/26 stays discredited (the ground-truth dossier was never in the pool).
+### The headline
 
-So **accuracy is no longer the blocker. Speed is.**
+**The whole local corpus — 57 dossiers — now indexes in 17 minutes with no failures,
+and search finds people in it.** Before today a single page took 37 s and there was no
+folder flow at all.
 
-### Why speed became the whole problem
+### The numbers, and what they are worth
 
-Allan's own use case is on the order of **7,000 dossiers of ~10 pages** — roughly 70,000
-pages. At the measured 37 s/page that is **~720 CPU-hours**, single-threaded. The scale
-run confirms the shape: 13 pages in 534 s, and per-page cost swinging 2 s → 63 s with the
-row count.
+| | before | after |
+|---|---|---|
+| one page | 37 s | **4 s** (1.8 s geometry + 2.4 s recognition) |
+| 57 dossiers | never run | **17.3 min, 0 failures, 50 transcribed + 7 already cached** |
+| 7,000 dossiers (Allan's real case) | ~720 CPU-hours | **~35 h on this laptop**, four workers |
 
-### Done
+Retrieval, which is the measure that matters — can a person find their ancestor:
 
-* `/api/index` — folder indexing over HTTP: start, progress, stop, resume from the
-  content-hash cache. It **refuses to start when no engine is installed**, because
-  otherwise every one of 7,000 documents fails identically.
-* **The sidebar now leads with "Indexar esta pasta"**, with a plain-language estimate
-  ("faltam cerca de 2 h"), named failures, and a stop button. Per-document transcription
-  asked the user to already know which dossier held their ancestor.
-* **`desembarque/engine_paddle.py`** — a real engine at last, replacing `NullEngine`
-  when paddleocr is importable. It crops each row band and recognises it directly, with
-  no detection pass, and takes confidence from the recogniser instead of inventing it.
-* 88 Python tests, 33 browser assertions, all passing.
+* **typed page, 1,081-row pool: 23/26 ranked first, 26/26 in the top five.**
+  (The same queries scored 26/26 first against a 147-row pool, so the loss is the
+  pool growing, exactly as expected. A 70,000-row pool will be worse again.)
+* **handwritten page, 1,081-row pool: 5/6 ranked first, 5/6 in the top five.**
+  The sixth, "A. VIEIRA MIRANDA", was beaten to first place by a real "Joaquim
+  Miranda" in another dossier — a fair loss, not a broken index.
+
+Caveat worth keeping: the typed check counts *any* row of the right dossier as
+correct, so it is slightly generous. The handwritten check is against known row
+numbers and is not.
+
+### What made it ten times faster
+
+The name column was being detected and then recognised. But the grid already knows
+where every row is, so detection is redundant: crop the row bands, recognise them
+directly. That was 21× faster and, at first, much worse — CER 0.418 against 0.205.
+
+The cause was not the model. **The recogniser's input is 320 px wide, and a manifest
+name is wider**, so every long name was silently truncated: "JOHN SCHRADER" came back
+as "JOHN". At 640 px the accuracy is *identical* to the detection pipeline (CER 0.205)
+at a tenth of the cost. Measurements in `scripts/spike_speed.py`, and the mobile
+recogniser was rejected there too (CER 0.508 at any width).
+
+### Two bugs that were invisible until the corpus was run
+
+* **Fourteen of the first twenty dossiers were stored as negatives** — white ink on
+  black paper, because the PDFs keep an MRC ink mask with 1 = ink. Geometry never
+  minded, since a projection does not care which way contrast runs, which is why a
+  night of grid work never noticed. Fixed in `page_geometry.positive()`. Honest note:
+  **fixing it did not measurably improve recognition** — the recogniser was already
+  coping — but it makes every crop legible to a human, which the review UI depends on.
+* **An empty manual note marked a document as indexed forever.** Someone opens a
+  dossier, types nothing, and it silently drops out of every future run. For an
+  archive index that is the worst failure mode: nobody is told, and the person is
+  simply never found.
+
+### PaddleOCR-VL: not viable on this machine
+
+Loaded fine (`vl_rec_backend="native"`, no torch needed) in 14 s, then spent **22
+minutes on a single name column without finishing**, against 2.4 s for the
+recogniser. Even as an on-demand "read this one page properly" action that is
+unusable without a GPU. `scripts/spike_vl.py` is kept for when there is one.
+
+So the answer to "if it is still too bad, jump to PaddleOCR-VL" is: **the small
+engine is not too bad** — 5/6 on cursive — and VL is not reachable on this hardware
+anyway.
+
+### Where the handwriting actually stands
+
+Engine, on a cursive page: `GUIDO CONTADORE` → `Guudo Camtadore`, `CEZARIO SAMMAMED`
+→ `Besaruir Sormamed`. Wrong as transcription, findable as search. That is the whole
+argument for measuring retrieval rather than CER — but the winning margins are thin
+(some hits score 0.13), and thin margins are what a 70,000-row pool destroys. **This
+is the number to re-check as the pool grows.**
+
+The first hand-read ground truth for a handwritten page is now in
+`data/truth/`, versioned. Until today the only truth in the repository was a *typed*
+page, which is why none of this was visible.
+
+### Built today
+
+* `/api/index` — folder indexing: start, progress with a plain-language estimate,
+  stop, resume from the content-hash cache, failures named. Four documents at a time.
+* `/api/search` + a sidebar search box — **searches every indexed document**, not the
+  open one. Trigram matching, an explicit floor below which nothing is returned.
+* `desembarque/engine_paddle.py` — the real engine, replacing `NullEngine`.
+* `desembarque/search.py`, `scripts/spike_speed.py`, `scripts/spike_retrieval.py`,
+  `scripts/spike_vl.py`, `docs/HOSTING.md`.
+* Rows now follow the page being read; fields the engine never attempted are blank
+  rather than "ilegível".
+* **109 Python tests, 33 browser assertions, all passing in Chromium and Firefox.**
+
+### Next, in order
+
+1. **Re-check retrieval as the pool grows.** The margins above are thin. The cheapest
+   real test is Allan's own folder, if it is larger than 57 dossiers.
+2. **Row-level accuracy on handwriting.** Per-row upscaling did nothing once the
+   width bug was fixed; the remaining lever is a recogniser trained on handwriting,
+   or fine-tuning one on this hand.
+3. **Search results need the page image beside them.** Clicking a hit opens the
+   document, but the reason to trust the hit is the scan, and confirming still means
+   reading the row by eye.
+4. **The header row is indexed as a passenger** ("Nomes e Cognomes" scores 1.0).
+   Harmless in ranking, sloppy in a corpus meant as evidence.
+5. **Geometry is now the floor on speed** at 1.8 s of the 4 s page. Untouched so far.
+6. **`data/transcriptions/` has no schema version.** It will need one before the row
+   shape changes again.
+
+### Open questions for Allan
+
+* Is 35 h for 7,000 dossiers acceptable, or should this run on something bigger?
+  Four workers on this laptop use ~7 GB and leave it usable; more workers would cut
+  the wall clock and make the machine unpleasant.
+* The hosting note (`docs/HOSTING.md`) recommends keeping local-only as the shipped
+  default and treating hosting as a separate deployment. Worth reading and arguing with.
+* The hand-read truth in `data/truth/` is my reading of a cursive hand. If any of
+  those six names are wrong, the retrieval number is wrong too.
 
 ## 2026-08-19 — session ended deliberately (laptop noise; Allan sleeping)
 
@@ -120,8 +207,13 @@ content-hash cache, stop, and a surfaced failure list. Seven tests, all on failu
 ### Running it
 
 ```sh
-.venv/bin/python scripts/serve.py          # app venv: pypdfium2, Pillow, numpy
-.venv-ocr/bin/python scripts/spike_guided.py   # optional engine venv
-.venv/bin/python -m pytest tests/ -q       # 69 tests
-python3 scripts/smoke_prototype.py --url http://127.0.0.1:8795/selftest
+# the engine venv runs the app too, and is the one to use for indexing
+.venv-ocr/bin/python scripts/serve.py --root data/scans
+.venv/bin/python scripts/serve.py          # app only; engine reads "não instalado"
+.venv/bin/python -m pytest tests/ -q       # 109 tests
+python3 scripts/smoke_prototype.py --url http://127.0.0.1:8799/selftest   # 33 assertions
+
+# measurements
+.venv-ocr/bin/python scripts/spike_speed.py            # per-variant speed and CER
+.venv/bin/python scripts/spike_retrieval.py            # retrieval over the real index
 ```
