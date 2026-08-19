@@ -88,3 +88,24 @@ def test_eta_ignores_skipped_documents(tmp_path):
     wait(st)
     d = st.as_dict()
     assert d["skipped"] == 2 and d["done"] == 2
+
+
+def test_collect_pdfs_finds_nested_documents(tmp_path):
+    from desembarque.batch import collect_pdfs
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "a.pdf").write_bytes(b"%PDF")
+    (tmp_path / "sub" / "b.PDF").write_bytes(b"%PDF")
+    (tmp_path / "notes.txt").write_text("x")
+    got = [p.name for p in collect_pdfs(tmp_path)]
+    assert got == ["a.pdf", "b.PDF"]
+
+
+def test_collect_pdfs_ignores_hidden_and_stays_flat_when_asked(tmp_path):
+    from desembarque.batch import collect_pdfs
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / ".hidden" / "h.pdf").write_bytes(b"%PDF")
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "b.pdf").write_bytes(b"%PDF")
+    (tmp_path / "a.pdf").write_bytes(b"%PDF")
+    assert [p.name for p in collect_pdfs(tmp_path)] == ["a.pdf", "b.pdf"]
+    assert [p.name for p in collect_pdfs(tmp_path, recursive=False)] == ["a.pdf"]

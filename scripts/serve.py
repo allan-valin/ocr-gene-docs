@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify          # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
+from desembarque.batch import BatchIndexer, collect_pdfs  # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page          # noqa: E402
 
@@ -47,6 +48,7 @@ SAMPLE_INDEX = "017397"
 
 STATE = {"root": ROOT / "data" / "scans"}
 JOBS = JobRunner(ROOT / "data" / "transcriptions")
+BATCH = BatchIndexer()
 
 
 def safe(path_str: str, root: Path) -> Path | None:
@@ -234,6 +236,41 @@ def transcribe_document(pdf: Path, job) -> dict:
     }
 
 
+class _BatchJob:
+    """What transcribe_document needs from a job, without the UI job machinery.
+
+    A folder index reports progress per document, not per page, so there is
+    nothing for a per-document job record to be polled for."""
+
+    def __init__(self, total: int) -> None:
+        self.total = total
+        self.page = 0
+
+
+def index_folder(folder: Path):
+    """Transcribe every PDF under a folder, resuming from the cache.
+
+    The engine is checked once, before anything starts: with no model
+    installed every document would fail identically, and a failure list seven
+    thousand entries long says less than one refusal does.
+    """
+    eng = engines.active()
+    if not eng.available():
+        return None
+    pdfs = collect_pdfs(folder)
+
+    def is_cached(pdf: Path) -> bool:
+        return JOBS.cached(identify(pdf).doc_hash) is not None
+
+    def transcribe(pdf: Path) -> None:
+        data = transcribe_document(pdf, _BatchJob(pdf_pages(pdf)))
+        if data.get("unavailable"):
+            raise RuntimeError(data.get("message", "motor indisponível"))
+        JOBS.store(data["hash"], data)
+
+    return BATCH.start(folder, pdfs, is_cached, transcribe)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "Desembarque"
 
@@ -315,6 +352,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(404, {"error": "no such job"})
                 return self._send(200, job.as_dict())
 
+            if u.path == "/api/index":
+                st = BATCH.state
+                return self._send(200, st.as_dict() if st else {"status": "idle"})
+
             if u.path == "/api/transcription":
                 data = JOBS.cached(q.get("hash", ""))
                 return self._send(200 if data else 404, data or {"error": "not transcribed"})
@@ -362,6 +403,22 @@ class Handler(BaseHTTPRequestHandler):
             JOBS.store(ident.doc_hash, existing)
             return self._send(200, {"saved": True, "hash": ident.doc_hash,
                                     "rows": len(rows)})
+        if u.path == "/api/index":
+            folder = safe(q.get("dir", ""), STATE["root"])
+            if not folder or not folder.is_dir():
+                return self._send(404, {"error": "no such folder"})
+            if BATCH.running():
+                return self._send(200, BATCH.state.as_dict())
+            state = index_folder(folder)
+            if state is None:
+                return self._send(409, {"error": engines.status()["detail"]})
+            return self._send(202, state.as_dict())
+
+        if u.path == "/api/index/stop":
+            BATCH.stop()
+            st = BATCH.state
+            return self._send(200, st.as_dict() if st else {"status": "idle"})
+
         if u.path == "/api/transcribe":
             pdf = safe(str(Path(q.get("dir", "")) / q.get("pdf", "")), STATE["root"])
             if not pdf or not pdf.exists():

@@ -18,6 +18,25 @@ from pathlib import Path
 from typing import Callable
 
 
+def collect_pdfs(folder: Path, recursive: bool = True) -> list[Path]:
+    """Every PDF under a folder, in a stable order.
+
+    Someone points this at "the dossiers I downloaded", which in practice is a
+    tree with a folder per ship or per year, so the default walks it. Hidden
+    directories are skipped: they hold caches and version control, never
+    scans, and walking them turns a folder index into a disk crawl.
+    """
+    out: list[Path] = []
+    for p in (folder.rglob("*") if recursive else folder.glob("*")):
+        if p.suffix.lower() != ".pdf" or not p.is_file():
+            continue
+        rel = p.relative_to(folder)
+        if any(part.startswith(".") for part in rel.parts):
+            continue
+        out.append(p)
+    return sorted(out, key=lambda q: str(q.relative_to(folder)).lower())
+
+
 @dataclass
 class BatchState:
     folder: str
