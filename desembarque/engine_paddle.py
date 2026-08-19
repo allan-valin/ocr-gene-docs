@@ -43,6 +43,11 @@ PAD_PX = 6
 MIN_ROW_PX = 12
 INK_MARGIN = 4
 
+# Below this share of rows read, try the page again from a grayscale render.
+# See `with_fallback` for why the render is a fallback and not the default.
+RETRY_FLOOR = 0.5
+RENDER_DPI = 300
+
 
 def refine(im, margin: int = INK_MARGIN):
     """Trim a row band down to the writing inside it.
@@ -134,6 +139,68 @@ def rows_from_bands(geo, size: tuple[int, int],
     return rows
 
 
+def read_ratio(rows: list[dict]) -> float:
+    """Share of the page's rows that produced any text.
+
+    The printed column caption does not count. A page whose only legible line
+    is its own heading has read nothing, and scoring that 1/1 would hide
+    exactly the failure this number exists to catch.
+    """
+    people = [r for r in rows if not r.get("header")]
+    if not people:
+        return 0.0
+    return sum(1 for r in people if (r.get("name_raw") or "").strip()) / len(people)
+
+
+def wants_retry(rows: list[dict], floor: float = RETRY_FLOOR) -> bool:
+    """Whether this page is worth reading a second time.
+
+    No rows means no grid, and a render cannot conjure one -- retrying there
+    would buy a second recognition pass and the same empty answer.
+    """
+    if not rows:
+        return False
+    return read_ratio(rows) < floor
+
+
+def richer(mask_rows: list[dict], alt_rows: list[dict]) -> list[dict]:
+    """Whichever reading found more names.
+
+    The mask keeps a tie. It is the default path and the better-tested one, so
+    a fallback has to earn the swap by reading *more*, not by reading as much.
+    On BS_ENT_017053 the render read five rows fewer than the mask; taking the
+    render on faith there would have lost five people.
+    """
+    n_mask = sum(1 for r in mask_rows if (r.get("name_raw") or "").strip())
+    n_alt = sum(1 for r in alt_rows if (r.get("name_raw") or "").strip())
+    return alt_rows if n_alt > n_mask else mask_rows
+
+
+def with_fallback(mask_rows: list[dict], make_alt: Callable[[], list[dict] | None],
+                  floor: float = RETRY_FLOOR) -> tuple[list[dict], bool]:
+    """The better of the mask reading and a second attempt, and which was used.
+
+    `page_image` hands recognition the PDF's embedded MRC ink mask, because
+    geometry needs it -- the mask yields nine column rules where a composited
+    render yields three. But the mask is one bit deep, so on a faint page the
+    strokes fall below its threshold and are simply gone: on BS_ENT_015741 p2
+    the recogniser read 7 of 39 bands from the mask and 26 from a render, and
+    an entire family was missing from the index.
+
+    Across ten pages the mask read 63.3% of bands and the render 68.2% -- seven
+    pages unchanged, one far better, one worse. So the render is not an
+    improvement to adopt wholesale; it is a second opinion, asked for only when
+    the first one came back nearly empty, and kept only when it reads more.
+    """
+    if not wants_retry(mask_rows, floor):
+        return mask_rows, False
+    alt = make_alt()
+    if not alt:
+        return mask_rows, False
+    chosen = richer(mask_rows, alt)
+    return chosen, chosen is alt
+
+
 class PaddleEngine:
     """PaddleOCR (Apache-2.0 code, open weights), run locally on CPU."""
 
@@ -210,7 +277,40 @@ class PaddleEngine:
             parts.extend(t for t in (d.get("rec_texts") or []) if t)
         return "\n".join(parts)
 
-    def transcribe_page(self, image: Path, kind: str = "unknown") -> PageResult:
+    def _render_rows(self, source: Path | None, page: int | None, geo,
+                     size: tuple[int, int], workdir: Path) -> list[dict] | None:
+        """The same bands, read from a grayscale render instead of the mask.
+
+        Geometry stays measured on the mask, which is what it is good for; only
+        the pixels handed to the recogniser change. The render is resized to
+        the mask's dimensions so the row bands still land where geometry put
+        them, and cached, since a page that needed it once will need it again.
+        """
+        if source is None or page is None:
+            return None
+        from PIL import Image
+        from . import pdf as pdflib
+
+        out = workdir / f"{source.stem}-p{page}-render-gray.png"
+        try:
+            if not out.exists() or not out.stat().st_size:
+                if not pdflib.render_page(source, page, out, dpi=RENDER_DPI,
+                                          grayscale=True):
+                    return None
+            im = Image.open(out).convert("L")
+            if im.size != size:
+                im = im.resize(size, Image.LANCZOS)
+            im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
+        except Exception:
+            # a fallback that cannot be produced is not an error: the mask
+            # reading still stands, and the page is still reported
+            return None
+        return rows_from_bands(geo, im.size, self._recognize,
+                               lambda box: refine(im.crop(box)))
+
+    def transcribe_page(self, image: Path, kind: str = "unknown",
+                        source: Path | None = None,
+                        page: int | None = None) -> PageResult:
         try:
             self._import()
         except Exception as e:
@@ -238,11 +338,16 @@ class PaddleEngine:
             im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
             rows = rows_from_bands(geo, im.size, self._recognize,
                                    lambda box: refine(im.crop(box)))
+            rows, from_render = with_fallback(
+                rows,
+                lambda: self._render_rows(source, page, geo, im.size, image.parent),
+            )
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
                 geometry={"rows": geo.normalized_rows(),
                           "columns": geo.normalized_cols(),
-                          "skew": geo.skew},
+                          "skew": geo.skew,
+                          "read_from": "render" if from_render else "mask"},
             )
         except Exception as e:
             return PageResult(kind=kind, engine=self.name,

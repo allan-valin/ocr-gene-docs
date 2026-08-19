@@ -29,7 +29,7 @@ class FakeEngine:
     def available(self):
         return True
 
-    def transcribe_page(self, image, kind="unknown"):
+    def transcribe_page(self, image, kind="unknown", source=None, page=None):
         return engines.PageResult(kind=kind, engine=self.name, rows=[{"name": "TEST"}])
 
 

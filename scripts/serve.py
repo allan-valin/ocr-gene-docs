@@ -239,7 +239,7 @@ def transcribe_document(pdf: Path, job) -> dict:
         if img is None:
             pages.append({"n": n, "error": "render failed"})
             continue
-        res = eng.transcribe_page(img, classify(n))
+        res = eng.transcribe_page(img, classify(n), source=pdf, page=n)
         pages.append({"n": n, "kind": res.kind, "error": res.error})
         if res.kind == "cover" and res.text:
             cover_text = cover_text or res.text

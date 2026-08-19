@@ -115,3 +115,139 @@ def test_the_printed_column_heading_is_not_a_passenger():
     assert rows[0]["header"] is True
     assert rows[1].get("header") is not True
     assert rows[0]["name_raw"] == "Nomes e Cognomes"   # recorded, not discarded
+
+
+# --- the bilevel mask destroys faint pages -----------------------------------
+#
+# `page_image` prefers the PDF's embedded MRC ink mask, because geometry needs
+# it: the mask yields nine column rules where a render yields three. But the
+# mask is one bit deep, so faint strokes fall below its threshold and are gone
+# before recognition ever runs. On BS_ENT_015741 p2 the recogniser read 7 of 39
+# bands from the mask and 26 from a grayscale render -- the whole Bloch family
+# was invisible.
+#
+# It is not a blanket win. Measured over ten pages the mask read 63.3% of bands
+# and the render 68.2%: seven pages were unchanged, one gained nineteen rows,
+# and one *lost* five. So the render is a fallback for pages the mask ruins,
+# never a replacement, and the two are compared by what they actually read.
+
+def rows_with(texts):
+    """Rows shaped like the engine's, with the given name strings."""
+    return [{"n": i + 1, "name_raw": t, "surname": t or None, "given": ""}
+            for i, t in enumerate(texts)]
+
+
+def test_read_ratio_is_the_share_of_rows_that_produced_text():
+    from desembarque.engine_paddle import read_ratio
+    assert read_ratio(rows_with(["ANNA", "", "JOSE", ""])) == 0.5
+    assert read_ratio(rows_with(["", "", ""])) == 0.0
+    assert read_ratio(rows_with(["ANNA"])) == 1.0
+
+
+def test_read_ratio_ignores_the_printed_heading():
+    """A page whose only legible line is its own column caption has read
+    nothing, and must not score 1/1."""
+    from desembarque.engine_paddle import read_ratio
+    rows = rows_with(["Nomes e Cognomes", "", ""])
+    rows[0]["header"] = True
+    assert read_ratio(rows) == 0.0
+
+
+def test_read_ratio_of_a_page_with_no_rows_is_zero():
+    from desembarque.engine_paddle import read_ratio
+    assert read_ratio([]) == 0.0
+
+
+def test_a_well_read_page_is_not_retried():
+    from desembarque.engine_paddle import wants_retry
+    assert wants_retry(rows_with(["ANNA", "JOSE", "MARIA", ""]), floor=0.5) is False
+
+
+def test_a_barely_read_page_is_retried():
+    from desembarque.engine_paddle import wants_retry
+    assert wants_retry(rows_with(["ANNA", "", "", ""]), floor=0.5) is True
+
+
+def test_a_page_with_no_rows_is_not_retried():
+    """No bands means no grid, which the render cannot fix -- retrying would
+    only pay for a second recognition pass to get nothing again."""
+    from desembarque.engine_paddle import wants_retry
+    assert wants_retry([], floor=0.5) is False
+
+
+def test_the_richer_reading_wins():
+    from desembarque.engine_paddle import richer
+    mask = rows_with(["", "L", "", ""])
+    render = rows_with(["BLOCH ALEXANDRE", "BLOCH LINE", "", "BLOCH MADELON"])
+    assert richer(mask, render) is render
+
+
+def test_a_tie_keeps_the_mask():
+    """The mask is the default and the better-tested path; a fallback has to
+    earn the swap by reading more, not by reading the same."""
+    from desembarque.engine_paddle import richer
+    mask = rows_with(["ANNA", ""])
+    render = rows_with(["ANNA", ""])
+    assert richer(mask, render) is mask
+
+
+def test_a_worse_fallback_is_discarded():
+    """ENT_017053: the render read five rows fewer than the mask. Falling back
+    blindly would have lost five people."""
+    from desembarque.engine_paddle import richer
+    mask = rows_with(["ANNA", "JOSE", "MARIA"])
+    render = rows_with(["ANNA", "", ""])
+    assert richer(mask, render) is mask
+
+
+def test_fallback_is_not_attempted_when_the_page_reads_well():
+    from desembarque.engine_paddle import with_fallback
+    called = []
+    rows = rows_with(["ANNA", "JOSE", "MARIA", ""])
+    out, used = with_fallback(rows, lambda: called.append(1) or rows_with(["X"]))
+    assert out is rows and used is False and called == []
+
+
+def test_fallback_runs_and_wins_on_a_ruined_page():
+    from desembarque.engine_paddle import with_fallback
+    mask = rows_with(["", "L", "", ""])
+    render = rows_with(["BLOCH ALEXANDRE", "BLOCH LINE", "", "BLOCH MADELON"])
+    out, used = with_fallback(mask, lambda: render)
+    assert out is render and used is True
+
+
+def test_a_fallback_that_cannot_be_produced_leaves_the_page_alone():
+    """No source PDF, or a render that fails: the mask reading still stands."""
+    from desembarque.engine_paddle import with_fallback
+    mask = rows_with(["", "", ""])
+    out, used = with_fallback(mask, lambda: None)
+    assert out is mask and used is False
+
+
+def test_the_source_pdf_reaches_the_fallback(tmp_path, monkeypatch):
+    """The engine is handed a page image, not a document, so the PDF has to be
+    threaded through for the render to be producible at all. Without it the
+    fallback silently never fires and a ruined page stays ruined."""
+    from desembarque.engine_paddle import PaddleEngine
+    eng = PaddleEngine()
+    seen = {}
+    monkeypatch.setattr(eng, "_render_rows",
+                        lambda source, page, geo, size, workdir:
+                            seen.update(source=source, page=page) or None)
+    geo = Band([(0.1, 0.2), (0.2, 0.3)])
+    rows = rows_with(["", ""])
+    from desembarque.engine_paddle import with_fallback
+    out, used = with_fallback(
+        rows, lambda: eng._render_rows(tmp_path / "d.pdf", 2, geo, (10, 10), tmp_path))
+    assert seen == {"source": tmp_path / "d.pdf", "page": 2}
+    assert out is rows and used is False
+
+
+def test_a_page_read_from_the_render_says_so(monkeypatch):
+    """Which image a row came from changes how much to trust it, so it is
+    recorded rather than inferred later."""
+    from desembarque import engine_paddle as ep
+    rows, used = ep.with_fallback(rows_with(["", "", ""]),
+                                  lambda: rows_with(["ANNA", "JOSE", "MARIA"]))
+    assert used is True
+    assert [r["name_raw"] for r in rows] == ["ANNA", "JOSE", "MARIA"]
