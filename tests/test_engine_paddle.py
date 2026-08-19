@@ -67,3 +67,39 @@ def test_engine_reports_unavailable_rather_than_guessing(monkeypatch):
     assert eng.available() is False
     res = eng.transcribe_page(Path("nope.png"), "list")
     assert res.rows == [] and res.error
+
+
+def test_refine_trims_blank_paper_around_the_writing():
+    from PIL import Image
+    from desembarque.engine_paddle import refine
+    im = Image.new("L", (400, 120), 245)
+    for x in range(150, 260):
+        for y in range(50, 78):
+            im.putpixel((x, y), 20)
+    out = refine(im)
+    assert out.width < 200 and out.height < 60
+    assert out.width > 100 and out.height > 20
+
+
+def test_refine_leaves_a_blank_band_alone():
+    from PIL import Image
+    from desembarque.engine_paddle import refine
+    im = Image.new("L", (400, 120), 245)
+    assert refine(im).size == (400, 120)
+
+
+def test_predictors_are_per_thread(monkeypatch):
+    """Workers share one engine object; a predictor is not shared across
+    threads, because paddle's is not thread-safe."""
+    import threading
+    from desembarque.engine_paddle import PaddleEngine
+    eng = PaddleEngine()
+    monkeypatch.setattr(eng, "_make_recogniser", lambda: object())
+    seen = []
+    def grab():
+        seen.append(eng._recogniser())
+    ts = [threading.Thread(target=grab) for _ in range(3)]
+    for t in ts: t.start()
+    for t in ts: t.join()
+    assert len({id(x) for x in seen}) == 3
+    assert eng._recogniser() is eng._recogniser()

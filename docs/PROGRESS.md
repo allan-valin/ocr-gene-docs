@@ -4,6 +4,37 @@ Running checkpoint. Newest first. The design record is
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
 next actions.
 
+## 2026-08-19 — daytime session (Allan at work)
+
+### Retrieval at scale: the number is good
+
+Rerun with the fixed script: **26/26 correct rows ranked #1**, and 26/26 in the top 5,
+against a pool of **147 rows from 12 dossiers** — not the 25 distractors of the
+single-page result. The small recogniser is accurate enough for search. The earlier
+0/26 stays discredited (the ground-truth dossier was never in the pool).
+
+So **accuracy is no longer the blocker. Speed is.**
+
+### Why speed became the whole problem
+
+Allan's own use case is on the order of **7,000 dossiers of ~10 pages** — roughly 70,000
+pages. At the measured 37 s/page that is **~720 CPU-hours**, single-threaded. The scale
+run confirms the shape: 13 pages in 534 s, and per-page cost swinging 2 s → 63 s with the
+row count.
+
+### Done
+
+* `/api/index` — folder indexing over HTTP: start, progress, stop, resume from the
+  content-hash cache. It **refuses to start when no engine is installed**, because
+  otherwise every one of 7,000 documents fails identically.
+* **The sidebar now leads with "Indexar esta pasta"**, with a plain-language estimate
+  ("faltam cerca de 2 h"), named failures, and a stop button. Per-document transcription
+  asked the user to already know which dossier held their ancestor.
+* **`desembarque/engine_paddle.py`** — a real engine at last, replacing `NullEngine`
+  when paddleocr is importable. It crops each row band and recognises it directly, with
+  no detection pass, and takes confidence from the recogniser instead of inventing it.
+* 88 Python tests, 33 browser assertions, all passing.
+
 ## 2026-08-19 — session ended deliberately (laptop noise; Allan sleeping)
 
 Heavy work stopped on request. Nothing is running. **Resume from "Next, in order" below.**

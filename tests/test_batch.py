@@ -109,3 +109,47 @@ def test_collect_pdfs_ignores_hidden_and_stays_flat_when_asked(tmp_path):
     (tmp_path / "a.pdf").write_bytes(b"%PDF")
     assert [p.name for p in collect_pdfs(tmp_path)] == ["a.pdf", "b.pdf"]
     assert [p.name for p in collect_pdfs(tmp_path, recursive=False)] == ["a.pdf"]
+
+
+def test_workers_share_the_queue_without_repeating_a_document(tmp_path):
+    """Seventy thousand pages is a week on one core, so the run is parallel —
+    and a document indexed twice is wasted hours, not a harmless duplicate."""
+    import threading
+    b = BatchIndexer()
+    lock, seen = threading.Lock(), []
+
+    def transcribe(p):
+        time.sleep(0.005)
+        with lock:
+            seen.append(p.name)
+
+    st = b.start(tmp_path, files(tmp_path, 24), lambda p: False, transcribe, workers=4)
+    assert wait(st) == "finished"
+    assert sorted(seen) == sorted(f"doc{i}.pdf" for i in range(24))
+    assert st.done == 24
+
+
+def test_parallel_run_still_isolates_a_bad_document(tmp_path):
+    b = BatchIndexer()
+
+    def transcribe(p):
+        if p.name in ("doc3.pdf", "doc7.pdf"):
+            raise RuntimeError("corrupt page tree")
+
+    st = b.start(tmp_path, files(tmp_path, 12), lambda p: False, transcribe, workers=4)
+    assert wait(st) == "finished"
+    assert st.done == 10
+    assert sorted(f["file"] for f in st.failed) == ["doc3.pdf", "doc7.pdf"]
+
+
+def test_parallel_run_stops_on_request(tmp_path):
+    b = BatchIndexer()
+
+    def transcribe(p):
+        time.sleep(0.05)
+
+    st = b.start(tmp_path, files(tmp_path, 200), lambda p: False, transcribe, workers=4)
+    time.sleep(0.1)
+    b.stop()
+    assert wait(st, timeout=5) == "stopped"
+    assert st.done < 200

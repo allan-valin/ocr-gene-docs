@@ -18,6 +18,7 @@ on the page still matches the page.
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 from typing import Callable
 
@@ -25,11 +26,46 @@ from .engine import PageResult
 
 # Recogniser choice and threading are set by measurement, not taste — see
 # scripts/spike_speed.py and docs/PROGRESS.md for the numbers behind these.
-DEFAULT_REC = os.environ.get("DESEMBARQUE_REC_MODEL", "PP-OCRv5_mobile_rec")
-DEFAULT_DET = os.environ.get("DESEMBARQUE_DET_MODEL", "PP-OCRv5_mobile_det")
+# Measured on the Gelria page (scripts/spike_speed.py):
+#   detect+recognise the name column   25.2 s   CER 0.205
+#   recognise the row bands, 320 wide   1.1 s   CER 0.418  (names clipped)
+#   recognise the row bands, 640 wide   2.4 s   CER 0.205  <- this
+# The clipping is the whole story: a manifest name is far wider than the
+# recogniser's default input, so at 320 it lost the surname. At 640 it matches
+# the detection pipeline exactly, ten times faster. The mobile recogniser stays
+# poor at any width (CER 0.508), so the medium one is kept.
+DEFAULT_REC = os.environ.get("DESEMBARQUE_REC_MODEL", "PP-OCRv6_medium_rec")
+DEFAULT_DET = os.environ.get("DESEMBARQUE_DET_MODEL", "PP-OCRv6_medium_det")
 DEFAULT_THREADS = int(os.environ.get("DESEMBARQUE_CPU_THREADS", "0")) or None
+REC_INPUT_SHAPE = (3, 48, 640)
 PAD_PX = 6
 MIN_ROW_PX = 12
+INK_MARGIN = 4
+
+
+def refine(im, margin: int = INK_MARGIN):
+    """Trim a row band down to the writing inside it.
+
+    Skipping detection also skipped the tight box it used to draw. A band cut
+    from the row comb spans the whole column and reaches into the ruled lines,
+    so the recogniser is handed blank paper and the tips of the neighbouring
+    row's descenders. Trimming to the ink restores what detection contributed,
+    without a model. A band with no ink is returned untouched — an empty row is
+    a real answer.
+    """
+    import numpy as np
+    a = np.asarray(im.convert("L"), dtype=np.uint8)
+    if a.size == 0:
+        return im
+    thr = max(60, int(a.mean()) - 35)
+    ink = a < thr
+    ys = np.flatnonzero(ink.sum(axis=1) > max(1, int(0.02 * a.shape[1])))
+    xs = np.flatnonzero(ink.sum(axis=0) > max(1, int(0.02 * a.shape[0])))
+    if ys.size == 0 or xs.size == 0:
+        return im
+    return im.crop((max(0, int(xs[0]) - margin), max(0, int(ys[0]) - margin),
+                    min(a.shape[1], int(xs[-1]) + 1 + margin),
+                    min(a.shape[0], int(ys[-1]) + 1 + margin)))
 
 
 def split_name(text: str) -> tuple[str | None, str | None]:
@@ -103,7 +139,7 @@ class PaddleEngine:
         self.det_model = det_model
         self.mkldnn = mkldnn
         self.threads = threads
-        self._rec = None
+        self._local = threading.local()
         self._page = None
 
     # ---- model loading ------------------------------------------------------
@@ -118,14 +154,21 @@ class PaddleEngine:
             return False
         return True
 
+    def _make_recogniser(self):
+        from paddleocr import TextRecognition
+        kw = {"model_name": self.rec_model, "enable_mkldnn": self.mkldnn,
+              "input_shape": REC_INPUT_SHAPE}
+        if self.threads:
+            kw["cpu_threads"] = self.threads
+        return TextRecognition(**kw)
+
     def _recogniser(self):
-        if self._rec is None:
-            from paddleocr import TextRecognition
-            kw = {"model_name": self.rec_model, "enable_mkldnn": self.mkldnn}
-            if self.threads:
-                kw["cpu_threads"] = self.threads
-            self._rec = TextRecognition(**kw)
-        return self._rec
+        """One predictor per thread: the indexer runs documents in parallel and
+        paddle's predictor is not safe to share between them."""
+        rec = getattr(self._local, "rec", None)
+        if rec is None:
+            rec = self._local.rec = self._make_recogniser()
+        return rec
 
     def _full_page(self):
         if self._page is None:
@@ -187,7 +230,8 @@ class PaddleEngine:
 
             im = Image.open(image).convert("L")
             im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
-            rows = rows_from_bands(geo, im.size, self._recognize, im.crop)
+            rows = rows_from_bands(geo, im.size, self._recognize,
+                                   lambda box: refine(im.crop(box)))
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
                 geometry={"rows": geo.normalized_rows(),

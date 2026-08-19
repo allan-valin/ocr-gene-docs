@@ -80,7 +80,19 @@ class BatchIndexer:
 
     def start(self, folder: Path, pdfs: list[Path],
               is_cached: Callable[[Path], bool],
-              transcribe: Callable[[Path], None]) -> BatchState:
+              transcribe: Callable[[Path], None],
+              workers: int = 1) -> BatchState:
+        """Index every document, on `workers` threads.
+
+        Seventy thousand pages is a week of one core, so the run is parallel by
+        default. Threads rather than processes: recognition releases the GIL
+        while it runs, and a process per worker would load a copy of the model
+        weights on a laptop that has already been made to swap once.
+
+        Counters are only touched under the lock, and each document is claimed
+        once from a shared iterator — indexing a document twice is wasted hours,
+        not a harmless duplicate.
+        """
         with self._lock:
             if self.running():
                 return self.state
@@ -88,29 +100,45 @@ class BatchIndexer:
             state = BatchState(folder=str(folder), total=len(pdfs), status="running")
             self.state = state
 
+        pending = iter(pdfs)
+        claim = threading.Lock()
+
+        def next_pdf() -> Path | None:
+            with claim:
+                return next(pending, None)
+
         def run() -> None:
-            for pdf in pdfs:
-                if self._stop.is_set():
-                    state.status = "stopped"
-                    break
-                state.current = pdf.name
+            while not self._stop.is_set():
+                pdf = next_pdf()
+                if pdf is None:
+                    return
+                with self._lock:
+                    state.current = pdf.name
                 try:
                     if is_cached(pdf):
-                        state.skipped += 1      # resume: nothing to re-do
+                        with self._lock:
+                            state.skipped += 1      # resume: nothing to re-do
                         continue
                     transcribe(pdf)
-                    state.done += 1
+                    with self._lock:
+                        state.done += 1
                 except Exception as e:
                     # one bad document must not end an unattended run, and a
                     # silently skipped document is worse than a loud failure
-                    state.failed.append({"file": pdf.name,
-                                         "error": f"{type(e).__name__}: {e}"})
-            else:
-                state.status = "finished"
-            if state.status == "running":
-                state.status = "finished"
+                    with self._lock:
+                        state.failed.append({"file": pdf.name,
+                                             "error": f"{type(e).__name__}: {e}"})
+
+        def supervise() -> None:
+            threads = [threading.Thread(target=run, daemon=True)
+                       for _ in range(max(1, workers))]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            state.status = "stopped" if self._stop.is_set() else "finished"
             state.current = ""
             state.finished = time.time()
 
-        threading.Thread(target=run, daemon=True).start()
+        threading.Thread(target=supervise, daemon=True).start()
         return state

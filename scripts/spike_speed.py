@@ -58,6 +58,39 @@ def name_strip(pdf: Path, page: int, work: Path, pad: float = 0.004):
     return strip, rel, geom_s, (W, H)
 
 
+def refine(im, target_h: int = 0, margin: int = 4):
+    """Trim a row band to the writing inside it, and optionally scale it up.
+
+    Dropping detection also dropped the tight box detection used to draw. A
+    band cut from the comb spans the full column width and reaches into the
+    ruled lines above and below, so the recogniser is handed blank paper and
+    the tips of a neighbouring row's descenders. Trimming to the ink puts back
+    what detection was actually contributing.
+    """
+    import numpy as np
+    from PIL import Image
+    a = np.asarray(im.convert("L"), dtype=np.uint8)
+    if a.size == 0:
+        return im
+    thr = max(60, int(a.mean()) - 35)
+    ink = a < thr
+    rows = ink.sum(axis=1)
+    cols = ink.sum(axis=0)
+    rmin = max(1, int(0.02 * a.shape[1]))
+    cmin = max(1, int(0.02 * a.shape[0]))
+    ys = np.flatnonzero(rows > rmin)
+    xs = np.flatnonzero(cols > cmin)
+    if ys.size == 0 or xs.size == 0:
+        return im
+    y0 = max(0, ys[0] - margin); y1 = min(a.shape[0], ys[-1] + 1 + margin)
+    x0 = max(0, xs[0] - margin); x1 = min(a.shape[1], xs[-1] + 1 + margin)
+    out = im.crop((x0, y0, x1, y1))
+    if target_h and out.height and out.height < target_h:
+        k = target_h / out.height
+        out = out.resize((max(1, int(out.width * k)), target_h), Image.LANCZOS)
+    return out
+
+
 def row_images(strip, rel, pad_px: int = 6, min_h: int = 12):
     """One image per row band — what the recogniser is actually meant to see."""
     out = []
@@ -115,24 +148,68 @@ def run_pipeline(strip_path: Path, rel, det_model, rec_model, mkldnn, threads):
     return dt, {i: " ".join(v).strip() for i, v in per.items()}
 
 
-def run_reconly(strip, rel, rec_model, mkldnn, threads, batch_size=16):
+def word_chunks(im, min_gap_frac: float = 0.035, margin: int = 4):
+    """Split a row into words on the blank gaps between them.
+
+    A whole name is several times wider than the recogniser's input, so it
+    arrives squashed or clipped. Words are the unit the detector used to hand
+    over, and they can be recovered from the ink profile alone — no model, and
+    no risk of reordering, since they are kept left to right.
+    """
+    import numpy as np
+    a = np.asarray(im.convert("L"), dtype=np.uint8)
+    if a.size == 0:
+        return [im]
+    thr = max(60, int(a.mean()) - 35)
+    cols = (a < thr).sum(axis=0)
+    on = cols > max(1, int(0.02 * a.shape[0]))
+    if not on.any():
+        return [im]
+    gap = max(6, int(min_gap_frac * a.shape[1]))
+    out, run_start, blank = [], None, 0
+    for x, v in enumerate(on):
+        if v:
+            if run_start is None:
+                run_start = x
+            blank = 0
+        elif run_start is not None:
+            blank += 1
+            if blank >= gap:
+                out.append((run_start, x - blank))
+                run_start, blank = None, 0
+    if run_start is not None:
+        out.append((run_start, len(on)))
+    return [im.crop((max(0, x0 - margin), 0, min(a.shape[1], x1 + margin), im.height))
+            for x0, x1 in out if x1 > x0]
+
+
+def run_reconly(strip, rel, rec_model, mkldnn, threads, batch_size=16,
+                tighten=False, target_h=0, input_shape=None, words=False):
     """No detection: the grid says where the rows are, so recognise them directly."""
     import numpy as np
     from paddleocr import TextRecognition
-    rec = TextRecognition(model_name=rec_model, enable_mkldnn=mkldnn,
-                          cpu_threads=threads)
+    kw = {"model_name": rec_model, "enable_mkldnn": mkldnn, "cpu_threads": threads}
+    if input_shape:
+        kw["input_shape"] = input_shape
+    rec = TextRecognition(**kw)
     crops = row_images(strip, rel)
+    if tighten:
+        crops = [(i, refine(im, target_h)) for i, im in crops]
+    if words:
+        crops = [(i, w) for i, im in crops for w in word_chunks(im)]
     arrs = [np.array(im.convert("RGB")) for _, im in crops]
     if arrs:
         list(rec.predict(arrs[:1]))       # warm up
     t0 = time.time()
     results = list(rec.predict(arrs, batch_size=batch_size))
     dt = time.time() - t0
-    per: dict[int, str] = {}
+    per: dict[int, list[str]] = {}
     for (i, _), r in zip(crops, results):
         d = r.json.get("res", r.json) if hasattr(r, "json") else {}
-        per[i] = (d.get("rec_text") or "").strip()
-    return dt, per
+        t = (d.get("rec_text") or "").strip()
+        if t:
+            per.setdefault(i, []).append(t)
+    return dt, {i: " ".join(v) for i, v in per.items()}
 
 
 def main(argv=None) -> int:
@@ -166,6 +243,29 @@ def main(argv=None) -> int:
         ("mobile+mkldnn", lambda: run_pipeline(sp, rel, V5D, V5R, True, threads)),
         ("reconly-v6",    lambda: run_reconly(strip, rel, V6R, True, threads)),
         ("reconly-v5",    lambda: run_reconly(strip, rel, V5R, True, threads)),
+        ("tight-v6",      lambda: run_reconly(strip, rel, V6R, True, threads, tighten=True)),
+        ("tight-v6-48",   lambda: run_reconly(strip, rel, V6R, True, threads,
+                                              tighten=True, target_h=48)),
+        ("tight-v6-96",   lambda: run_reconly(strip, rel, V6R, True, threads,
+                                              tighten=True, target_h=96)),
+        ("tight-v5-96",   lambda: run_reconly(strip, rel, V5R, True, threads,
+                                              tighten=True, target_h=96)),
+        ("wide-640",      lambda: run_reconly(strip, rel, V6R, True, threads,
+                                              tighten=True, input_shape=(3, 48, 640))),
+        ("wide-960",      lambda: run_reconly(strip, rel, V6R, True, threads,
+                                              tighten=True, input_shape=(3, 48, 960))),
+        ("words-v6",      lambda: run_reconly(strip, rel, V6R, True, threads,
+                                              tighten=True, words=True)),
+        ("words-v6-96",   lambda: run_reconly(strip, rel, V6R, True, threads,
+                                              tighten=True, words=True, target_h=96)),
+        ("wide-480",      lambda: run_reconly(strip, rel, V6R, True, threads,
+                                              tighten=True, input_shape=(3, 48, 480))),
+        ("wide-640-v5",   lambda: run_reconly(strip, rel, V5R, True, threads,
+                                              tighten=True, input_shape=(3, 48, 640))),
+        ("wide-640-t4",   lambda: run_reconly(strip, rel, V6R, True, 4,
+                                              tighten=True, input_shape=(3, 48, 640))),
+        ("wide-640-t2",   lambda: run_reconly(strip, rel, V6R, True, 2,
+                                              tighten=True, input_shape=(3, 48, 640))),
     ]
     wanted = {s.strip() for s in args.only.split(",") if s.strip()}
     report = {"pdf": args.pdf.name, "page": args.page, "geometry_s": round(geom_s, 2),

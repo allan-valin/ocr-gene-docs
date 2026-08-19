@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -39,7 +40,7 @@ from desembarque.identity import identify          # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import BatchIndexer, collect_pdfs  # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
-from page_geometry import analyze_pdf_page          # noqa: E402
+from page_geometry import analyze_pdf_page, page_image  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / "data" / "pagecache"
@@ -49,6 +50,10 @@ SAMPLE_INDEX = "017397"
 STATE = {"root": ROOT / "data" / "scans"}
 JOBS = JobRunner(ROOT / "data" / "transcriptions")
 BATCH = BatchIndexer()
+# Documents are indexed in parallel: one page is ~4 s, and a real folder is
+# thousands of them. Four workers rather than one per core — each loads its own
+# recogniser, and this has to leave a laptop usable while it runs.
+INDEX_WORKERS = int(os.environ.get("DESEMBARQUE_WORKERS", "4"))
 
 
 def register_engines() -> None:
@@ -229,7 +234,7 @@ def transcribe_document(pdf: Path, job) -> dict:
     pages, rows, cover_text = [], [], ""
     for n in range(1, job.total + 1):
         job.page = n
-        img = render_page(pdf, n, dpi=200)
+        img = page_image(pdf, n, CACHE) or render_page(pdf, n, dpi=200)
         if img is None:
             pages.append({"n": n, "error": "render failed"})
             continue
@@ -284,7 +289,8 @@ def index_folder(folder: Path):
             raise RuntimeError(data.get("message", "motor indisponível"))
         JOBS.store(data["hash"], data)
 
-    return BATCH.start(folder, pdfs, is_cached, transcribe)
+    return BATCH.start(folder, pdfs, is_cached, transcribe,
+                       workers=INDEX_WORKERS)
 
 
 class Handler(BaseHTTPRequestHandler):
