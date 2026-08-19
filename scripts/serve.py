@@ -51,6 +51,22 @@ JOBS = JobRunner(ROOT / "data" / "transcriptions")
 BATCH = BatchIndexer()
 
 
+def register_engines() -> None:
+    """Activate a local engine if its dependencies are installed.
+
+    The engine venv is optional on purpose: the app is useful without it
+    (geometry-detected grids, manual entry, search over what is transcribed),
+    and a missing model must read as missing rather than as an empty page."""
+    try:
+        from desembarque.engine_paddle import PaddleEngine
+        engines.register(PaddleEngine())
+    except Exception:      # an engine that cannot even be imported is absent
+        pass
+
+
+register_engines()
+
+
 def safe(path_str: str, root: Path) -> Path | None:
     """Resolve a request path, refusing anything outside the chosen root."""
     try:
