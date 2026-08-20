@@ -60,6 +60,30 @@ RENDER_DPI = 300
 # crops; only this pass is scaled, and only when the page is bigger than this.
 TEXT_MAX_SIDE = int(os.environ.get("DESEMBARQUE_TEXT_MAX_SIDE", "2000"))
 
+# A page with a grid was never read as prose, so the printed header above the
+# table — which states the ship, the port it sailed from and the date — was seen
+# on no dossier that kept its list and lost its PARTE form. That is most of
+# them. The header is everything above the table's first row, and reading that
+# strip costs a fraction of reading the sheet.
+MIN_HEADER_PX = 200
+
+
+def header_box(geo, size: tuple[int, int]) -> tuple[int, int, int, int] | None:
+    """The strip above the table, or None when there is no room for one."""
+    w, h = size
+    top = None
+    if getattr(geo, "row_edges", None):
+        top = min(geo.row_edges)
+    if getattr(geo, "table_box", None):
+        top = min(top, geo.table_box[1]) if top is not None else geo.table_box[1]
+    if top is None:
+        # nothing measured: the forms print their header in the top third
+        return (0, 0, w, h // 3)
+    top = int(top)
+    if top < MIN_HEADER_PX:
+        return None      # the sheet is table from the first line down
+    return (0, 0, w, min(top, h))
+
 
 def refine(im, margin: int = INK_MARGIN):
     """Trim a row band down to the writing inside it.
@@ -409,13 +433,38 @@ class PaddleEngine:
             return image
         return dest
 
-    def _page_text(self, image: Path) -> str:
-        res = self._predict_page(self._readable_copy(image))
+    def _header_text(self, image: Path, geo) -> str:
+        """What is printed above the table: the letterhead, the voyage.
+
+        Reading the whole sheet would answer the same question at several times
+        the cost, and the answer is never below the first row of names.
+        """
+        from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None
+        try:
+            with Image.open(image) as im:
+                box = header_box(geo, im.size)
+                if box is None:
+                    return ""
+                dest = image.with_name(f"{image.stem}-head.jpg")
+                if not (dest.exists() and dest.stat().st_size):
+                    strip = im.convert("L").crop(box)
+                    strip.thumbnail((TEXT_MAX_SIDE, TEXT_MAX_SIDE), Image.LANCZOS)
+                    strip.save(dest, quality=88)
+        except (OSError, ValueError):
+            return ""
+        res = self._predict_page(dest)
+        return self._texts_of(res)
+
+    def _texts_of(self, res) -> str:
         parts = []
         for r in res:
             d = r.json.get("res", r.json) if hasattr(r, "json") else {}
             parts.extend(t for t in (d.get("rec_texts") or []) if t)
         return "\n".join(parts)
+
+    def _page_text(self, image: Path) -> str:
+        return self._texts_of(self._predict_page(self._readable_copy(image)))
 
     def _render_rows(self, source: Path | None, page: int | None, geo,
                      size: tuple[int, int], workdir: Path) -> list[dict] | None:
@@ -520,6 +569,7 @@ class PaddleEngine:
             )
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
+                text=self._header_text(image, geo) if text else "",
                 geometry={"rows": geo.normalized_rows(),
                           "columns": geo.normalized_cols(),
                           "skew": geo.skew,

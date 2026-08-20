@@ -72,7 +72,7 @@ def month_number(text: str) -> int | None:
 # reported as read. `de` before the month is written `deDesembro` about as often
 # as `de Desembro` — the recogniser loses the space between a printed word and
 # the writing that follows it.
-RE_PAQUETE = re.compile(r"paquete\b(.*)", re.I)
+RE_PAQUETE = re.compile(r"(?:paquete|vapor)\b(.*)", re.I)
 RE_QUOTED = re.compile(r"[\"“”]\s*([^\"“”]{2,40}?)\s*[\"“”]")
 RE_ORIGIN = re.compile(r"procedente\s+d[eo]\b(.*)", re.I)
 # The day is whatever was written where the day goes -- often a stroke the
@@ -99,13 +99,34 @@ PARTE_MARKS = ["parte", "interprete", "que visitou o paquete",
 # particular to this form — `consignado` appears nowhere else on these pages,
 # and `porto de` is the label above the port, not the `Porto do Rio de Janeiro`
 # in the other form's letterhead.
-LISTA_MARKS = ["lista de entra", "de passageiros no", "toneladas de registro",
+LISTA_MARKS = ["lista de entra", "de passageiros no", "toneladas",
                "pessoas de tripulacao", "sob o commando de", "consignado",
-               "policia do porto", "porto de"]
+               "policia do porto", "porto de", "relacao dos passageiros",
+               "desembarcaram", "no vapor", "no paquete"]
 
 # The letterhead is the first thing printed on the sheet, above everything the
 # clerk filled in. These two lines come before it and are not it.
 NOT_LETTERHEAD = ["policia do porto", "modelo n"]
+
+# What a clerk writes beside `paquete` is as often the ship's flag as its name.
+# Filing `Inglez` as a ship would put a hundred unrelated voyages under one name
+# and make searching by ship worse than not searching by ship at all. This is a
+# closed list, so a near miss on it is not a guess.
+FLAGS = ["inglez", "ingles", "francez", "frances", "allemao", "alemao",
+         "americano", "italiano", "hollandez", "holandes", "brazileiro",
+         "brasileiro", "hespanhol", "espanhol", "japonez", "japones",
+         "portuguez", "portugues", "argentino", "norueguez", "sueco",
+         "belga", "dinamarquez", "grego", "russo", "austriaco"]
+FLAG_FLOOR = 0.8
+
+
+def is_flag(text: str) -> bool:
+    """Whether this word names a nationality rather than a vessel."""
+    word = fold(text)
+    if not word or len(word) < 4:
+        return False
+    return max(difflib.SequenceMatcher(None, word, f).ratio()
+               for f in FLAGS) >= FLAG_FLOOR
 # The archival notation is stamped at the top of most sheets, above the printed
 # letterhead. It is the one line up there that carries a long run of digits.
 RE_NOTATION = re.compile(r"\d{4,}")
@@ -210,7 +231,7 @@ def _letterhead(lines: list[str]) -> str | None:
     means when they say "the Lloyd ship" — so it is worth having even though it
     is the one field nobody writes.
     """
-    for line in lines[:4]:
+    for line in lines[:6]:
         folded = fold(line)
         if not folded or any(mark in folded for mark in NOT_LETTERHEAD):
             continue
@@ -247,7 +268,30 @@ def _read_date(v: Voyage, lines: list[str]) -> None:
 
 
 RE_YEAR_TAIL = re.compile(r"\bde\s*(\d{2}\s*\d{0,2})\b", re.I)
-RE_PORT = re.compile(r"^(.{3,24}?)\s*,\s*$")
+# The form prints `_______,` and the clerk writes the date on past the comma,
+# so the port is what stands before the form's own comma, not the whole line.
+RE_PORT = re.compile(r"^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.' ]{2,23}?)\s*,")
+
+
+def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
+    """The value, if it can be a vessel's name at all.
+
+    Where the clerk wrote the ship, the detector sometimes reports a page number
+    or a piece of the printed letterhead just above it instead. A ship filed
+    under `2104` is a ship nobody can search for, and a ship filed under
+    `Facional` — half of the `Nacional` printed above it — is the letterhead
+    wearing a vessel's name.
+    """
+    if not value:
+        return None
+    letters = [c for c in value if c.isalpha()]
+    if len(letters) < 3 or len(letters) < len(value.replace(" ", "")) / 2:
+        return None
+    word = fold(value)
+    for printed in fold(letterhead or "").split():
+        if len(printed) > 3 and difflib.SequenceMatcher(None, word, printed).ratio() >= 0.85:
+            return None
+    return value
 
 
 def _read_port(lines: list[str]) -> str | None:
@@ -260,6 +304,8 @@ def _read_port(lines: list[str]) -> str | None:
     """
     for line in lines[:8]:
         m = RE_PORT.match(line.strip())
+        if m and _is_label(line):
+            continue
         if m and not month_number(m.group(1)) and not m.group(1).strip().isdigit():
             return _clean(m.group(1))
     return None
@@ -310,11 +356,16 @@ def parse_voyage(text: str) -> Voyage | None:
     # recognised by whole printed phrases that appear nowhere else on a page,
     # and two of those are already more evidence. Neither form is made to fit:
     # a page that is neither is left alone.
+    port, letterhead = _read_port(lines), _letterhead(lines)
     if parte < 3 and lista < 2:
-        return None
+        # One printed phrase is thin evidence on its own. A port written where
+        # the form asks for one, under a letterhead, is the rest of the same
+        # form — and on a badly-read sheet it may be all that survives.
+        if not (lista == 1 and port and letterhead):
+            return None
     v = Voyage(source="parte" if parte >= lista else "lista")
     if v.source == "lista":
-        v.line = _letterhead(lines)
+        v.line = letterhead
 
     # Two things are written against `paquete`: the ship, and the nationality of
     # the line that owned it. On one sheet the nationality follows the label and
@@ -325,9 +376,15 @@ def parse_voyage(text: str) -> Voyage | None:
         # No nationality field on this form: the name beside `paquete` is the
         # ship. Reading it the PARTE way would file every voyage under the
         # wrong word.
-        v.ship = _beside(RE_PAQUETE, lines)
+        beside = _beside(RE_PAQUETE, lines)
+        if beside and is_flag(beside):
+            v.flag = beside
+            v.ship = _above(RE_PAQUETE, lines, skip=beside)
+        else:
+            v.ship = beside
+        v.ship = plausible_ship(v.ship, v.line)
         v.origin = _beside(RE_ORIGIN, lines)
-        v.port = _read_port(lines)
+        v.port = port
         _read_date(v, lines)
         if v.year is None:
             _read_dateline(v, lines)
@@ -345,7 +402,7 @@ def parse_voyage(text: str) -> Voyage | None:
         # `paquete` are the nationality *and* the ship it belongs to. The
         # nationality is written first, before the quotation mark opens.
         v.flag = _clean(v.flag[:v.flag.index(quoted)]) or None
-    v.ship = quoted or _above(RE_PAQUETE, lines, skip=v.flag)
+    v.ship = plausible_ship(quoted or _above(RE_PAQUETE, lines, skip=v.flag), None)
 
     v.origin = _beside(RE_ORIGIN, lines)
 

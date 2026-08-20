@@ -474,3 +474,83 @@ def test_the_same_page_reads_the_same_at_either_size():
     big, small = parse_voyage(PARTE_19845), parse_voyage(PARTE_19845_SCALED)
     for field in ("ship", "origin", "arrival", "year", "month", "passengers"):
         assert getattr(big, field) == getattr(small, field), field
+
+
+# Three more printings, read off real pages by the header pass. Every shipping
+# line worded its own form: `Relação dos passageiros que desembarcaram` here,
+# `Lista de entrada de passageiros` there, `vapor` for what another calls
+# `paquete`.
+HEADER_013990 = """BS.RPV.ENT 013990
+1
+MODELO
+A-80
+Conpanhia Nacional de Navegação Costeira
+ÉRIIEL
+orto
+Facional
+Relação dos passageiros que desembarcaram neste porto vindo no vapor."""
+
+HEADER_014037 = """BS.FRPV.ENT.014037
+4
+POLICIA DO PORTO
+ Lloyd Brazileiro
+Santos, 2.3 de Jen
+1917
+entirsa
+RepartiçãodaPolicia"""
+
+HEADER_16548 = """BR.AN.RIO.OL.0.RPVPRJ.16548
+No. 461B.
+The Koyal Mail Steam Packet Company.
+metear
+2104
+Relação dos passageiros que desembarcaram n'este porto vindos no paquete Inglez
+de
+toneladas
+149
+Buenos Aires"""
+
+
+def test_a_form_that_says_vapor_rather_than_paquete_is_still_a_list():
+    v = parse_voyage(HEADER_013990)
+    assert v is not None and v.source == "lista"
+    assert v.line == "Conpanhia Nacional de Navegação Costeira"
+
+
+def test_the_shipping_line_survives_where_the_rest_of_the_header_does_not():
+    """The letterhead is printed and large; the clerk's writing beside it is
+    neither. On this page the line is all that came back, and it is worth
+    having on its own — it is what someone means by "the Lloyd ship"."""
+    v = parse_voyage(HEADER_014037)
+    assert v.line == "Lloyd Brazileiro"
+
+
+def test_the_port_may_have_the_date_written_after_it_on_the_same_line():
+    """`Santos, 2.3 de Jen` — the form prints the comma and the clerk writes on
+    past it."""
+    assert parse_voyage(HEADER_014037).port == "Santos"
+
+
+def test_a_nationality_beside_paquete_is_not_recorded_as_a_ship():
+    """`vindos no paquete Inglez` names the flag, not the vessel. Filing
+    `Inglez` as a ship would put a hundred unrelated voyages under one name and
+    make searching by ship worse than not searching by ship."""
+    v = parse_voyage(HEADER_16548)
+    assert v.flag == "Inglez"
+    assert v.ship != "Inglez"
+
+
+def test_a_number_off_the_form_is_not_a_ship():
+    """`2104` sits where the ship's name should be on this sheet. A ship filed
+    under a number is a ship nobody can search for, and worse, it is a claim the
+    page never made."""
+    assert parse_voyage(HEADER_16548).ship is None
+
+
+def test_a_fragment_of_the_letterhead_is_not_a_ship():
+    """The detector reports `Facional` — half of `Navegação Costeira`'s
+    `Nacional`, broken off the printed letterhead directly above. It is the
+    printing, not the vessel."""
+    v = parse_voyage(HEADER_013990)
+    assert v.ship is None
+    assert v.line == "Conpanhia Nacional de Navegação Costeira"

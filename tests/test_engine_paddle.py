@@ -457,3 +457,50 @@ def test_a_page_already_small_enough_is_not_copied(tmp_path, monkeypatch):
     monkeypatch.setattr(eng, "_predict_page", lambda p: seen.append(Path(p)) or [])
     eng._page_text(small)
     assert seen == [small]
+
+
+def test_the_printed_header_above_a_list_is_read_when_the_voyage_is_missing():
+    """Almost every page two is a passenger list *with* a grid, and a page with
+    a grid was never read as prose at all — so the printed header that states
+    the ship, the port and the date was seen on no dossier that kept its list
+    and lost its PARTE form. That is most of them: twelve documents indexed,
+    twelve without a voyage."""
+    from desembarque.engine_paddle import header_box
+
+    class Geo:
+        height, width = 4000, 3000
+        row_edges = [1200.0, 1300.0, 1400.0]
+        table_box = (100.0, 1150.0, 2900.0, 3900.0)
+
+    box = header_box(Geo(), (3000, 4000))
+    assert box is not None
+    x0, y0, x1, y1 = box
+    assert y0 == 0 and y1 <= 1200, "the header is what sits above the first row"
+    assert (x0, x1) == (0, 3000)
+
+
+def test_a_table_that_starts_at_the_top_has_no_header_to_read():
+    """Some sheets are all table. Cropping a sliver and running detection over
+    it costs the same twenty seconds and returns nothing."""
+    from desembarque.engine_paddle import header_box
+
+    class Geo:
+        height, width = 4000, 3000
+        row_edges = [40.0, 140.0]
+        table_box = (100.0, 20.0, 2900.0, 3900.0)
+
+    assert header_box(Geo(), (3000, 4000)) is None
+
+
+def test_a_page_with_no_measured_table_offers_its_top_third():
+    """Where the geometry found no rows the page is read whole anyway, so this
+    only has to be right when there is a grid."""
+    from desembarque.engine_paddle import header_box
+
+    class Geo:
+        height, width = 4000, 3000
+        row_edges = []
+        table_box = None
+
+    box = header_box(Geo(), (3000, 4000))
+    assert box and box[3] == 4000 // 3
