@@ -376,3 +376,34 @@ def test_naming_the_ship_does_not_promote_a_row_that_looks_like_nothing():
                    ("Sirio", 1923, ["Guudo Casrtadore"]))
     hits = search(rows, "Contadore Valdivia")
     assert hits[0]["text"] == "Guudo Casrtadore"
+
+
+def test_the_form_s_own_words_are_not_indexed_as_passengers():
+    """Live search for `Contadore` returned rows read off the printed form —
+    `toneladas`, `pessoas de tripulação` — caught by the row comb and filed as
+    people. They score against anything that shares a few letters with them and
+    they belong to no ship."""
+    from desembarque.search import is_heading
+    for junk in ("toneladas", "PROFISSÃO", "pessoas de tripulação",
+                 "OBSERVAÇÕES", "procedencia destino"):
+        assert is_heading(junk), junk
+
+
+def test_one_misread_printed_word_is_left_alone():
+    """`consigr` is `consignado` broken by the row comb, and no threshold
+    catches it without also catching `gomes` (against `cognomes`) and `romano`
+    (against `comando`) — both real surnames in this corpus. Losing a passenger
+    is the failure this tool exists to prevent, so the doubtful ones stay in.
+    Telling them apart wants the geometry that knows they sit above the table."""
+    from desembarque.search import is_heading
+    assert not is_heading("consigr")
+    assert not is_heading("gomes")
+    assert not is_heading("romano")
+
+
+def test_a_surname_that_looks_like_a_port_is_still_a_passenger():
+    """`Santos` is on the letterhead of half this corpus and is also one of the
+    commonest surnames in Brazil. Dropping it would lose real people."""
+    from desembarque.search import is_heading
+    for name in ("Santos", "JOSE SANTOS", "Maria da Silva", "Nacional Pereira"):
+        assert not is_heading(name), name

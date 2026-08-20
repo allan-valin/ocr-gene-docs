@@ -50,6 +50,23 @@ def fold(s: str) -> str:
     return "".join(c for c in s if not unicodedata.combining(c)).upper().strip()
 
 
+# What these sheets print around the names. Deliberately narrower than the list
+# the voyage parser uses: that one refuses port names and nationalities, and
+# `Santos` is on the letterhead of half this corpus *and* one of the commonest
+# surnames in Brazil. Dropping it here would lose real people.
+PRINTED_WORDS = """consignado consignada tripulacao toneladas registro
+    passageiros passageiro observacoes profissao nacionalidade procedencia
+    cognomes sobrenomes commando comando desembarcaram entrados immigrantes
+    imigrantes reparticao policia intendencia povoamento ministerio
+    documentos numero ordem estado civil destino classe pessoas""".split()
+PRINTED_FLOOR = 0.8
+
+
+def _is_printed_word(word: str) -> bool:
+    return max(difflib.SequenceMatcher(None, word, w).ratio()
+               for w in PRINTED_WORDS) >= PRINTED_FLOOR
+
+
 def is_heading(text: str) -> bool:
     """The printed caption of the name column, not a person.
 
@@ -64,7 +81,26 @@ def is_heading(text: str) -> bool:
         return False
     if t in COLUMN_HEADINGS:
         return True
-    return any(similarity(t, h) >= 0.55 for h in COLUMN_HEADINGS if " " in h)
+    if any(similarity(t, h) >= 0.55 for h in COLUMN_HEADINGS if " " in h):
+        return True
+    # The rest of the printing gets caught by the row comb too. A live search
+    # for `Contadore` returned `consigr` and `consign` — the word `consignado`
+    # broken in two and filed as two people, scoring against anything beginning
+    # `con` and belonging to no ship. A row made only of the form's own words is
+    # the form, not a passenger.
+    words = [w for w in t.lower().split() if len(w) > 3]
+    if not words:
+        return False
+    if len(words) == 1:
+        # One word has to be the printed word exactly. Measured against real
+        # surnames from this corpus, a loose match at any usable threshold also
+        # drops `gomes` (against `cognomes`) and `romano` (against `comando`),
+        # and losing a passenger is the failure this whole tool exists to
+        # prevent. So `consigr` — `consignado` broken in two by the row comb —
+        # stays in the index, and telling it from a name wants the geometry
+        # that knows it sits above the table, not a string distance.
+        return words[0] in PRINTED_WORDS
+    return all(_is_printed_word(w) for w in words)
 
 
 def trigrams(s: str) -> set[str]:
