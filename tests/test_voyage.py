@@ -767,3 +767,36 @@ def test_a_word_that_merely_starts_like_a_month_is_not_a_stamp():
     assert stamp_year("MARQUES PEREIRA") is None
     assert stamp_year("Setubal 40") is None
     assert stamp_year("") is None
+
+
+def test_a_year_outside_the_archive_s_period_is_not_recorded():
+    """A page read as `Suntos, 5 de Jamier de 1980` — the recogniser's account
+    of a 1920s date. These are arrival records of the Serviço de Povoamento;
+    1980 is not a misreading of a year in this corpus, it is a misreading. The
+    verbatim string is kept and the searchable year is withheld, which is the
+    same distinction the rows make between `ilegível` and a value."""
+    v = parse_voyage("""POLICIA DO PORTO
+Lloyd Brazileiro
+Suntos, 5 de Jamier de 1980
+Lista de entrada de passageiros no""")
+    assert v is not None
+    assert v.year is None and v.arrival is None
+    assert v.arrival_raw and "1980" in v.arrival_raw
+
+
+def test_the_years_the_archive_does_hold_are_kept():
+    from desembarque.voyage import plausible_year
+    for y in (1888, 1917, 1925, 1938):
+        assert plausible_year(y) == y
+    for y in (1799, 1980, 2011, 19):
+        assert plausible_year(y) is None
+
+
+def test_a_letterhead_the_detector_ran_together_is_still_not_one():
+    """`POLICIA·DO PORTO` was filed as a shipping line: the middle dot the
+    detector inserted meant the words no longer matched the stamp they are."""
+    v = parse_voyage("""POLICIA·DO PORTO
+Suntos,
+Lista de entrada de passageiros no
+consignado""")
+    assert v is None or v.line != "POLICIA·DO PORTO"

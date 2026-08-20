@@ -236,7 +236,9 @@ def _letterhead(lines: list[str]) -> str | None:
     is the one field nobody writes.
     """
     for line in lines[:6]:
-        folded = fold(line)
+        # `POLICIA·DO PORTO` was filed as a shipping line: a dot the detector
+        # inserted meant the words no longer matched the stamp they are.
+        folded = fold(re.sub(r"[^\w\s]+", " ", line))
         if not folded or any(mark in folded for mark in NOT_LETTERHEAD):
             continue
         if _is_label(line) or len(folded) < 8 or RE_NOTATION.search(line):
@@ -265,7 +267,7 @@ def _read_date(v: Voyage, lines: list[str]) -> None:
         v.arrival_raw = _clean(m.group(0)[m.group(0).lower().index("em") + 2:])
         v.month = month_number(month_word)
         digits = re.sub(r"\s+", "", year)
-        v.year = int(digits) if len(digits) == 4 else None
+        v.year = plausible_year(int(digits)) if len(digits) == 4 else None
         if v.month and v.year and day.isdigit() and 1 <= int(day) <= 31:
             v.arrival = f"{v.year:04d}-{v.month:02d}-{int(day):02d}"
         return
@@ -385,6 +387,21 @@ MONTH_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun",
 RE_STAMP = re.compile(r"\b(" + "|".join(MONTH_ABBR) + r")\.?\s*([\d\s]{4,12})", re.I)
 RE_CENTURY = re.compile(r"(1[89]\d\d)")
 
+# What the archive holds. The Serviço de Povoamento ran through the first third
+# of the twentieth century, and every dossier read so far falls between 1917 and
+# 1925. A page read as `Suntos, 5 de Jamier de 1980` is not a record of 1980; it
+# is a misreading of a year in the 1920s, and a wrong year answers a search that
+# should have found nothing. This is an assumption about the corpus rather than
+# about any one page, and it is one line to move.
+FIRST_YEAR, LAST_YEAR = 1880, 1940
+
+
+def plausible_year(year: int | None) -> int | None:
+    """The year, if the archive could hold a dossier from it."""
+    if year is None:
+        return None
+    return year if FIRST_YEAR <= int(year) <= LAST_YEAR else None
+
 
 def stamp_year(text: str) -> int | None:
     """The year in a port's date stamp, or None.
@@ -408,7 +425,7 @@ def stamp_year(text: str) -> int | None:
     if not 4 <= len(digits) <= 6:
         return None
     tail = digits[-4:]
-    return int(tail) if RE_CENTURY.fullmatch(tail) else None
+    return plausible_year(int(tail)) if RE_CENTURY.fullmatch(tail) else None
 
 
 def _read_dateline(v: Voyage, lines: list[str]) -> None:
@@ -442,6 +459,12 @@ def _read_dateline(v: Voyage, lines: list[str]) -> None:
             # often enough to matter. The year standing beside it is what makes
             # it a date rather than a coincidence.
             continue
+        if plausible_year(int(digits)) is None:
+            # A date line the recogniser misread into a year the archive cannot
+            # hold. It is still the date line, so what it says is kept; only
+            # the year that would answer a search is withheld.
+            v.arrival_raw = _clean(window[:60])
+            return
         v.month, v.year = month, int(digits)
         if day:
             v.arrival = f"{v.year:04d}-{v.month:02d}-{day:02d}"
