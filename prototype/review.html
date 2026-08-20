@@ -361,6 +361,16 @@ function pageURL(doc,page){
 }
 
 // ---- documents ----
+// Scanning a folder of two hundred dossiers, the useful thing to see beside the
+// ship is when she landed — that is how somebody with an approximate date finds
+// the handful worth opening. It is absent far more often than it is present, so
+// it is a prefix rather than a column.
+function docYear(d){
+  const m=d.meta;
+  if(!m) return "";
+  const when = m.arrival || m.year;
+  return when ? `${when} · ` : "";
+}
 function renderDocList(){
   const t=DB.documents.filter(d=>d.rows).length;
   $("#sidehead").innerHTML=`<span>${DB.documents.length} documentos · ${t} transcrito${t===1?"":"s"}</span>`
@@ -369,7 +379,7 @@ function renderDocList(){
   $("#doclist").innerHTML=DB.documents.map((d,i)=>`
     <div class="doc ${i===docIdx?"on":""}" data-d="${i}">
       <b>${d.ship}</b>
-      <span>${d.notation} · ${d.total_pages} p.</span>
+      <span>${docYear(d)}${d.notation} · ${d.total_pages} p.</span>
       ${d.transcribed||d.rows?'<span class="badge">transcrito</span>':""}
     </div>`).join("");
 }

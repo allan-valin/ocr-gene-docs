@@ -239,6 +239,17 @@ window.addEventListener("load",async()=>{
     }
   }
 
+  // Beside the ship in the folder list, when she landed: that is how somebody
+  // with an approximate date picks the handful of dossiers worth opening.
+  {
+    ok("a document that states no date gets no date in the list",
+       typeof docYear === "function" && docYear({}) === "");
+    ok("a document that states one shows it",
+       docYear({meta:{arrival:"1924-12-10"}}).indexOf("1924-12-10") === 0);
+    ok("a year without a full date is shown too",
+       docYear({meta:{year:1925}}).indexOf("1925") === 0);
+  }
+
   // The voyage line is built from whatever the dossier's form actually stated.
   // A fixed template printed "undefined" between the bullets for every field
   // the clerk left blank, which reads as a page that said nothing where the
