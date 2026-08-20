@@ -433,7 +433,7 @@ class PaddleEngine:
             return image
         return dest
 
-    def _header_text(self, image: Path, geo) -> str:
+    def _header(self, image: Path, geo):
         """What is printed above the table: the letterhead, the voyage.
 
         Reading the whole sheet would answer the same question at several times
@@ -445,16 +445,15 @@ class PaddleEngine:
             with Image.open(image) as im:
                 box = header_box(geo, im.size)
                 if box is None:
-                    return ""
+                    return []
                 dest = image.with_name(f"{image.stem}-head.jpg")
                 if not (dest.exists() and dest.stat().st_size):
                     strip = im.convert("L").crop(box)
                     strip.thumbnail((TEXT_MAX_SIDE, TEXT_MAX_SIDE), Image.LANCZOS)
                     strip.save(dest, quality=88)
         except (OSError, ValueError):
-            return ""
-        res = self._predict_page(dest)
-        return self._texts_of(res)
+            return []
+        return self._predict_page(dest)
 
     def _texts_of(self, res) -> str:
         parts = []
@@ -462,6 +461,38 @@ class PaddleEngine:
             d = r.json.get("res", r.json) if hasattr(r, "json") else {}
             parts.extend(t for t in (d.get("rec_texts") or []) if t)
         return "\n".join(parts)
+
+    def _read(self, predict, wanted: bool) -> dict:
+        """The text of a detection pass and the boxes it came from."""
+        if not wanted:
+            return {"text": "", "fragments": None}
+        res = predict()
+        return {"text": self._texts_of(res), "fragments": self._fragments_of(res)}
+
+    def _fragments_of(self, res) -> list[dict]:
+        """Each recognised fragment with the box it was read from.
+
+        Reading order is not layout: a value written a little above its printed
+        baseline is reported before the label it belongs to. The boxes are what
+        make `INDIANA` the ship beside `no vapor` rather than a stray line.
+        """
+        out = []
+        for r in res:
+            d = r.json.get("res", r.json) if hasattr(r, "json") else {}
+            polys = d.get("rec_polys")
+            if polys is None:
+                polys = d.get("dt_polys") or []
+            for t, poly in zip(d.get("rec_texts") or [], polys):
+                if not t:
+                    continue
+                try:
+                    xs = [float(pt[0]) for pt in poly]
+                    ys = [float(pt[1]) for pt in poly]
+                except (TypeError, ValueError, IndexError):
+                    continue
+                out.append({"text": t, "x0": min(xs), "y0": min(ys),
+                            "x1": max(xs), "y1": max(ys)})
+        return out
 
     def _page_text(self, image: Path) -> str:
         return self._texts_of(self._predict_page(self._readable_copy(image)))
@@ -545,7 +576,8 @@ class PaddleEngine:
             # the cover card carries the archival notation, and has no grid
             if kind == "cover":
                 return PageResult(kind="cover", engine=self.name,
-                                  text=self._page_text(image) if text else "")
+                                  **self._read(lambda: self._predict_page(
+                                      self._readable_copy(image)), text))
 
             import sys
             sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -557,7 +589,8 @@ class PaddleEngine:
             if not geo.rows or not geo.name_column(0):
                 # no grid is a legitimate answer: many pages are not tables
                 return PageResult(kind="unknown", engine=self.name,
-                                  text=self._page_text(image) if text else "")
+                                  **self._read(lambda: self._predict_page(
+                                      self._readable_copy(image)), text))
 
             im = Image.open(image).convert("L")
             im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
@@ -569,7 +602,7 @@ class PaddleEngine:
             )
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
-                text=self._header_text(image, geo) if text else "",
+                **self._read(lambda: self._header(image, geo), text),
                 geometry={"rows": geo.normalized_rows(),
                           "columns": geo.normalized_cols(),
                           "skew": geo.skew,

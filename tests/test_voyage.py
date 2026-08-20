@@ -623,3 +623,81 @@ def test_a_voyage_is_complete_when_it_names_a_ship_and_a_time():
     assert not is_complete(parse_voyage(HEADER_014037))
     assert is_complete(parse_voyage(PARTE_19845))
     assert not is_complete(None)
+
+
+# ---- pairing a printed label with the handwriting beside it ------------------
+#
+# Reading order is not layout. The detector reports fragments roughly top-down,
+# and the clerk's hand sits a little above the printed baseline it belongs to,
+# so the ship's name arrives *before* the label that names it. These fragments
+# are the detector's own output for the header of BS.ENT.013942, boxes and all.
+
+FRAGS_013942 = [
+    {"text": "BS.RPV. ENT. 013942", "x0": 419, "y0": 69, "x1": 1218, "y1": 175},
+    {"text": "LLOYD ITALIANO", "x0": 548, "y0": 182, "x1": 1272, "y1": 242},
+    {"text": "ABR 2 917 2", "x0": 1498, "y0": 186, "x1": 1551, "y1": 427},
+    {"text": "SOCIETÀ DI NAVIGAZIONE", "x0": 713, "y0": 253, "x1": 1121, "y1": 287},
+    {"text": "SEDE IN GENOVA", "x0": 664, "y0": 347, "x1": 1166, "y1": 391},
+    {"text": "SANTOG", "x0": 688, "y0": 459, "x1": 991, "y1": 520},
+    {"text": "de", "x0": 1263, "y0": 477, "x1": 1311, "y1": 513},
+    {"text": "INDIANA", "x0": 769, "y0": 517, "x1": 1066, "y1": 584},
+    {"text": "de(3)toneladas de registro", "x0": 1206, "y0": 533, "x1": 1726, "y1": 592},
+    {"text": "Lista de passageiros entrados no vapor(2)",
+     "x0": 113, "y0": 550, "x1": 744, "y1": 602},
+    {"text": "e(4)|03pessoas de tripulação, procedente de()JENOS AYRES",
+     "x0": 168, "y0": 590, "x1": 1281, "y1": 683},
+    {"text": "NOME E COGNOMES", "x0": 245, "y0": 820, "x1": 492, "y1": 852},
+]
+
+# BS.ENT.013947: the ship is over to the right of a long printed label, with a
+# footnote marker `(1)` sitting between them.
+FRAGS_013947 = [
+    {"text": "POLICIA DO PORTO", "x0": 136, "y0": 135, "x1": 473, "y1": 173},
+    {"text": "COMPAGNIE DE NAVIGATION SUD ATLANTIQUE",
+     "x0": 656, "y0": 126, "x1": 1757, "y1": 186},
+    {"text": "Santos,", "x0": 1145, "y0": 197, "x1": 1256, "y1": 234},
+    {"text": "(1)", "x0": 823, "y0": 250, "x1": 854, "y1": 276},
+    {"text": "Jaronna", "x0": 1220, "y0": 252, "x1": 1485, "y1": 302},
+    {"text": "Lista de entrada de passageiros no",
+     "x0": 212, "y0": 267, "x1": 851, "y1": 319},
+    {"text": "de3 530 toneladas de registro e", "x0": 103, "y0": 319, "x1": 613, "y1": 396},
+    {"text": "Ruenes", "x0": 1258, "y0": 305, "x1": 1445, "y1": 372},
+    {"text": "pessoas de tripulação procedente de",
+     "x0": 719, "y0": 332, "x1": 1273, "y1": 381},
+]
+
+
+def test_the_ship_is_the_writing_beside_the_label_not_the_line_before_it():
+    """`INDIANA` is reported before the label that names it, because the clerk
+    wrote it a little higher than the printed baseline. By reading order it is
+    two fragments away from `vapor`; by position it is directly beside it."""
+    v = parse_voyage("", fragments=FRAGS_013942)
+    assert v is not None and v.ship == "INDIANA"
+
+
+def test_the_rest_of_the_header_still_reads_the_same_way():
+    v = parse_voyage("", fragments=FRAGS_013942)
+    assert v.line == "LLOYD ITALIANO"
+    assert v.origin and "JENOS AYRES" in v.origin
+
+
+def test_a_footnote_marker_between_label_and_value_is_not_the_value():
+    """`(1)` sits closer to the label than the ship does. It is the form's own
+    reference mark, and it is not a name."""
+    v = parse_voyage("", fragments=FRAGS_013947)
+    assert v.ship == "Jaronna"
+
+
+def test_the_value_has_to_share_the_label_s_line():
+    """Something further down the page is not beside anything, however well it
+    lines up on the left."""
+    from desembarque.voyage import beside_fragment
+    label = {"text": "no vapor", "x0": 100, "y0": 500, "x1": 300, "y1": 560}
+    below = {"text": "Brasil", "x0": 400, "y0": 900, "x1": 600, "y1": 960}
+    assert beside_fragment(label, [label, below]) is None
+
+
+def test_without_fragments_it_reads_the_text_as_before():
+    """Every stored transcription written before the boxes were kept is text
+    only, and has to go on being read."""
+    assert parse_voyage(PARTE_19845).ship == "Valdivia"

@@ -27,6 +27,10 @@ class PageResult:
     """One page's transcription. `rows` empty is a legitimate answer."""
     kind: str = "unknown"          # cover | list | blank | unknown
     text: str = ""                 # raw text, used for cover-card identity
+    # the same text with each fragment's box, so a printed label can be paired
+    # with the handwriting *beside* it rather than with whatever the detector
+    # happened to report next
+    fragments: list[dict] | None = None
     rows: list[dict] = field(default_factory=list)
     geometry: dict | None = None   # row bands / column ranges, when measurable
     engine: str = ""

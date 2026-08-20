@@ -73,6 +73,10 @@ def month_number(text: str) -> int | None:
 # as `de Desembro` — the recogniser loses the space between a printed word and
 # the writing that follows it.
 RE_PAQUETE = re.compile(r"(?:paquete|vapor)\b(.*)", re.I)
+# Not every form names the kind of vessel. `Lista de entrada de passageiros no
+# _____` leaves the blank straight after `no`, so the ship is beside that.
+# Tried second, because a form that does say `vapor` says it after this phrase.
+RE_LISTA_SHIP = re.compile(r"passageiros(?:\s+entrados)?\s+no\b(.*)", re.I)
 RE_QUOTED = re.compile(r"[\"“”]\s*([^\"“”]{2,40}?)\s*[\"“”]")
 RE_ORIGIN = re.compile(r"procedente\s+d[eo]\b(.*)", re.I)
 # The day is whatever was written where the day goes -- often a stroke the
@@ -367,9 +371,64 @@ def _read_dateline(v: Voyage, lines: list[str]) -> None:
         return
 
 
-def parse_voyage(text: str) -> Voyage | None:
+# How much of a printed label's height a fragment has to share before it counts
+# as standing beside it. The clerk writes a little above the printed baseline
+# and larger than the print, so the overlap is generous; what it rules out is
+# the next line down.
+BESIDE_OVERLAP = 0.25
+
+
+def beside_fragment(label: dict, frags: list[dict]) -> dict | None:
+    """The handwriting written against a printed label.
+
+    Reading order is not layout. The detector reports fragments roughly
+    top-down, and a value written a little above its printed baseline arrives
+    *before* the label it belongs to — on one header the ship `INDIANA` is two
+    fragments away from the word `vapor` by reading order and directly beside it
+    on the page. So the pairing is done by position: the nearest thing to the
+    right that shares the label's line and reads as a name.
+    """
+    height = max(1.0, label["y1"] - label["y0"])
+    out = []
+    for f in frags:
+        if f is label:
+            continue
+        overlap = min(f["y1"], label["y1"]) - max(f["y0"], label["y0"])
+        if overlap < BESIDE_OVERLAP * height:
+            continue
+        if f["x0"] < label["x1"] - 0.2 * (label["x1"] - label["x0"]):
+            continue          # to the left, or the same words again
+        if not plausible_value(f["text"]):
+            continue          # a footnote marker, a page number, a stray rule
+        out.append(f)
+    return min(out, key=lambda f: f["x0"]) if out else None
+
+
+def _fragment_lines(frags: list[dict]) -> list[str]:
+    """The fragments as text, in the order the page reads."""
+    return [f["text"] for f in sorted(frags, key=lambda f: (round(f["y0"] / 30), f["x0"]))]
+
+
+def _positional(pattern: re.Pattern, frags: list[dict]) -> str | None:
+    """The value beside the first fragment carrying this printed label."""
+    for f in sorted(frags, key=lambda f: f["y0"]):
+        m = pattern.search(f["text"])
+        if not m:
+            continue
+        trailing = _clean(m.group(1))
+        if plausible_value(trailing):
+            return trailing
+        found = beside_fragment(f, frags)
+        if found:
+            return _clean(found["text"])
+    return None
+
+
+def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | None:
     """The voyage a page states, or None when the page is not one of the forms."""
     lines = [l.strip() for l in (text or "").splitlines() if l.strip()]
+    if fragments:
+        lines = [l for l in _fragment_lines(fragments) if l.strip()]
     if not lines:
         return None
     parte, lista = _marks(lines, PARTE_MARKS), _marks(lines, LISTA_MARKS)
@@ -398,14 +457,20 @@ def parse_voyage(text: str) -> Voyage | None:
         # No nationality field on this form: the name beside `paquete` is the
         # ship. Reading it the PARTE way would file every voyage under the
         # wrong word.
-        beside = _beside(RE_PAQUETE, lines)
+        beside = None
+        if fragments:
+            beside = (_positional(RE_PAQUETE, fragments)
+                      or _positional(RE_LISTA_SHIP, fragments))
+        beside = beside or _beside(RE_PAQUETE, lines)
         if beside and is_flag(beside):
             v.flag = beside
             v.ship = _above(RE_PAQUETE, lines, skip=beside)
         else:
             v.ship = beside
         v.ship = plausible_ship(v.ship, v.line)
-        v.origin = plausible_value(_beside(RE_ORIGIN, lines))
+        v.origin = plausible_value(
+            (_positional(RE_ORIGIN, fragments) if fragments else None)
+            or _beside(RE_ORIGIN, lines))
         v.port = port
         _read_date(v, lines)
         if v.year is None:

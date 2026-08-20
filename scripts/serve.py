@@ -287,8 +287,9 @@ def transcribe_document(pdf: Path, job) -> dict:
         # are the interpreter's PARTE form, which states the ship, the port it
         # sailed from and the arrival date in print — the three things a person
         # searching for an ancestor actually knows.
-        if res.text and not is_complete(voyage):
-            voyage = merge_voyages(voyage, parse_voyage(res.text))
+        if (res.text or res.fragments) and not is_complete(voyage):
+            voyage = merge_voyages(
+                voyage, parse_voyage(res.text, fragments=res.fragments))
         for r in res.rows:
             r["page"] = n
             rows.append(r)
