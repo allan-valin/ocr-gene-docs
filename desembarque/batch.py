@@ -40,6 +40,40 @@ def is_indexed(data: dict | None, schema: int) -> bool:
     return bool(data.get("rows"))
 
 
+# What a person leaves on a record when they correct it. The engine's own stamp
+# stays on the record too, so these are the only marks that say a human was here.
+HUMAN_MARKS = ("source", "saved_at")
+
+
+def preserve_human_work(existing: dict | None, fresh: dict) -> dict:
+    """A fresh reading of a document, with anything a person typed kept.
+
+    Correcting a row saves the whole record, engine stamp and all, so the next
+    schema bump marks that record stale and the run reads the document again —
+    and storing is a whole-record write. Every correction anybody had typed
+    would be gone, on the run that was supposed to make the corpus better, with
+    nobody told. That is the same silent-loss shape as an empty note marking a
+    document done, and it is worse, because the work destroyed was real.
+
+    Only the rows are the person's. Everything else the re-read brings — the
+    voyage, the geometry, the schema stamp — is why it was read again at all.
+
+    An empty note is still not a transcription: someone opens a dossier, types
+    nothing and leaves, and treating that as a correction would freeze the
+    document against every future improvement.
+    """
+    if not existing or not existing.get("rows"):
+        return fresh
+    if not any(existing.get(mark) for mark in HUMAN_MARKS):
+        return fresh
+    out = dict(fresh)
+    out["rows"] = existing["rows"]
+    for mark in HUMAN_MARKS:
+        if existing.get(mark):
+            out[mark] = existing[mark]
+    return out
+
+
 def collect_pdfs(folder: Path, recursive: bool = True) -> list[Path]:
     """Every PDF under a folder, in a stable order.
 

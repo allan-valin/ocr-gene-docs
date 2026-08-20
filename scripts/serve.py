@@ -38,7 +38,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
-from desembarque.batch import BatchIndexer, collect_pdfs, is_indexed  # noqa: E402
+from desembarque.batch import (BatchIndexer, collect_pdfs, is_indexed,  # noqa: E402
+                               preserve_human_work)
 from desembarque.serve_shapes import ui_meta, ui_transcription  # noqa: E402
 from desembarque.export import csv_filename, rows_to_csv  # noqa: E402
 from desembarque.voyage import parse_voyage            # noqa: E402
@@ -323,7 +324,7 @@ def index_folder(folder: Path):
         data = transcribe_document(pdf, _BatchJob(pdf_pages(pdf)))
         if data.get("unavailable"):
             raise RuntimeError(data.get("message", "motor indisponível"))
-        JOBS.store(data["hash"], data)
+        JOBS.store(data["hash"], preserve_human_work(JOBS.cached(data["hash"]), data))
 
     return BATCH.start(folder, pdfs, is_cached, transcribe,
                        workers=INDEX_WORKERS)

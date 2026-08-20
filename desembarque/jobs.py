@@ -18,6 +18,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from desembarque.batch import preserve_human_work
+
 
 @dataclass
 class Job:
@@ -91,7 +93,10 @@ class JobRunner:
                     job.status = "unavailable"
                     job.message = data.get("message", "")
                 else:
-                    job.result_path = str(self.store(doc_hash, data))
+                    # reading a document again must not discard the reading a
+                    # person typed over the last one
+                    job.result_path = str(self.store(
+                        doc_hash, preserve_human_work(self.cached(doc_hash), data)))
                     job.status = "done"
             except Exception as e:  # a failed page must not kill the server
                 job.status = "error"

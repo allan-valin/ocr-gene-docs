@@ -192,3 +192,52 @@ def test_an_empty_manual_note_is_not_an_index():
     from desembarque.batch import is_indexed
     assert is_indexed({"rows": [], "notes": ""}, schema=2) is False
     assert is_indexed(None, schema=2) is False
+
+
+# ---- a person's work is never the engine's to redo ---------------------------
+
+def test_a_document_someone_corrected_is_not_overwritten_by_a_later_run():
+    """Saving a correction leaves the engine's own stamp on the record, so the
+    next schema bump marks it stale and the run reads the document again — and
+    `store` writes the whole record. Every correction a person typed would go,
+    silently, on the run that was supposed to improve the corpus."""
+    from desembarque.batch import preserve_human_work
+    existing = {"hash": "h", "engine": "paddle", "schema": 4,
+                "source": "manual", "saved_at": "2026-08-19T22:10:00",
+                "rows": [{"n": 1, "surname": "CONTADORE", "given": "GUIDO",
+                          "verified": True}]}
+    fresh = {"hash": "h", "engine": "paddle", "schema": 5,
+             "rows": [{"n": 1, "surname": "Camtadore", "given": "Guudo"}],
+             "voyage": {"ship": "Valdivia"}}
+    out = preserve_human_work(existing, fresh)
+    assert out["rows"] == existing["rows"], "the correction was overwritten"
+    assert out["source"] == "manual" and out["saved_at"] == existing["saved_at"]
+
+
+def test_the_re_read_still_brings_back_what_the_person_did_not_type():
+    """The point of reading it again is what the engine has learned since. Only
+    the rows are the person's."""
+    from desembarque.batch import preserve_human_work
+    existing = {"hash": "h", "source": "manual", "rows": [{"n": 1}]}
+    fresh = {"hash": "h", "schema": 5, "rows": [{"n": 1, "surname": "x"}],
+             "voyage": {"ship": "Valdivia"}, "engine": "paddle"}
+    out = preserve_human_work(existing, fresh)
+    assert out["voyage"] == {"ship": "Valdivia"}
+    assert out["schema"] == 5
+
+
+def test_a_record_no_person_touched_is_replaced_wholesale():
+    from desembarque.batch import preserve_human_work
+    existing = {"hash": "h", "engine": "paddle", "schema": 4, "rows": [{"n": 1}]}
+    fresh = {"hash": "h", "engine": "paddle", "schema": 5, "rows": [{"n": 2}]}
+    assert preserve_human_work(existing, fresh) == fresh
+    assert preserve_human_work(None, fresh) == fresh
+
+
+def test_an_empty_manual_note_does_not_shield_a_document_forever():
+    """Someone opens a dossier, types nothing, and leaves. Treating that as a
+    correction would freeze the document against every future improvement."""
+    from desembarque.batch import preserve_human_work
+    existing = {"hash": "h", "source": "manual", "rows": []}
+    fresh = {"hash": "h", "schema": 5, "rows": [{"n": 1}]}
+    assert preserve_human_work(existing, fresh) == fresh

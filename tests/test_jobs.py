@@ -78,3 +78,25 @@ def test_elapsed_is_reported(tmp_path):
     job = r.submit("t", "doc", 1, lambda j: {"ok": True})
     wait_for(job, {"done"})
     assert job.as_dict()["elapsed"] >= 0
+
+
+def test_transcribing_again_does_not_discard_what_a_person_typed(tmp_path):
+    """The button says "transcribe this document", not "throw away the
+    corrections". Someone fixes a page, clicks it again to pick up an engine
+    improvement, and the typing has to survive it."""
+    from desembarque.jobs import JobRunner
+    runner = JobRunner(tmp_path / "cache")
+    runner.store("h", {"hash": "h", "source": "manual", "saved_at": "2026-08-19",
+                       "rows": [{"n": 1, "surname": "CONTADORE", "verified": True}]})
+    job = runner.submit("h", "doc.pdf", 2,
+                       lambda j: {"hash": "h", "engine": "paddle", "schema": 5,
+                                  "rows": [{"n": 1, "surname": "Camtadore"}],
+                                  "voyage": {"ship": "Valdivia"}})
+    import time
+    for _ in range(200):
+        if runner.get(job.id).status in ("done", "error", "unavailable"):
+            break
+        time.sleep(0.01)
+    out = runner.cached("h")
+    assert out["rows"][0]["surname"] == "CONTADORE"
+    assert out["voyage"] == {"ship": "Valdivia"}
