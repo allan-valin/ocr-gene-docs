@@ -60,3 +60,31 @@ def ui_transcription(data: dict | None) -> dict | None:
     if isinstance(out.get("geometry"), dict):
         out["geometry"] = ui_geometry(out["geometry"])
     return out
+
+
+# What the review UI's document header shows, in the order it shows it. Every
+# one of these is absent on some page: conservation varies, and the clerk left
+# fields blank.
+META_FIELDS = ("ship", "line", "flag", "origin", "port", "arrival", "year", "passengers")
+
+
+def ui_meta(voyage: dict | None, notation: str | None = None) -> dict | None:
+    """A stored voyage in the shape the document header reads.
+
+    Only the fields the page actually stated are carried. A missing port
+    rendered as `undefined` is worse than a missing port, and an empty string
+    reads as a page that said nothing where the page was never asked — the same
+    distinction the row cells make between *ilegível* and never attempted.
+    """
+    if not voyage:
+        return None
+    out = {k: voyage[k] for k in META_FIELDS
+           if voyage.get(k) not in (None, "", [])}
+    if not out:
+        return None
+    if notation:
+        out["notation"] = notation
+    # the page it was read from, so a wrong ship can be checked against the scan
+    if voyage.get("source"):
+        out["source"] = voyage["source"]
+    return out

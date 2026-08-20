@@ -351,3 +351,35 @@ def test_a_dossier_that_states_no_voyage_carries_none(server, engine, monkeypatc
         page = 0
     data = serve.transcribe_document(folder / "doc0.pdf", Job())
     assert "voyage" not in data
+
+
+def test_the_sidebar_names_the_ship_the_document_names(server, monkeypatch):
+    """Until now every real dossier showed `—` where the ship goes, because the
+    only ship the corpus knew was the hand-made sample's."""
+    base, folder = server
+    monkeypatch.setattr(engines, "_ACTIVE", VoyageEngine())
+    docs(folder, 1)
+    from desembarque.identity import identify
+    ident = identify(folder / "doc0.pdf")
+    serve.JOBS.store(ident.doc_hash, {
+        "hash": ident.doc_hash, "engine": "fake-voyage", "notation": "OL.PRJ.19845",
+        "rows": [], "voyage": {"source": "parte", "ship": "Valdivia",
+                               "origin": "B. Aires e escalas", "arrival": "1924-12-10"},
+    })
+    out = serve.corpus(folder)
+    doc = out["documents"][0]
+    assert doc["ship"] == "Valdivia"
+    assert doc["meta"]["arrival"] == "1924-12-10"
+    assert doc["meta"]["origin"] == "B. Aires e escalas"
+
+
+def test_a_field_the_page_never_stated_is_absent_rather_than_empty(server, engine):
+    """The header line is built from whatever is known. A missing port printed
+    as `undefined` is worse than a missing port, and an empty string reads as a
+    page that said nothing where the page was never asked."""
+    from desembarque.serve_shapes import ui_meta
+    meta = ui_meta({"source": "parte", "ship": "Baden", "year": 1925}, "OL.PRJ.20039")
+    assert meta["ship"] == "Baden"
+    assert "arrival" not in meta and "origin" not in meta
+    assert meta["notation"] == "OL.PRJ.20039"
+    assert ui_meta(None, "OL.PRJ.1") is None

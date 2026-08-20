@@ -308,6 +308,26 @@ function cell(r,f,txt){
   return `<td class="cellwrap"><span contenteditable="${EDIT}" data-f="${f}" class="${cls}"
            title="${title}">${val}</span>${mark}</td>`;
 }
+// The voyage is read off the dossier's own printed form, and most of its fields
+// are missing on most pages: the clerk left them blank, or the corner is gone.
+// Joining a fixed template printed "undefined" between the bullets, which reads
+// as a page that said nothing where the page was never asked.
+function docmetaLine(){
+  const m=D.meta;
+  if(!m) return `<b>${D.ship||D.notation}</b> · ${D.notation} · página ${D.pages[pageIdx].n} de ${D.total_pages}`;
+  const bits=[];
+  if(m.ship) bits.push(`<b>${m.ship}</b>${m.flag?` (${m.flag})`:""}`);
+  if(m.line) bits.push(m.line);
+  const route=[m.origin,m.port].filter(Boolean).join(" → ");
+  if(route) bits.push(route);
+  if(m.arrival) bits.push(m.arrival);
+  else if(m.year) bits.push(String(m.year));
+  if(m.passengers) bits.push(`${m.passengers} imigrantes`);
+  if(m.notation) bits.push(m.notation);
+  const read = m.source==="parte" ? "lido da PARTE do intérprete"
+             : m.source==="lista" ? "lido do cabeçalho da lista" : "";
+  return `<span title="${read}">${bits.join(" · ")}</span>`;
+}
 function render(){
   $("#rows").innerHTML = rows.map((r,i)=>`
     <tr data-i="${i}" class="${r.verified?"verified":""}">
@@ -383,10 +403,7 @@ function openDoc(i,page){
   rows = pageRows.map(r=>({...r,verified:false}));
   sel=0; hits=[]; hitAt=-1;
   $("#scan").src=pageURL(D,D.pages[pageIdx]);
-  const m=D.meta;
-  $("#docmeta").innerHTML = m
-    ? `<b>${m.ship}</b> · ${m.line} · ${m.origin} → ${m.port} · ${m.arrival} · ${m.notation}`
-    : `<b>${D.ship}</b> · ${D.notation} · página ${D.pages[pageIdx].n} de ${D.total_pages}`;
+  $("#docmeta").innerHTML = docmetaLine();
   $("#tbl").hidden=!showRows;
   $("#empty").hidden=showRows;
   if(!showRows) renderEmpty();

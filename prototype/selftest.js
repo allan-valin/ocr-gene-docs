@@ -239,6 +239,23 @@ window.addEventListener("load",async()=>{
     }
   }
 
+  // The voyage line is built from whatever the dossier's form actually stated.
+  // A fixed template printed "undefined" between the bullets for every field
+  // the clerk left blank, which reads as a page that said nothing where the
+  // page was never asked.
+  {
+    const saved = D && D.meta;
+    if(typeof D !== "undefined" && D){
+      D.meta = {ship:"Baden", year:1925, notation:"OL.PRJ.20039", source:"parte"};
+      const line = docmetaLine();
+      ok("the header names the ship the document names", line.indexOf("Baden") >= 0);
+      ok("a field the page never stated is left out, not printed as undefined",
+         line.indexOf("undefined") < 0 && line.indexOf("null") < 0);
+      ok("a year without a full date is still shown", line.indexOf("1925") >= 0);
+      D.meta = saved;
+    }
+  }
+
   // Correcting a record is deliberate. Every cell used to be editable all the
   // time, including the ones the engine never attempted, so the page invited
   // typing into fields that had simply not been read — and a stray keystroke on

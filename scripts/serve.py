@@ -39,7 +39,7 @@ from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import BatchIndexer, collect_pdfs, is_indexed  # noqa: E402
-from desembarque.serve_shapes import ui_transcription  # noqa: E402
+from desembarque.serve_shapes import ui_meta, ui_transcription  # noqa: E402
 from desembarque.export import csv_filename, rows_to_csv  # noqa: E402
 from desembarque.voyage import parse_voyage            # noqa: E402
 from desembarque import search as searchlib          # noqa: E402
@@ -163,12 +163,14 @@ def corpus(folder: Path, limit: int = 0) -> dict:
                         f"{meta.get('fundo')}.{meta.get('series')}.{meta.get('index')}")
                         or "sem notação",
             "identified_by": ident.source,
-            "ship": (cached or {}).get("ship") or meta.get("ship") or "—",
+            "ship": (((cached or {}).get("voyage") or {}).get("ship")
+                     or (cached or {}).get("ship") or meta.get("ship") or "—"),
             "total_pages": total,
             "pages": [{"n": n, "file": f"/api/page?pdf={pdf.name}&n={n}"} for n in range(1, total + 1)],
             "rows": (cached or {}).get("rows") or (sample["rows"] if is_sample else None),
             "geometry": (cached or {}).get("geometry") or (sample["geometry"] if is_sample else None),
-            "meta": sample["document"] if is_sample else None,
+            "meta": (ui_meta((cached or {}).get("voyage"), ident.notation)
+                     or (sample["document"] if is_sample else None)),
             "transcribed_page": (cached or {}).get("transcribed_page") or (2 if is_sample else None),
             "transcribed": bool(cached) or is_sample,
         })
