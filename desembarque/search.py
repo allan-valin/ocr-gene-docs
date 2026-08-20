@@ -13,7 +13,9 @@ evidence, a confident wrong row is worse than an empty list.
 """
 from __future__ import annotations
 
+import difflib
 import json
+import re
 import unicodedata
 from pathlib import Path
 
@@ -28,6 +30,17 @@ COLUMN_HEADINGS = ("NOMES E COGNOMES", "NOME E COGNOME", "NOMES", "COGNOMES",
 SCHEMA = 5
 MIN_QUERY = 3
 MIN_SCORE = 0.10
+
+# A year in the query is worth about as much as the difference between two
+# spellings of the same surname, which is the point: it is meant to break the
+# tie a recogniser cannot, not to overrule the name.
+VOYAGE_BONUS = 0.15
+# A ship's name is one token, and trigrams are harsh on single tokens: changing
+# the last letter of `Valdivia` to `Valdivin` — exactly what the recogniser does
+# to it — costs a third of the trigram score. Edit distance is the right measure
+# for one word, and it is the same one the month names use.
+SHIP_FLOOR = 0.75
+RE_YEAR = re.compile(r"\b(1[6-9]\d{2}|20[0-2]\d)\b")
 
 
 def fold(s: str) -> str:
@@ -129,6 +142,7 @@ def _parse(f: Path, engine_only: bool) -> list[dict]:
     if engine_only and not d.get("engine"):
         return []
     out = []
+    voyage = d.get("voyage") or {}
     for r in d.get("rows", []):
         text = row_text(r)
         # the flag covers documents indexed since headings were noticed; the
@@ -140,6 +154,7 @@ def _parse(f: Path, engine_only: bool) -> list[dict]:
         out.append({
             "doc": d.get("hash", f.stem),
             "notation": d.get("notation"),
+            **{k: voyage[k] for k in ("ship", "year") if voyage.get(k)},
             "file": d.get("file"),
             "page": r.get("page"),
             "row": r.get("n"),
@@ -149,15 +164,89 @@ def _parse(f: Path, engine_only: bool) -> list[dict]:
     return out
 
 
+def split_year(query: str) -> tuple[str, int | None]:
+    """The query with any year taken out of it, and the year.
+
+    `Contadore 1924` is a name and a year, not a nine-character surname. Left in
+    the string it competes with the spelling of the name it was meant to
+    narrow.
+    """
+    m = RE_YEAR.search(query or "")
+    if not m:
+        return (query or "").strip(), None
+    rest = (query[:m.start()] + " " + query[m.end():]).strip()
+    return (rest or query.strip()), int(m.group(1))
+
+
+def ship_similarity(a: str, b: str) -> float:
+    """How close two spellings of one ship's name are."""
+    return difflib.SequenceMatcher(None, fold(a), fold(b)).ratio()
+
+
+def split_ship(query: str, rows: list[dict]) -> tuple[str, str | None]:
+    """The query with a ship's name taken out of it, and the ship.
+
+    Which word is a ship cannot be decided from the query alone, so it is
+    decided against the index: a term is a ship when it matches one that is
+    actually there. Left in the string, `Valdivia` is compared against every
+    surname on every page and dilutes the name it was typed to narrow.
+
+    A term is only removed when what remains is still a name. Somebody looking
+    for a passenger called Baden aboard the *Baden* must not be left searching
+    for nothing.
+    """
+    ships = {r["ship"] for r in rows if r.get("ship")}
+    if not ships:
+        return query, None
+    terms = query.split()
+    for i, term in enumerate(terms):
+        if len(term) < 4:
+            continue
+        best = max(ships, key=lambda sh: ship_similarity(term, sh))
+        if ship_similarity(term, best) >= SHIP_FLOOR:
+            rest = " ".join(terms[:i] + terms[i + 1:]).strip()
+            if len(fold(rest)) >= MIN_QUERY:
+                return rest, term
+    return query, None
+
+
+def voyage_bonus(row: dict, year: int | None, terms: list[str]) -> float:
+    """How much the voyage a row belongs to agrees with what was typed.
+
+    Never a filter. Most of the corpus has no voyage indexed yet, and a filter
+    would make those dossiers unfindable — which is the exact failure this tool
+    exists to prevent. A document that says nothing about its voyage is neither
+    helped nor hurt; one that contradicts the query is ranked below the rest,
+    not removed from them.
+    """
+    bonus = 0.0
+    if year and row.get("year"):
+        bonus += VOYAGE_BONUS if int(row["year"]) == year else -VOYAGE_BONUS
+    ship = row.get("ship")
+    if ship and terms:
+        # the ship's name came off the page through the same recogniser as the
+        # surnames, so it is matched as forgivingly as they are
+        best = max(ship_similarity(t, ship) for t in terms)
+        if best >= SHIP_FLOOR:
+            bonus += VOYAGE_BONUS * best
+    return bonus
+
+
 def search(rows: list[dict], query: str, limit: int = 50,
            min_score: float = MIN_SCORE) -> list[dict]:
     """Ranked matches, best first. An unrecognisable query returns nothing."""
     if len(fold(query)) < MIN_QUERY:
         return []
+    name_q, year = split_year(query)
+    name_q, ship_term = split_ship(name_q, rows)
+    terms = [ship_term] if ship_term else []
     scored = []
     for r in rows:
-        s = similarity(query, r["text"])
+        s = similarity(name_q, r["text"])
+        # the floor is applied to the name alone: the voyage orders what was
+        # found, it does not decide what counts as found
         if s >= min_score:
-            scored.append({**r, "score": round(s, 3)})
+            rank = max(0.0, min(1.0, s + voyage_bonus(r, year, terms)))
+            scored.append({**r, "score": round(rank, 3), "name_score": round(s, 3)})
     scored.sort(key=lambda h: (-h["score"], h.get("file") or "", h["row"] or 0))
     return scored[:limit]

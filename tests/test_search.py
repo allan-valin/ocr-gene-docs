@@ -182,3 +182,92 @@ def test_matching_the_whole_name_beats_matching_one_word_of_it():
     right = similarity("EMMA CONTADORE", "Nemma Comtadiie")
     lucky = similarity("EMMA CONTADORE", "Nina Emma Lundqwist")
     assert right > lucky
+
+
+# ---- the voyage, as something to search with --------------------------------
+#
+# A person looking for an ancestor knows the ship, or the year, or the port far
+# more reliably than they know how a clerk spelled a surname. Until the dossiers
+# stated their own voyage there was nothing to narrow a name against; now there
+# is, and it is the cheapest way to cut the pool a fuzzy match competes in.
+
+def voyaged(*docs):
+    """Rows carrying the voyage of the document they came from."""
+    rows = []
+    for d, (ship, year, names) in enumerate(docs):
+        for i, t in enumerate(names):
+            rows.append({"doc": f"D{d}", "file": f"d{d}.pdf", "page": 2,
+                         "row": i + 1, "text": t, "ship": ship, "year": year})
+    return rows
+
+
+ROWS = voyaged(
+    ("Valdivia", 1924, ["Guudo Camtadore", "Jose Muerso"]),
+    ("Baden", 1925, ["Guido Contadore"]),
+)
+
+
+def test_a_year_in_the_query_is_not_matched_against_the_name():
+    """`Contadore 1924` is a name and a year, not a nine-character surname."""
+    hits = search(ROWS, "Camtadore 1924")
+    assert hits, "the year swallowed the query"
+    assert hits[0]["text"] == "Guudo Camtadore"
+
+
+def test_the_right_year_lifts_a_row_without_overruling_the_name():
+    """The voyage breaks ties the recogniser cannot; it does not decide the
+    match. `Guido Contadore` spelled exactly stays first even when the year
+    points elsewhere — the user may be wrong about the year, and the name is
+    the stronger evidence. What the year changes is everything below that."""
+    with_year = {h["text"]: h["score"] for h in search(ROWS, "Camtadore 1924")}
+    without = {h["text"]: h["score"] for h in search(ROWS, "Camtadore")}
+    assert with_year["Guudo Camtadore"] > without["Guudo Camtadore"]
+
+
+def test_a_row_from_a_year_the_query_rules_out_falls_behind():
+    """Thin margins are what a seventy-thousand-row pool destroys, and this is
+    where the year earns its place: not by winning the top spot but by pushing
+    the wrong ship down the list."""
+    with_year = {h["text"]: h["score"] for h in search(ROWS, "Camtadore 1924")}
+    without = {h["text"]: h["score"] for h in search(ROWS, "Camtadore")}
+    assert with_year["Guido Contadore"] < without["Guido Contadore"]
+
+
+def test_naming_the_ship_does_the_same():
+    lifted = {h["text"]: h["score"] for h in search(ROWS, "Contadore Valdivia")}
+    plain = {h["text"]: h["score"] for h in search(ROWS, "Contadore")}
+    assert lifted["Guudo Camtadore"] > plain["Guudo Camtadore"]
+
+
+def test_the_ship_is_not_compared_against_every_surname_on_every_page():
+    """Which word is a ship cannot be decided from the query alone, so it is
+    decided against the index. Left in the string it is matched against each
+    name and dilutes the one it was typed to narrow."""
+    from desembarque.search import split_ship
+    assert split_ship("Contadore Valdivia", ROWS) == ("Contadore", "Valdivia")
+    assert split_ship("Guido Contadore", ROWS) == ("Guido Contadore", None)
+
+
+def test_a_ship_the_recogniser_mangled_still_matches_a_typed_one():
+    """The ship's name came off the page through the same recogniser as the
+    surnames, so it is as mangled as they are."""
+    rows = voyaged(("Valdivin", 1924, ["Jose Muerso"]))
+    from desembarque.search import split_ship
+    assert split_ship("Muesso Valdivia", rows) == ("Muesso", "Valdivia")
+
+
+def test_a_passenger_whose_name_is_also_the_ship_is_still_searchable():
+    """Somebody looking for a passenger called Baden aboard the Baden must not
+    be left searching for nothing."""
+    from desembarque.search import split_ship
+    rows = voyaged(("Baden", 1925, ["Baden"]))
+    assert split_ship("Baden", rows) == ("Baden", None)
+
+
+def test_a_document_with_no_voyage_is_never_hidden_by_one():
+    """Most of the corpus is not indexed for voyage yet, and a filter would make
+    those dossiers unfindable — the failure this whole tool exists to prevent."""
+    rows = ROWS + [{"doc": "D9", "file": "d9.pdf", "page": 2, "row": 1,
+                    "text": "Guido Contadore"}]
+    hits = search(rows, "Guido Contadore 1924")
+    assert any(h["doc"] == "D9" for h in hits)
