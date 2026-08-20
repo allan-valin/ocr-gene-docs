@@ -486,3 +486,39 @@ def test_a_dossier_is_read_until_its_voyage_names_a_ship(server, monkeypatch):
     assert v["port"] == "Santos"
     assert v["ship"] == "Valdivia"
     assert v["arrival"] == "1924-12-10"
+
+
+def test_the_form_a_voyage_was_read_from_is_kept_with_the_record(server, monkeypatch):
+    """Reading a page as prose costs twenty seconds and re-reading the corpus
+    costs hours, so every improvement to the parser was making the whole corpus
+    stale and unaffordable to refresh. The text and its boxes are cheap to keep
+    and are what the voyage was derived from — kept, a parser change is a
+    re-parse of what is already on disk."""
+    base, folder = server
+    monkeypatch.setattr(engines, "_ACTIVE", VoyageEngine())
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+    docs(folder, 1)
+
+    class Job:
+        total = 2
+        page = 0
+    data = serve.transcribe_document(folder / "doc0.pdf", Job())
+    forms = [p.get("form") for p in data["pages"] if p.get("form")]
+    assert forms, "the page the voyage came from was thrown away"
+    assert "Valdivia" in forms[0]["text"]
+
+
+def test_a_page_read_only_for_its_rows_keeps_no_form(server, engine, monkeypatch):
+    """Most pages are never read as prose at all, and an empty form on every one
+    of them is noise in a file somebody may open."""
+    base, folder = server
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+    docs(folder, 1)
+
+    class Job:
+        total = 1
+        page = 0
+    data = serve.transcribe_document(folder / "doc0.pdf", Job())
+    assert all("form" not in p for p in data["pages"])

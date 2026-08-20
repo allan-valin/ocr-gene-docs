@@ -280,7 +280,15 @@ def transcribe_document(pdf: Path, job) -> dict:
                            is_complete(voyage))
         res = eng.transcribe_page(img, classify(n), source=pdf, page=n,
                                   text=want)
-        pages.append({"n": n, "kind": res.kind, "error": res.error})
+        page = {"n": n, "kind": res.kind, "error": res.error}
+        # What the page said as prose, and where each fragment sat. Reading a
+        # page costs twenty seconds and re-reading the corpus costs hours, so
+        # every improvement to the way these forms are parsed was making the
+        # whole corpus stale and unaffordable to refresh. Kept, a parser change
+        # becomes a re-parse of what is already on disk.
+        if res.text or res.fragments:
+            page["form"] = {"text": res.text, "fragments": res.fragments}
+        pages.append(page)
         if res.kind == "cover" and res.text:
             cover_text = cover_text or res.text
         # A page with no rows is not a page with nothing on it. Most of them
