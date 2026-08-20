@@ -67,6 +67,84 @@ The five recovered pages went from zero coverage to 0.50–0.79. The choice
 between the two combs is now `choose_comb`, a function tested on the numbers real
 pages produce, which is how its thresholds were set.
 
+### The dossiers now state their own voyage  (bc354fe … 83dcdd1)
+
+Every dossier says, in print, which ship it is about, where she sailed from and
+when she arrived. None of it was in the index. Search had only the name to go
+on, and the names come out of a cursive hand through a recogniser: the measured
+winning margins are thin — some correct hits score 0.13 — and thin margins are
+what a seventy-thousand-row pool destroys. A person looking for an ancestor
+knows the ship, or the year, or the port far more reliably than they know how a
+clerk spelled a surname.
+
+Two forms carry it. The interpreter's **PARTE**, which is what most of the
+"blank" pages turned out to be, and the printed **header above every passenger
+list**. Seven different companies' printings appear in the corpus and no two are
+worded alike — `Lista de entrada de passageiros no paquete`, `Relação dos
+passageiros que desembarcaram neste porto vindo no vapor`, `Porto de`.
+
+The division of trust is the design: the labels are printed and read well, the
+values beside them are handwritten and do not, so the labels are matched and the
+value is reported verbatim. The month is the one exception — it is one of a
+couple of dozen known words, in Portuguese *and* French, since a Compagnie de
+Navigation Sud Atlantique list is dated `Octobre`.
+
+Nothing is completed from a partial reading:
+
+| read | recorded |
+|---|---|
+| `entrado em 10 deDesembro de 1924` | `1924-12-10` |
+| `entrado em f de Novemlro de 1923` | November 1923, no date — the day is a stroke |
+| `Entregou 1 lista com H immigrantes` | no headcount — `H` is not a number |
+| `Santos, / de / de 19` | no date at all — the clerk left it blank |
+| `vindos no paquete Inglez` | a flag, not a ship |
+| `2104`, `Facional`, `ri  ad` | refused — a page number and two pieces of letterhead |
+
+Search uses it without ever filtering on it. A year is taken out of the query
+rather than compared against surnames; which word is a ship is decided against
+the index rather than guessed. It **reorders and does not decide**: an
+exactly-spelled name stays first even when the year points elsewhere, because
+the user may be wrong about the year. Most of the corpus has no voyage indexed
+yet and a filter would make those dossiers unfindable, which is the failure this
+tool exists to prevent.
+
+### Two silent-loss bugs found on the way  (64204b5, 30e1726)
+
+**A re-read would have destroyed every correction anybody had typed.** Saving a
+corrected row writes the whole record, engine stamp included, so the next schema
+bump marked it stale, the run read the document again, and storing is a
+whole-record write. The schema stamp had just gone up. Both paths that store a
+reading now keep the person's rows.
+
+**The browser test had been green against a two-day-old page.** The prototype
+build died on an import error and left the previous `index.html` in place; the
+smoke run went on driving it and reporting 35 passing assertions. Behind it were
+nine real failures. The build now puts the repository root on `sys.path`, and
+the smoke test refuses to run against a build older than its source.
+
+### Indexing the corpus had to be made possible
+
+The first full run reported **twenty-two hours remaining**. The cost is not
+recognition, it is detection over the whole sheet — these scans are 5300×3800,
+and reading one whole page measured 74 s.
+
+| | |
+|---|---|
+| full page, 5287 px | 74.3 s |
+| 2400 px | 29.9 s |
+| **2000 px (now)** | ~22 s |
+| 1400 px | 14.3 s — loses the quotation marks that tell a ship from its flag |
+
+Three changes together: read a whole page from a 2000 px copy; read only the
+strip *above* the table on a page that has a grid, since that is where the
+header is; and stop reading a dossier as prose once the notation and the voyage
+are both in hand — page one is the archive's cover card and states no voyage at
+all.
+
+Scaling turned out to read *better*, not worse: the detector groups the lines
+the way the form is printed, so the ship and its nationality come back on the
+one line they share instead of three.
+
 ### What the remaining blank pages actually are
 
 Most of the ten are **not passenger lists**. They are the interpreter's *PARTE*
