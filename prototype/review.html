@@ -252,7 +252,7 @@ function sim(a,b){
 // looking for "Paul" returns every passenger living in São Paulo, which buries
 // the one thing a genealogical search is actually for.
 const SCOPES={
-  name:        r=>[r.given,r.surname],
+  name:        r=>[r.name_raw,r.given,r.surname],
   nationality: r=>[r.nationality],
   age:         r=>[r.age],
   sex:         r=>[r.sex],
@@ -260,7 +260,7 @@ const SCOPES={
   occupation:  r=>[r.occupation],
   origin:      r=>[r.origin],
   notes:       r=>[r.notes],
-  all:         r=>[r.given,r.surname,r.nationality,r.age,r.sex,r.status,r.occupation,r.origin,r.notes],
+  all:         r=>[r.name_raw,r.given,r.surname,r.nationality,r.age,r.sex,r.status,r.occupation,r.origin,r.notes],
 };
 function rowMatches(r,q,scope){
   if(!q) return false;
@@ -336,12 +336,31 @@ function docmetaLine(){
              : m.source==="lista" ? "lido do cabeçalho da lista" : "";
   return `<span title="${read}">${bits.join(" · ")}</span>`;
 }
+// What the page says, in the order it says it. The cell used to show the split
+// of the name put back together the other way round — BS.ENT.013990 reads
+// `Raymundo Cassaudii` and the row showed `Cassaudii Nayomgo`. The split into
+// surname and given name is a derivation, and on these forms it is derived the
+// wrong way round often enough to matter; the reading is not.
+function nameText(r){
+  if(r.name_raw) return r.name_raw;
+  return [r.given, r.surname].filter(Boolean).join(" ");
+}
+// The same convention as desembarque/engine_paddle.py split_name: these tables
+// are written surname-first with compound surnames spelled out and the given
+// name last. Editing a cell used to split it the other way round, so a person
+// correcting a name silently reversed what the engine had derived.
+function splitName(t){
+  const p=(t||"").trim().split(/\s+/).filter(Boolean);
+  if(!p.length) return ["",""];
+  if(p.length===1) return [p[0],""];
+  return [p.slice(0,-1).join(" "), p[p.length-1]];
+}
 function render(){
   $("#rows").innerHTML = rows.map((r,i)=>`
     <tr data-i="${i}" class="${r.verified?"verified":""}">
       <td class="num">${r.n}</td>
       <td class="name ${r.handwritten?'hw':''}"><span contenteditable="${EDIT}" data-f="name"
-          title="${r.handwritten?'entrada manuscrita':''}">${r.given} ${r.surname}</span>${r.conf&&'surname' in r.conf?dot(r,'surname'):''}</td>
+          title="${r.handwritten?'entrada manuscrita':''}">${nameText(r)}</span>${r.conf&&'surname' in r.conf?dot(r,'surname'):''}</td>
       ${cell(r,"nationality",r.nationality)}
       ${cell(r,"age",r.age)}
       <td>${r.sex||""}</td>
@@ -879,8 +898,10 @@ $("#rows").addEventListener("input",e=>{
   const idx=+e.target.closest("tr").dataset.i;
   const val=e.target.textContent.trim();
   if(f==="name"){
-    const parts=val.split(/\s+/);
-    rows[idx].given=parts.shift()||""; rows[idx].surname=parts.join(" ");
+    // what the person typed is the reading; the split is derived from it
+    rows[idx].name_raw = val;
+    const [sur, giv] = splitName(val);
+    rows[idx].surname = sur; rows[idx].given = giv;
   } else {
     rows[idx][f] = val==="" || val==="ilegível" ? null : val;
   }

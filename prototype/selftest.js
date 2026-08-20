@@ -239,6 +239,22 @@ window.addEventListener("load",async()=>{
     }
   }
 
+  // The name cell shows what the page says. It was showing the *split* of the
+  // name put back together the other way round: BS.ENT.013990 reads `Raymundo
+  // Cassaudii` and the row showed `Cassaudii Nayomgo`. A transcription that
+  // reorders the document is asserting something the document does not say.
+  {
+    const row = {name_raw:"Nayomgo Cassaudii", surname:"Nayomgo", given:"Cassaudii"};
+    ok("the name cell shows the reading verbatim", nameText(row) === "Nayomgo Cassaudii");
+    ok("a row with no verbatim reading still shows a name",
+       nameText({surname:"SILVA", given:"JOSE"}).indexOf("SILVA") >= 0);
+    // same convention as desembarque/engine_paddle.py split_name
+    ok("the split takes the given name last",
+       String(splitName("ROCA REBULLIDA AMPARO")) === "ROCA REBULLIDA,AMPARO");
+    ok("one word is a surname on its own",
+       String(splitName("CASSAUDII")) === "CASSAUDII,");
+  }
+
   // Beside the ship in the folder list, when she landed: that is how somebody
   // with an approximate date picks the handful of dossiers worth opening.
   {
