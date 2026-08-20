@@ -246,6 +246,11 @@ def text_wanted(page_n: int, have_notation: bool, have_voyage: bool,
         return True
     if have_voyage:
         return False
+    # Page one is the archive's own cover card: it carries the notation and
+    # says nothing about a ship. Once the filename has given the notation there
+    # is nothing on it worth detection over the whole sheet.
+    if page_n == 1:
+        return False
     return page_n <= limit
 
 

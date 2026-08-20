@@ -27,7 +27,7 @@ COLUMN_HEADINGS = ("NOMES E COGNOMES", "NOME E COGNOME", "NOMES", "COGNOMES",
 # Stored transcriptions carry a schema number from now on. Records written
 # before this have none, and are read as version 1 — the first schema change
 # must not silently drop everything already indexed.
-SCHEMA = 6
+SCHEMA = 7
 MIN_QUERY = 3
 MIN_SCORE = 0.10
 

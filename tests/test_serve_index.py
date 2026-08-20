@@ -425,3 +425,12 @@ def test_a_document_nothing_identifies_is_still_read_past_that_limit():
     """Losing the notation means the dossier is filed under nothing at all."""
     from serve import text_wanted, TEXT_PAGES
     assert text_wanted(TEXT_PAGES + 3, have_notation=False, have_voyage=True)
+
+
+def test_the_cover_card_is_not_read_for_a_voyage_it_never_states():
+    """Page one is the archive's own cover card. It carries the notation and
+    says nothing about the ship, so once the filename has given the notation
+    there is nothing on it worth twenty seconds of detection."""
+    from serve import text_wanted
+    assert not text_wanted(1, have_notation=True, have_voyage=False)
+    assert text_wanted(2, have_notation=True, have_voyage=False)

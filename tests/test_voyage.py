@@ -554,3 +554,27 @@ def test_a_fragment_of_the_letterhead_is_not_a_ship():
     v = parse_voyage(HEADER_013990)
     assert v.ship is None
     assert v.line == "Conpanhia Nacional de Navegação Costeira"
+
+
+def test_a_scattering_of_letters_is_not_a_name():
+    """Real output from the corpus run: `ri  ad` was filed as a ship and
+    `RI VE` as a port of origin. Both are the detector's account of a rubber
+    stamp. A name has a word in it."""
+    from desembarque.voyage import plausible_value
+    assert plausible_value("ri  ad") is None
+    assert plausible_value("RI VE") is None
+    assert plausible_value("Itapuca") == "Itapuca"
+    assert plausible_value("B. Aires e escalas") == "B. Aires e escalas"
+
+
+def test_a_month_with_no_year_beside_it_is_not_a_date():
+    """Also from the run: `Lista de entrada de passagiras no Paguete...` was
+    recorded as March, because one word in a badly-read line came within reach
+    of a month name. On the dateline there is no `entrado em` to vouch for it,
+    so the year standing next to it is what makes it a date at all."""
+    v = parse_voyage("""POLICIA DO PORTO
+Lloyd Brazileiro
+Santos,
+Lista de entrada de passagiras no Paguete aco nal dapuna" RI""")
+    assert v is not None
+    assert v.month is None and v.arrival_raw is None

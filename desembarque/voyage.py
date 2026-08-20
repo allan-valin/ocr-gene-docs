@@ -267,10 +267,30 @@ def _read_date(v: Voyage, lines: list[str]) -> None:
         return
 
 
-RE_YEAR_TAIL = re.compile(r"\bde\s*(\d{2}\s*\d{0,2})\b", re.I)
+# `daPoliciade 1917` is one printed line and one written year run together by
+# the detector, so the `de` before the year does not always start a word.
+RE_YEAR_TAIL = re.compile(r"de\s*(\d{2}\s*\d{0,2})\b", re.I)
 # The form prints `_______,` and the clerk writes the date on past the comma,
 # so the port is what stands before the form's own comma, not the whole line.
 RE_PORT = re.compile(r"^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.' ]{2,23}?)\s*,")
+
+
+def plausible_value(value: str | None) -> str | None:
+    """The value, if it reads as a name rather than as noise.
+
+    From the corpus run: `ri  ad` was filed as a ship and `RI VE` as a port of
+    origin. Both are the detector's account of a rubber stamp across the
+    letterhead. A name has a word in it — three letters running — and is mostly
+    letters.
+    """
+    if not value:
+        return None
+    letters = [c for c in value if c.isalpha()]
+    if len(letters) < 4 or len(letters) < len(value.replace(" ", "")) / 2:
+        return None
+    if not any(len([c for c in w if c.isalpha()]) >= 3 for w in value.split()):
+        return None
+    return value
 
 
 def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
@@ -282,10 +302,8 @@ def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
     `Facional` — half of the `Nacional` printed above it — is the letterhead
     wearing a vessel's name.
     """
+    value = plausible_value(value)
     if not value:
-        return None
-    letters = [c for c in value if c.isalpha()]
-    if len(letters) < 3 or len(letters) < len(value.replace(" ", "")) / 2:
         return None
     word = fold(value)
     for printed in fold(letterhead or "").split():
@@ -324,7 +342,6 @@ def _read_dateline(v: Voyage, lines: list[str]) -> None:
                       if month_number(w)), None)
         if not month:
             continue
-        v.month = month
         # the day is the token before the month, where there is one that reads
         # as a number; `em 19 de Marco` is the common shape
         words = line.split()
@@ -336,10 +353,15 @@ def _read_dateline(v: Voyage, lines: list[str]) -> None:
         day = int(prev) if prev and 1 <= int(prev) <= 31 else None
         window = " ".join(lines[i:i + 3])
         m = RE_YEAR_TAIL.search(window)
-        if m:
-            digits = re.sub(r"\s+", "", m.group(1))
-            v.year = int(digits) if len(digits) == 4 else None
-        if day and v.year and v.month:
+        digits = re.sub(r"\s+", "", m.group(1)) if m else ""
+        if len(digits) != 4:
+            # There is no `entrado em` on this form to vouch for the word, and
+            # one word in a badly-read line comes within reach of a month name
+            # often enough to matter. The year standing beside it is what makes
+            # it a date rather than a coincidence.
+            continue
+        v.month, v.year = month, int(digits)
+        if day:
             v.arrival = f"{v.year:04d}-{v.month:02d}-{day:02d}"
         v.arrival_raw = _clean(window[:60])
         return
@@ -383,7 +405,7 @@ def parse_voyage(text: str) -> Voyage | None:
         else:
             v.ship = beside
         v.ship = plausible_ship(v.ship, v.line)
-        v.origin = _beside(RE_ORIGIN, lines)
+        v.origin = plausible_value(_beside(RE_ORIGIN, lines))
         v.port = port
         _read_date(v, lines)
         if v.year is None:
@@ -404,7 +426,7 @@ def parse_voyage(text: str) -> Voyage | None:
         v.flag = _clean(v.flag[:v.flag.index(quoted)]) or None
     v.ship = plausible_ship(quoted or _above(RE_PAQUETE, lines, skip=v.flag), None)
 
-    v.origin = _beside(RE_ORIGIN, lines)
+    v.origin = plausible_value(_beside(RE_ORIGIN, lines))
 
     _read_date(v, lines)
 
