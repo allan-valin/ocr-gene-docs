@@ -377,6 +377,40 @@ def _read_port(lines: list[str]) -> str | None:
     return None
 
 
+# The port stamped every one of these sheets on arrival, and the stamp is inked
+# rather than written: `MAR191919`, `DEZ 1924`. The handwritten date is lost on
+# nearly every dossier, and this is the same fact printed by a machine.
+MONTH_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun",
+              "jul", "ago", "set", "out", "nov", "dez"]
+RE_STAMP = re.compile(r"\b(" + "|".join(MONTH_ABBR) + r")\.?\s*([\d\s]{4,12})", re.I)
+RE_CENTURY = re.compile(r"(1[89]\d\d)")
+
+
+def stamp_year(text: str) -> int | None:
+    """The year in a port's date stamp, or None.
+
+    Only the year. The day sits beside it in the same run of digits and cannot
+    be told from it with any confidence — `MAR191919` is the nineteenth of
+    March, or it is not — and the year is what a search actually narrows by.
+
+    A stamp the recogniser broke yields nothing. `ABR 2 917 2` is the second of
+    April 1917 with the century's `1` dropped, and guessing it back is how a
+    plausible wrong year gets onto a record used as evidence.
+    """
+    m = RE_STAMP.search(text or "")
+    if not m:
+        return None
+    digits = re.sub(r"\s+", "", m.group(2))
+    # These stamps read `JUN 23 1917`: a day, then the year, and the year is
+    # last. Searching the run for anything that looks like a year instead reads
+    # `JUN 19 1918` as 1919 — the day and the century run together — which is a
+    # wrong year rather than a missing one.
+    if not 4 <= len(digits) <= 6:
+        return None
+    tail = digits[-4:]
+    return int(tail) if RE_CENTURY.fullmatch(tail) else None
+
+
 def _read_dateline(v: Voyage, lines: list[str]) -> None:
     """The date on a list header, which has no `entrado em` to anchor on.
 
@@ -519,6 +553,9 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
         _read_date(v, lines)
         if v.year is None:
             _read_dateline(v, lines)
+        if v.year is None:
+            # the port's own stamp, which is inked where the date is written
+            v.year = next((y for y in (stamp_year(l) for l in lines) if y), None)
         return v
 
     v.flag = _beside(RE_PAQUETE, lines)
@@ -538,6 +575,8 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
     v.origin = plausible_value(_beside(RE_ORIGIN, lines))
 
     _read_date(v, lines)
+    if v.year is None:
+        v.year = next((y for y in (stamp_year(l) for l in lines) if y), None)
 
     for a, b in zip(lines, lines[1:] + [""]):
         m = RE_LANDED.search(f"{a} {b}")

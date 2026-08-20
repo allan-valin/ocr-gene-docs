@@ -731,3 +731,39 @@ def test_four_letters_is_not_a_ship_on_this_archive():
     assert plausible_ship("RI IVEO", None) is None
     assert plausible_ship("Baden", None) == "Baden"
     assert plausible_ship("San-America", None) == "San-America"
+
+
+def test_a_port_stamp_gives_up_the_year_the_hand_did_not():
+    """The arrival date is handwritten and mostly lost — no dossier in the run
+    resolved a year. The port's rubber stamp is inked and does come through:
+    `MAR191919` is March 19th, 1919. It is read only for its year, because the
+    day in it cannot be told from the year beside it with any confidence."""
+    from desembarque.voyage import stamp_year
+    assert stamp_year("JUN 23 1917") == 1917
+    assert stamp_year("MAR191919") == 1919
+    assert stamp_year("ABR 2 1917") == 1917
+    assert stamp_year("DEZ 1924") == 1924
+
+
+def test_the_year_is_the_end_of_the_stamp_not_whatever_looks_like_one():
+    """`JUN 19 1918` read as 1919: the day and the century run together in the
+    digits, and hunting the run for anything year-shaped finds the wrong four.
+    A wrong year is worse than a missing one — it answers a search."""
+    from desembarque.voyage import stamp_year
+    assert stamp_year("JUN 19 1918") == 1918
+    assert stamp_year("JUL 5 1918") == 1918
+    assert stamp_year("OUT 27 1917") == 1917
+
+
+def test_a_stamp_the_recogniser_broke_yields_nothing():
+    """`ABR 2 917 2` is April 2nd 1917 with the century's `1` lost. Guessing it
+    back is how a plausible wrong year gets onto a record used as evidence."""
+    from desembarque.voyage import stamp_year
+    assert stamp_year("ABR 2 917 2") is None
+
+
+def test_a_word_that_merely_starts_like_a_month_is_not_a_stamp():
+    from desembarque.voyage import stamp_year
+    assert stamp_year("MARQUES PEREIRA") is None
+    assert stamp_year("Setubal 40") is None
+    assert stamp_year("") is None
