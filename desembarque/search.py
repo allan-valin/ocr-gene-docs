@@ -132,14 +132,15 @@ _ROWS: dict[str, tuple[tuple[int, int], list[dict]]] = {}
 
 
 def _rows_of(f: Path, engine_only: bool,
-             ships: dict[str, str] | None = None) -> list[dict]:
+             ships: dict[str, str] | None = None, token: int = 0) -> list[dict]:
     try:
         st = f.stat()
     except OSError:
         return []
     # the catalogue is part of what a row says it is, so a different catalogue
-    # is a different reading and must not come out of the cache
-    stamp = (st.st_mtime_ns, st.st_size, len(ships or ()))
+    # is a different reading and must not come out of the cache. The token is
+    # computed once per load rather than once per file.
+    stamp = (st.st_mtime_ns, st.st_size, token)
     key = f"{f}|{int(engine_only)}"
     hit = _ROWS.get(key)
     if hit is not None and hit[0] == stamp:
@@ -163,9 +164,10 @@ def load_index(cache: Path, engine_only: bool = True,
     """
     out: list[dict] = []
     present = set()
+    token = hash(frozenset((ships or {}).items()))
     for f in sorted(Path(cache).glob("*.json")):
         present.add(f"{f}|{int(engine_only)}")
-        out.extend(_rows_of(f, engine_only, ships))
+        out.extend(_rows_of(f, engine_only, ships, token))
     for gone in [k for k in _ROWS if k.endswith(f"|{int(engine_only)}")
                  and k not in present]:
         del _ROWS[gone]        # a deleted transcription leaves the index

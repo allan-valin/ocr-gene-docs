@@ -407,3 +407,17 @@ def test_a_surname_that_looks_like_a_port_is_still_a_passenger():
     from desembarque.search import is_heading
     for name in ("Santos", "JOSE SANTOS", "Maria da Silva", "Nacional Pereira"):
         assert not is_heading(name), name
+
+
+def test_a_changed_catalogue_is_not_served_from_the_cache(tmp_path):
+    """Rows are cached by the file's mtime, and the catalogue is part of what a
+    row says it is. Two folders with the same number of ships in them are not
+    the same folder."""
+    from desembarque.search import load_index
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "h", "engine": "paddle", "file": "d.pdf", "schema": 12,
+        "rows": [{"n": 1, "surname": "CONTADORE"}],
+    }), encoding="utf-8")
+    first = load_index(tmp_path, ships={"d.pdf": "gelria"})[0]["ship"]
+    second = load_index(tmp_path, ships={"d.pdf": "itapuca"})[0]["ship"]
+    assert (first, second) == ("gelria", "itapuca")
