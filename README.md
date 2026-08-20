@@ -37,6 +37,13 @@ Working:
   hours, failures named rather than counted, and a run resumes from the cache having redone
   nothing. This is the flow the tool is for: nobody knows which dossier holds their
   ancestor, which is the whole problem.
+* **Every dossier states its own voyage.** The ship, the port she sailed from, the
+  arrival date and the headcount are printed on two forms — the interpreter's *PARTE*
+  and the header above every passenger list — in seven companies' different wordings,
+  and all of them are read. Nothing is completed from a partial reading: a day the
+  recogniser made an `f` of leaves a month and a year and no date, `lista com H
+  immigrantes` is not a headcount, and `vindos no paquete Inglez` is a flag rather than
+  a ship.
 * **Search across everything indexed** — matching is deliberately forgiving, because the
   names came out of a cursive hand through a recogniser. Someone typing "Guido Contadore"
   finds the row read as "Guudo Camtadore". Clicking a result opens the document at that row
@@ -49,7 +56,11 @@ Honest about the limits:
   pool is small. Measured at three pool sizes, typed pages hold (26/26 in the top five at
   3,430 rows) and handwritten ones erode: 5 of 6 names ranked first at a thousand rows,
   4 of 6 at three thousand, with one lost to an unrelated word printed on another page.
-  A recogniser that reads handwriting is the next thing this needs.
+  A recogniser that reads handwriting is the next thing this needs — and a searcher can
+  now say the ship or the year, which reorders the thin margins that erosion lives in.
+  Pretrained handwriting models were measured against this archive and lost to the
+  printed-text recogniser (CER 0.61 against 0.21, at 8 s a row), so this needs training
+  data of its own rather than somebody else's model.
 * **Some documents still yield nothing.** Of eighty-nine benchmarked pages, ten come back
   without a row; on inspection most are not passenger lists at all but the interpreter's
   *PARTE* form, where no rows is the right answer — and that form names the ship, the port
