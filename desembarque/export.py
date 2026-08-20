@@ -21,6 +21,11 @@ header would invite exactly the reading it does not support.
 Blank rows are kept. A blank line on these forms means the information was not
 known, which is a fact about the page; dropping it would silently renumber
 everyone below it.
+
+The voyage travels on every row for the same reason the notation does: a
+spreadsheet gets sorted and filtered, and a row has to stand alone. Without the
+ship and the date the row says only that somebody with a mangled name is written
+on a page somewhere, which is not evidence of anything.
 """
 from __future__ import annotations
 
@@ -28,9 +33,21 @@ import csv
 import io
 
 FIELDS = [
-    "notacao", "arquivo", "navio", "pagina", "linha",
-    "nome_lido", "sobrenome", "nome", "origem", "score_motor",
+    "notacao", "arquivo", "navio", "procedencia", "data_chegada",
+    "pagina", "linha", "nome_lido", "sobrenome", "nome", "origem", "score_motor",
 ]
+
+
+def _arrival(voyage: dict) -> str:
+    """The date the ship landed, as far as the page actually stated it.
+
+    A full date where all three parts were read, the year alone where the day
+    was a stroke nobody can make out. Never a completed guess: a plausible wrong
+    date on a document taken to a registry is the worst kind of wrong.
+    """
+    if voyage.get("arrival"):
+        return str(voyage["arrival"])
+    return str(voyage.get("year") or "")
 
 
 def _origin(row: dict, doc: dict) -> str:
@@ -43,12 +60,15 @@ def rows_to_csv(doc: dict) -> str:
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=FIELDS, lineterminator="\n")
     w.writeheader()
+    voyage = doc.get("voyage") or {}
     for row in doc.get("rows") or []:
         conf = row.get("conf") or {}
         w.writerow({
             "notacao": doc.get("notation") or "",
             "arquivo": doc.get("file") or "",
-            "navio": doc.get("ship") or "",
+            "navio": voyage.get("ship") or doc.get("ship") or "",
+            "procedencia": voyage.get("origin") or "",
+            "data_chegada": _arrival(voyage),
             "pagina": row.get("page") or "",
             "linha": row.get("n") or "",
             "nome_lido": row.get("name_raw") or "",

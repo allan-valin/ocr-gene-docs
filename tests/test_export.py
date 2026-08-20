@@ -86,3 +86,44 @@ def test_confidence_is_exported_but_not_dressed_up_as_accuracy():
     head = lines(rows_to_csv(DOC))[0].split(",")
     assert "score_motor" in head
     assert "precisao" not in head and "confianca" not in head
+
+
+VOYAGE_DOC = {
+    "notation": "OL.PRJ.19845", "file": "BR_..._19845.pdf", "engine": "paddle",
+    "voyage": {"source": "parte", "ship": "Valdivia", "origin": "B. Aires e escalas",
+               "arrival": "1924-12-10", "year": 1924},
+    "rows": [{"n": 1, "page": 2, "name_raw": "Guudo Camtadore",
+              "surname": "Guudo", "given": "Camtadore", "conf": {"surname": 0.6}}],
+}
+
+
+def test_the_ship_and_the_date_travel_with_the_row():
+    """A spreadsheet taken to an office says an ancestor arrived on a named ship
+    on a named date. Without those the row says only that somebody with a
+    mangled name is written on a page somewhere."""
+    from desembarque.export import rows_to_csv
+    import csv as _csv
+    out = list(_csv.reader(lines(rows_to_csv(VOYAGE_DOC))))
+    head, row = out[0], out[1]
+    assert row[head.index("navio")] == "Valdivia"
+    assert row[head.index("data_chegada")] == "1924-12-10"
+    assert row[head.index("procedencia")] == "B. Aires e escalas"
+
+
+def test_a_year_without_a_full_date_is_exported_as_the_year():
+    from desembarque.export import rows_to_csv
+    import csv as _csv
+    doc = {**VOYAGE_DOC, "voyage": {"ship": "Baden", "year": 1925}}
+    out = list(_csv.reader(lines(rows_to_csv(doc))))
+    assert out[1][out[0].index("data_chegada")] == "1925"
+
+
+def test_a_document_that_states_no_voyage_leaves_those_columns_empty():
+    """Empty means the page did not say. It must not mean the tool guessed."""
+    from desembarque.export import rows_to_csv
+    import csv as _csv
+    doc = {k: v for k, v in VOYAGE_DOC.items() if k != "voyage"}
+    out = list(_csv.reader(lines(rows_to_csv(doc))))
+    assert out[1][out[0].index("navio")] == ""
+    assert out[1][out[0].index("data_chegada")] == ""
+    assert out[1][out[0].index("procedencia")] == ""
