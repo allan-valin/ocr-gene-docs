@@ -145,6 +145,58 @@ Scaling turned out to read *better*, not worse: the detector groups the lines
 the way the form is printed, so the ship and its nationality come back on the
 one line they share instead of three.
 
+### Where this leaves the corpus, and what is running
+
+A full re-index is running as this is written — 660 dossiers, four workers,
+around 35-40 s each. It resumes from the content-hash cache, so it can be
+stopped and restarted at will and will skip whatever is already current:
+
+```sh
+.venv-ocr/bin/python scripts/serve.py --root data/scans     # then, in another shell
+curl -X POST 'http://127.0.0.1:8799/api/index?dir='         # start / resume
+curl      'http://127.0.0.1:8799/api/index'                 # progress
+curl -X POST 'http://127.0.0.1:8799/api/index/stop'         # stop; workers finish the page
+.venv/bin/python scripts/voyages.py                         # what the corpus now knows
+```
+
+The schema stamp moved four times today (5 → 8) as the engine learned to read
+these forms, and each move makes every earlier record stale by design. **A
+person's corrections now survive that**, which they would not have this morning.
+
+### Next, in order
+
+1. **The ship's name is the weak field.** The letterhead is printed and comes
+   back on nearly every list; the vessel's name beside `no paquete ___` is
+   handwritten and mostly does not. Reading both forms of a dossier together is
+   today's answer; the real one is to pair a printed label with the handwriting
+   *beside* it using the detector's boxes, rather than by the order it reports
+   its fragments. That is the one structural improvement left in this feature.
+2. **Confidence is not calibrated** — `conf.surname` is Paddle's raw decode
+   score, shown as if it meant trustworthiness. Allan saw a green label on
+   `Brges. iuig`. Hide it or calibrate it against hand-read truth.
+3. **Rows that are not passengers** — the `/36` line and the tally block are
+   read as people. Same class of problem as the column heading flag.
+4. **Ditto inheritance**, stored beside the verbatim text rather than replacing
+   it. 013990 is the fixture.
+5. **`data/transcriptions/` will outgrow memory.** Search loads every row; at
+   7,000 dossiers that is roughly a million. It wants SQLite before then.
+6. Handwriting recognition, still the ceiling, and still the thing pretrained
+   models do not solve.
+
+### Questions that are Allan's to answer
+
+* **Is the ship's name worth the box work?** It is the field that would let
+  somebody search "Valdivia 1924" and get one dossier instead of three thousand
+  rows, and it is the field the recogniser loses most often.
+* The corpus re-index takes hours on this machine. **Is unattended overnight
+  indexing the intended flow**, or should the tool do a fast pass first — the
+  forms only, no row recognition — so that a folder becomes searchable by ship
+  and year within minutes and by name later?
+* `port` and `origin` are exported and shown exactly as read: `Nio Sumalos` for
+  Rio de Janeiro, `Beuenes crures` for Buenos Aires. Correcting them against a
+  gazetteer would be a guess the scan cannot check. **Is verbatim right here**,
+  or should a canonical name sit beside the reading?
+
 ### What the remaining blank pages actually are
 
 Most of the ten are **not passenger lists**. They are the interpreter's *PARTE*
