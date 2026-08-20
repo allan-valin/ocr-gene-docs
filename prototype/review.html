@@ -317,7 +317,14 @@ function docmetaLine(){
   const m=D.meta;
   if(!m) return `<b>${D.ship||D.notation}</b> · ${D.notation} · página ${D.pages[pageIdx].n} de ${D.total_pages}`;
   const bits=[];
-  if(m.ship) bits.push(`<b>${m.ship}</b>${m.flag?` (${m.flag})`:""}`);
+  // Two claims about one ship. The archive's typed name is what the dossier is
+  // filed under; the reading is what the page says, through a recogniser. Where
+  // they differ the header carries both, because the scan is right there.
+  const filed = m.catalog_ship, aboard = m.ship;
+  const same = filed && aboard && filed.toLowerCase().replace(/[^a-z]/g,"")
+                               === aboard.toLowerCase().replace(/[^a-z]/g,"");
+  if(filed||aboard) bits.push(`<b>${filed||aboard}</b>${m.flag?` (${m.flag})`:""}`);
+  if(filed && aboard && !same) bits.push(`lido “${aboard}”`);
   if(m.line) bits.push(m.line);
   const route=[m.origin,m.port].filter(Boolean).join(" → ");
   if(route) bits.push(route);

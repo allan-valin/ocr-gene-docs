@@ -522,3 +522,26 @@ def test_a_page_read_only_for_its_rows_keeps_no_form(server, engine, monkeypatch
         page = 0
     data = serve.transcribe_document(folder / "doc0.pdf", Job())
     assert all("form" not in p for p in data["pages"])
+
+
+def test_the_archive_s_name_for_a_dossier_reaches_the_header():
+    """Two claims about one ship: what the page says, and what the dossier is
+    filed under. The header carries both when they differ, because the way to
+    settle it is to look at the scan."""
+    from desembarque.serve_shapes import ui_meta
+    meta = ui_meta({"ship": "Jaronna"}, "BS.ENT.013947", catalogued="garonne")
+    assert meta["ship"] == "Jaronna"
+    assert meta["catalog_ship"] == "garonne"
+
+
+def test_a_dossier_the_page_says_nothing_about_still_gets_its_filed_name():
+    from desembarque.serve_shapes import ui_meta
+    meta = ui_meta({"line": "Lloyd Brazileiro"}, "X", catalogued="itapuca")
+    assert meta["catalog_ship"] == "itapuca"
+
+
+def test_the_filed_name_alone_is_enough_to_have_a_header():
+    """Nothing was read off the page, and the folder still knows which ship."""
+    from desembarque.serve_shapes import ui_meta
+    assert ui_meta(None, "X", catalogued="itapuca")["catalog_ship"] == "itapuca"
+    assert ui_meta(None, "X") is None

@@ -94,22 +94,26 @@ def row_text(row: dict) -> str:
 _ROWS: dict[str, tuple[tuple[int, int], list[dict]]] = {}
 
 
-def _rows_of(f: Path, engine_only: bool) -> list[dict]:
+def _rows_of(f: Path, engine_only: bool,
+             ships: dict[str, str] | None = None) -> list[dict]:
     try:
         st = f.stat()
     except OSError:
         return []
-    stamp = (st.st_mtime_ns, st.st_size)
+    # the catalogue is part of what a row says it is, so a different catalogue
+    # is a different reading and must not come out of the cache
+    stamp = (st.st_mtime_ns, st.st_size, len(ships or ()))
     key = f"{f}|{int(engine_only)}"
     hit = _ROWS.get(key)
     if hit is not None and hit[0] == stamp:
         return hit[1]
-    rows = _parse(f, engine_only)
+    rows = _parse(f, engine_only, ships)
     _ROWS[key] = (stamp, rows)
     return rows
 
 
-def load_index(cache: Path, engine_only: bool = True) -> list[dict]:
+def load_index(cache: Path, engine_only: bool = True,
+               ships: dict[str, str] | None = None) -> list[dict]:
     """Flatten the transcription cache into rows that can be searched.
 
     Manually typed rows are excluded by default when measuring, because they
@@ -124,14 +128,15 @@ def load_index(cache: Path, engine_only: bool = True) -> list[dict]:
     present = set()
     for f in sorted(Path(cache).glob("*.json")):
         present.add(f"{f}|{int(engine_only)}")
-        out.extend(_rows_of(f, engine_only))
+        out.extend(_rows_of(f, engine_only, ships))
     for gone in [k for k in _ROWS if k.endswith(f"|{int(engine_only)}")
                  and k not in present]:
         del _ROWS[gone]        # a deleted transcription leaves the index
     return out
 
 
-def _parse(f: Path, engine_only: bool) -> list[dict]:
+def _parse(f: Path, engine_only: bool,
+           ships: dict[str, str] | None = None) -> list[dict]:
     """One stored transcription, flattened into searchable rows."""
     try:
         d = json.loads(f.read_text(encoding="utf-8"))
@@ -142,7 +147,16 @@ def _parse(f: Path, engine_only: bool) -> list[dict]:
     if engine_only and not d.get("engine"):
         return []
     out = []
-    voyage = d.get("voyage") or {}
+    voyage = dict(d.get("voyage") or {})
+    # The archive catalogues every dossier under a typed ship's name. The tool
+    # reads one off the page in about a fifth of them, mangled by the same hand
+    # and the same recogniser as the surnames. Both are worth searching, and
+    # they are different claims — the page is the document, the catalogue is
+    # somebody's note about it — so the page wins where it said anything.
+    if not voyage.get("ship") and ships:
+        catalogued = ships.get(d.get("file") or "")
+        if catalogued:
+            voyage["ship"] = catalogued
     for r in d.get("rows", []):
         text = row_text(r)
         # the flag covers documents indexed since headings were noticed; the

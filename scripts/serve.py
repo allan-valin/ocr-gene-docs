@@ -137,16 +137,38 @@ def list_dir(d: Path) -> dict:
     return {"dirs": dirs, "pdfs": pdfs}
 
 
-def corpus(folder: Path, limit: int = 0) -> dict:
-    """Build the sidebar's document list from a folder of PDFs."""
-    sample = json.loads(SAMPLE_ROWS.read_text(encoding="utf-8")) if SAMPLE_ROWS.exists() else None
-    manifest = {}
+def catalogue(folder: Path) -> dict[str, dict]:
+    """The archive's own index of the dossiers in this folder, by filename.
+
+    It names every one of them after a ship, typed, where the tool reads a ship
+    off the page in about a fifth of them and mangled. It is somebody's note
+    about the document rather than the document, and the archive's own
+    cataloguing errors are part of why this corpus needed building — but it is
+    how a dossier is filed, and it is the name a person searching knows.
+    """
+    out: dict[str, dict] = {}
     mpath = folder / "manifest.jsonl"
-    if mpath.exists():
+    if not mpath.exists():
+        return out
+    try:
         for line in mpath.open(encoding="utf-8"):
             row = json.loads(line)
             for f in row.get("files", []):
-                manifest[f] = row
+                out[f] = row
+    except (OSError, ValueError):
+        return out
+    return out
+
+
+def catalogue_ships(folder: Path) -> dict[str, str]:
+    return {name: row["ship"] for name, row in catalogue(folder).items()
+            if row.get("ship")}
+
+
+def corpus(folder: Path, limit: int = 0) -> dict:
+    """Build the sidebar's document list from a folder of PDFs."""
+    sample = json.loads(SAMPLE_ROWS.read_text(encoding="utf-8")) if SAMPLE_ROWS.exists() else None
+    manifest = catalogue(folder)
 
     docs = []
     for pdf in sorted(folder.glob("*.pdf")):
@@ -165,13 +187,18 @@ def corpus(folder: Path, limit: int = 0) -> dict:
                         f"{meta.get('fundo')}.{meta.get('series')}.{meta.get('index')}")
                         or "sem notação",
             "identified_by": ident.source,
-            "ship": (((cached or {}).get("voyage") or {}).get("ship")
-                     or (cached or {}).get("ship") or meta.get("ship") or "—"),
+            # the folder list is a list of ships, so it uses the archive's
+            # typed name where there is one; the page's own reading is in the
+            # header, beside the scan that can settle the two
+            "ship": (meta.get("ship")
+                     or ((cached or {}).get("voyage") or {}).get("ship")
+                     or (cached or {}).get("ship") or "—"),
             "total_pages": total,
             "pages": [{"n": n, "file": f"/api/page?pdf={pdf.name}&n={n}"} for n in range(1, total + 1)],
             "rows": (cached or {}).get("rows") or (sample["rows"] if is_sample else None),
             "geometry": (cached or {}).get("geometry") or (sample["geometry"] if is_sample else None),
-            "meta": (ui_meta((cached or {}).get("voyage"), ident.notation)
+            "meta": (ui_meta((cached or {}).get("voyage"), ident.notation,
+                             catalogued=meta.get("ship"))
                      or (sample["document"] if is_sample else None)),
             "transcribed_page": (cached or {}).get("transcribed_page") or (2 if is_sample else None),
             "transcribed": bool(cached) or is_sample,
@@ -455,7 +482,9 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/search":
                 # across everything indexed, not the open document: the whole
                 # point is that the user does not know which dossier to open
-                rows = searchlib.load_index(JOBS.cache, engine_only=False)
+                rows = searchlib.load_index(
+                    JOBS.cache, engine_only=False,
+                    ships=catalogue_ships(STATE["root"]))
                 hits = searchlib.search(rows, q.get("q", ""),
                                         limit=int(q.get("limit", 50)))
                 names = hash_index(STATE["root"])

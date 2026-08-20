@@ -258,6 +258,17 @@ window.addEventListener("load",async()=>{
     const saved = D && D.meta;
     if(typeof D !== "undefined" && D){
       D.meta = {ship:"Baden", year:1925, notation:"OL.PRJ.20039", source:"parte"};
+      {
+        const both = (D.meta = {ship:"Jaronna", catalog_ship:"garonne",
+                                notation:"X", source:"lista"}) && docmetaLine();
+        ok("the archive's name for the dossier leads", both.indexOf("garonne") >= 0);
+        ok("and the reading off the page is kept beside it",
+           both.indexOf("Jaronna") >= 0);
+        D.meta = {ship:"Baden", catalog_ship:"baden", notation:"X"};
+        ok("one name is shown once when the two agree",
+           docmetaLine().split("baden").length - 1 <= 1);
+      }
+      D.meta = {ship:"Baden", year:1925, notation:"OL.PRJ.20039", source:"parte"};
       const line = docmetaLine();
       ok("the header names the ship the document names", line.indexOf("Baden") >= 0);
       ok("a field the page never stated is left out, not printed as undefined",

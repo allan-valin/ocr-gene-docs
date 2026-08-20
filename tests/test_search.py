@@ -5,6 +5,7 @@ so search has to run over the whole index and be forgiving: the names come out
 of a cursive hand through a recogniser, and "Guudo Camtadore" has to be findable
 by someone typing "Guido Contadore".
 """
+import json
 import sys
 from pathlib import Path
 
@@ -271,3 +272,45 @@ def test_a_document_with_no_voyage_is_never_hidden_by_one():
                     "text": "Guido Contadore"}]
     hits = search(rows, "Guido Contadore 1924")
     assert any(h["doc"] == "D9" for h in hits)
+
+
+# ---- the archive's own index of ships ----------------------------------------
+#
+# The archive catalogues every dossier under a ship's name, typed. The tool
+# reads a ship off the page in about a fifth of them, mangled. Both are worth
+# having and they are different claims: one is how the dossier is filed, the
+# other is what the page says.
+
+def test_a_ship_the_archive_names_is_searchable_even_where_the_page_lost_it(tmp_path):
+    """Reading `Jaronna` off a header is a fifth of the corpus. The archive
+    filed all of it under a typed name, and a person searching knows that name,
+    not the recogniser's account of it."""
+    from desembarque.search import load_index
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "h", "engine": "paddle", "file": "d.pdf", "schema": 12,
+        "rows": [{"n": 1, "surname": "CONTADORE", "given": "GUIDO"}],
+    }), encoding="utf-8")
+    rows = load_index(tmp_path, ships={"d.pdf": "gelria"})
+    assert rows[0]["ship"] == "gelria"
+
+
+def test_what_the_page_said_wins_over_the_index_card(tmp_path):
+    """The page is the document; the catalogue is somebody's note about it, and
+    the archive's own cataloguing errors are why this corpus needed building."""
+    from desembarque.search import load_index
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "h", "engine": "paddle", "file": "d.pdf", "schema": 12,
+        "voyage": {"ship": "Valdivia"},
+        "rows": [{"n": 1, "surname": "CONTADORE"}],
+    }), encoding="utf-8")
+    rows = load_index(tmp_path, ships={"d.pdf": "gelria"})
+    assert rows[0]["ship"] == "Valdivia"
+
+
+def test_no_catalogue_changes_nothing(tmp_path):
+    from desembarque.search import load_index
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "h", "engine": "paddle", "file": "d.pdf", "schema": 12,
+        "rows": [{"n": 1, "surname": "CONTADORE"}],
+    }), encoding="utf-8")
+    assert "ship" not in load_index(tmp_path)[0]

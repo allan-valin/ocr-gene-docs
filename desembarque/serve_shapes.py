@@ -68,7 +68,8 @@ def ui_transcription(data: dict | None) -> dict | None:
 META_FIELDS = ("ship", "line", "flag", "origin", "port", "arrival", "year", "passengers")
 
 
-def ui_meta(voyage: dict | None, notation: str | None = None) -> dict | None:
+def ui_meta(voyage: dict | None, notation: str | None = None,
+            catalogued: str | None = None) -> dict | None:
     """A stored voyage in the shape the document header reads.
 
     Only the fields the page actually stated are carried. A missing port
@@ -76,15 +77,18 @@ def ui_meta(voyage: dict | None, notation: str | None = None) -> dict | None:
     reads as a page that said nothing where the page was never asked — the same
     distinction the row cells make between *ilegível* and never attempted.
     """
-    if not voyage:
-        return None
-    out = {k: voyage[k] for k in META_FIELDS
-           if voyage.get(k) not in (None, "", [])}
+    out = {k: (voyage or {})[k] for k in META_FIELDS
+           if (voyage or {}).get(k) not in (None, "", [])}
+    # Two claims about one ship: what the page says, and what the dossier is
+    # filed under at the archive. Both are kept where they differ, because the
+    # way to settle that is to look at the scan beside them.
+    if catalogued:
+        out["catalog_ship"] = catalogued
     if not out:
         return None
     if notation:
         out["notation"] = notation
     # the page it was read from, so a wrong ship can be checked against the scan
-    if voyage.get("source"):
+    if (voyage or {}).get("source"):
         out["source"] = voyage["source"]
     return out
