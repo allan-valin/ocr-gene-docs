@@ -365,3 +365,14 @@ def test_a_name_and_a_year_is_still_a_name_search():
     hits = search(ROWS, "Camtadore 1924")
     assert hits[0]["text"] == "Guudo Camtadore"
     assert "matched" not in hits[0]
+
+
+def test_naming_the_ship_does_not_promote_a_row_that_looks_like_nothing():
+    """Real behaviour before this: `Contadore belvedere` put `CONGE NGLONE A`
+    above `Guudo Casrtadore`, because a flat bonus lifts every row on the named
+    ship by the same amount and most rows on any ship resemble nothing that was
+    typed. The voyage should sharpen a match, not manufacture one."""
+    rows = voyaged(("Valdivia", 1924, ["CONGE NGLONE A"]),
+                   ("Sirio", 1923, ["Guudo Casrtadore"]))
+    hits = search(rows, "Contadore Valdivia")
+    assert hits[0]["text"] == "Guudo Casrtadore"

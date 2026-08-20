@@ -31,15 +31,16 @@ SCHEMA = 12
 MIN_QUERY = 3
 MIN_SCORE = 0.10
 
-# A year in the query is worth about as much as the difference between two
-# spellings of the same surname, which is the point: it is meant to break the
-# tie a recogniser cannot, not to overrule the name.
-VOYAGE_BONUS = 0.15
+# What the voyage is worth as a proportion of the name match it applies to. It
+# is meant to break the tie a recogniser cannot, not to overrule the name.
+VOYAGE_BONUS = 0.25
 # A ship's name is one token, and trigrams are harsh on single tokens: changing
 # the last letter of `Valdivia` to `Valdivin` — exactly what the recogniser does
 # to it — costs a third of the trigram score. Edit distance is the right measure
 # for one word, and it is the same one the month names use.
 SHIP_FLOOR = 0.75
+# Above this a name match is an answer; below it, it is a suggestion.
+STRONG_NAME = 0.5
 RE_YEAR = re.compile(r"\b(1[6-9]\d{2}|20[0-2]\d)\b")
 
 
@@ -257,12 +258,21 @@ def search(rows: list[dict], query: str, limit: int = 50,
     name_q, ship_term = split_ship(name_q, rows)
     terms = [ship_term] if ship_term else []
     scored = []
-    for r in rows:
+    # An empty name query is not a query. Trigrams are padded, so `similarity`
+    # of nothing against a row read as `B   B` comes out at 0.25 — a page of
+    # whitespace ranked above the ship somebody actually typed.
+    for r in (rows if len(fold(name_q)) >= MIN_QUERY else ()):
         s = similarity(name_q, r["text"])
         # the floor is applied to the name alone: the voyage orders what was
         # found, it does not decide what counts as found
         if s >= min_score:
-            rank = max(0.0, min(1.0, s + voyage_bonus(r, year, terms)))
+            # The voyage multiplies the name match rather than adding to it. A
+            # flat bonus lifts every row on the named ship by the same amount,
+            # and most rows on any ship resemble nothing that was typed — it
+            # put `CONGE NGLONE A` above `Guudo Casrtadore` for a query naming
+            # the Contadores' ship. What is wanted is to sharpen a match, not
+            # to manufacture one.
+            rank = max(0.0, min(1.0, s * (1 + voyage_bonus(r, year, terms))))
             scored.append({**r, "score": round(rank, 3), "name_score": round(s, 3)})
     scored.sort(key=lambda h: (-h["score"], h.get("file") or "", h["row"] or 0))
 
@@ -279,7 +289,12 @@ def search(rows: list[dict], query: str, limit: int = 50,
         # own, and it was stripped out of the query as a year should be —
         # leaving nothing at all to search for.
         aboard = _arrived(rows, year, seen)
-    return (scored + aboard)[:limit]
+    # A row scoring 0.15 against a surname is noise; the passengers of the ship
+    # that was typed are a certainty. Strong name matches keep the top of the
+    # list, the ship's own dossier follows, and the guesses come after it.
+    strong = [h for h in scored if h["score"] >= STRONG_NAME]
+    weak = [h for h in scored if h["score"] < STRONG_NAME]
+    return (strong + aboard + weak)[:limit]
 
 
 def _arrived(rows: list[dict], year: int, already: set) -> list[dict]:
