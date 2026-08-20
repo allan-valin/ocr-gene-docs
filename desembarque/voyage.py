@@ -437,3 +437,36 @@ def parse_voyage(text: str) -> Voyage | None:
                 v.passengers = int(m.group(1))
             break
     return v
+
+
+def merge_voyages(first: Voyage | None, second: Voyage | None) -> Voyage | None:
+    """One dossier's voyage, from the two forms that state it.
+
+    A dossier says it twice and the two forms are good at different things. The
+    header above the list is printed, so it gives up the shipping line and the
+    port; the ship's name and the date are handwritten there and mostly lost.
+    The interpreter's PARTE gives those up readily. Reading only whichever came
+    first threw away the half the other one had.
+
+    Filling a gap is not the same as changing an answer: where both forms state
+    something, the first stands. Two forms that disagree about the ship are a
+    thing to show a person against the scans, not something to settle by the
+    order the pages happened to be read in.
+    """
+    if first is None or second is None:
+        return first or second
+    out = Voyage(**first.__dict__)
+    for field, value in second.__dict__.items():
+        if field != "source" and getattr(out, field) in (None, ""):
+            setattr(out, field, value)
+    return out
+
+
+def is_complete(voyage: Voyage | None) -> bool:
+    """Whether there is any point reading the rest of the dossier for a voyage.
+
+    A ship and a time. The shipping line alone narrows nothing — every Lloyd
+    Brazileiro sailing shares it — and a search that cannot say which vessel is
+    back to comparing a mangled surname against the whole pool.
+    """
+    return bool(voyage and voyage.ship and (voyage.arrival or voyage.year))

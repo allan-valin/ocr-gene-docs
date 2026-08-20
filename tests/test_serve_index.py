@@ -434,3 +434,55 @@ def test_the_cover_card_is_not_read_for_a_voyage_it_never_states():
     from serve import text_wanted
     assert not text_wanted(1, have_notation=True, have_voyage=False)
     assert text_wanted(2, have_notation=True, have_voyage=False)
+
+
+PARTE_PAGE3 = """MINISTERIO DA AGRICULTURA, INDUSTRIA E COMMERCIO
+SERVIÇO DE POVOAMENTO
+PARTE
+do Interprete Arthur K Fexxerria
+que visitou o paquete Francer "Valdivia"
+procedente de B. Aires e escalas
+entrado em 10 de Desembro de 1924
+SAUDE DOS PASSAGEIROS
+MORTALIDADE
+NASCIMENTOS
+OBSERVAÇÕES"""
+
+HEADER_PAGE2 = """POLICIA DO PORTO
+Lloyd Brazileiro
+Santos, 2.3 de Jen
+Repartição da Policia"""
+
+
+class TwoFormEngine:
+    """A dossier that states its voyage twice, as most of them do."""
+    name = "fake-two-form"
+
+    def available(self):
+        return True
+
+    def transcribe_page(self, image, kind="unknown", source=None, page=None, text=True):
+        body = {2: HEADER_PAGE2, 3: PARTE_PAGE3}.get(page, "")
+        return engines.PageResult(kind="list" if page == 2 else "unknown",
+                                  engine=self.name, text=body if text else "")
+
+
+def test_a_dossier_is_read_until_its_voyage_names_a_ship(server, monkeypatch):
+    """The header above the list gives up the shipping line and the port and
+    loses the ship; the interpreter's form two pages later gives up the ship and
+    the date. Stopping at the first form found kept the half that narrows
+    nothing — every Lloyd Brazileiro sailing shares a shipping line."""
+    base, folder = server
+    monkeypatch.setattr(engines, "_ACTIVE", TwoFormEngine())
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+    docs(folder, 1)
+
+    class Job:
+        total = 3
+        page = 0
+    v = serve.transcribe_document(folder / "doc0.pdf", Job())["voyage"]
+    assert v["line"] == "Lloyd Brazileiro"
+    assert v["port"] == "Santos"
+    assert v["ship"] == "Valdivia"
+    assert v["arrival"] == "1924-12-10"

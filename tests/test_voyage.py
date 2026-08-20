@@ -578,3 +578,48 @@ Santos,
 Lista de entrada de passagiras no Paguete aco nal dapuna" RI""")
     assert v is not None
     assert v.month is None and v.arrival_raw is None
+
+
+def test_two_pages_of_one_dossier_are_read_together():
+    """A dossier states its voyage twice — the header above the list, and the
+    interpreter's PARTE — and the two are good at different things. The header
+    is printed and gives up the shipping line and the port; the ship's name and
+    the date are handwritten there and mostly lost, while the PARTE form gives
+    them up readily. Taking only the first form found throws away the half the
+    other one had."""
+    from desembarque.voyage import merge_voyages
+    header = parse_voyage(HEADER_014037)          # line and port, no ship
+    parte = parse_voyage(PARTE_19845)             # ship, origin, date
+    merged = merge_voyages(header, parte)
+    assert merged.line == "Lloyd Brazileiro"
+    assert merged.port == "Santos"
+    assert merged.ship == "Valdivia"
+    assert merged.arrival == "1924-12-10"
+
+
+def test_the_page_read_first_is_not_overruled_by_the_page_read_after():
+    """Filling a gap is not the same as changing an answer. Two forms that
+    disagree about the ship are a thing to show a person, not to resolve by
+    reading order."""
+    from desembarque.voyage import merge_voyages
+    a = parse_voyage(PARTE_19845)
+    b = parse_voyage(PARTE_20039)
+    assert merge_voyages(a, b).ship == "Valdivia"
+
+
+def test_merging_with_nothing_is_the_thing_itself():
+    from desembarque.voyage import merge_voyages
+    v = parse_voyage(PARTE_19845)
+    assert merge_voyages(None, v) is v
+    assert merge_voyages(v, None) is v
+    assert merge_voyages(None, None) is None
+
+
+def test_a_voyage_is_complete_when_it_names_a_ship_and_a_time():
+    """Complete enough to stop reading the rest of the dossier for one. The
+    shipping line alone does not narrow a search — every Lloyd Brazileiro
+    sailing shares it."""
+    from desembarque.voyage import is_complete
+    assert not is_complete(parse_voyage(HEADER_014037))
+    assert is_complete(parse_voyage(PARTE_19845))
+    assert not is_complete(None)

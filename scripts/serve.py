@@ -42,7 +42,8 @@ from desembarque.batch import (BatchIndexer, collect_pdfs, is_indexed,  # noqa: 
                                preserve_human_work)
 from desembarque.serve_shapes import ui_meta, ui_transcription  # noqa: E402
 from desembarque.export import csv_filename, rows_to_csv  # noqa: E402
-from desembarque.voyage import parse_voyage            # noqa: E402
+from desembarque.voyage import (is_complete, merge_voyages,  # noqa: E402
+                                parse_voyage)
 from desembarque import search as searchlib          # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
@@ -276,7 +277,7 @@ def transcribe_document(pdf: Path, job) -> dict:
             pages.append({"n": n, "error": "render failed"})
             continue
         want = text_wanted(n, bool(ident.notation) or bool(cover_text),
-                           voyage is not None)
+                           is_complete(voyage))
         res = eng.transcribe_page(img, classify(n), source=pdf, page=n,
                                   text=want)
         pages.append({"n": n, "kind": res.kind, "error": res.error})
@@ -286,10 +287,8 @@ def transcribe_document(pdf: Path, job) -> dict:
         # are the interpreter's PARTE form, which states the ship, the port it
         # sailed from and the arrival date in print — the three things a person
         # searching for an ancestor actually knows.
-        if voyage is None and res.text:
-            found = parse_voyage(res.text)
-            if found:
-                voyage = found.as_dict()
+        if res.text and not is_complete(voyage):
+            voyage = merge_voyages(voyage, parse_voyage(res.text))
         for r in res.rows:
             r["page"] = n
             rows.append(r)
@@ -304,7 +303,7 @@ def transcribe_document(pdf: Path, job) -> dict:
         "engine": eng.name,
         "pages": pages,
         "rows": rows,
-        **({"voyage": voyage} if voyage else {}),
+        **({"voyage": voyage.as_dict()} if voyage else {}),
     }
 
 
