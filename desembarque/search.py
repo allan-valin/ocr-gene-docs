@@ -188,8 +188,10 @@ def split_year(query: str) -> tuple[str, int | None]:
     m = RE_YEAR.search(query or "")
     if not m:
         return (query or "").strip(), None
-    rest = (query[:m.start()] + " " + query[m.end():]).strip()
-    return (rest or query.strip()), int(m.group(1))
+    # The remainder may be nothing at all — a year typed on its own is a whole
+    # question, and `search` answers it by listing that year's arrivals rather
+    # than by comparing four digits against every surname in the corpus.
+    return (query[:m.start()] + " " + query[m.end():]).strip(), int(m.group(1))
 
 
 def ship_similarity(a: str, b: str) -> float:
@@ -270,8 +272,23 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # that exact name was nowhere in the results. The people aboard are added
     # after the name matches rather than instead of them: `Formosa` is a ship
     # and a surname, and somebody typing it means a person more often than not.
-    aboard = _aboard(rows, query, {(h["doc"], h["row"]) for h in scored})
+    seen = {(h["doc"], h["row"]) for h in scored}
+    aboard = _aboard(rows, query, seen)
+    if not aboard and year and len(fold(name_q)) < MIN_QUERY:
+        # A year typed on its own is the same question as a ship typed on its
+        # own, and it was stripped out of the query as a year should be —
+        # leaving nothing at all to search for.
+        aboard = _arrived(rows, year, seen)
     return (scored + aboard)[:limit]
+
+
+def _arrived(rows: list[dict], year: int, already: set) -> list[dict]:
+    """Rows from every document that says it landed in this year."""
+    out = [{**r, "score": 1.0, "matched": "year"} for r in rows
+           if r.get("year") and int(r["year"]) == year
+           and (r["doc"], r["row"]) not in already]
+    out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
+    return out
 
 
 def _aboard(rows: list[dict], query: str, already: set) -> list[dict]:

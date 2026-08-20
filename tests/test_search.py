@@ -345,3 +345,23 @@ def test_a_name_that_is_also_a_ship_still_searches_names():
 
 def test_a_ship_nobody_indexed_still_finds_nothing():
     assert search(ROWS, "Lusitania") == []
+
+
+def test_a_year_on_its_own_lists_that_year_s_arrivals():
+    """Somebody who knows only the year has the same question as somebody who
+    knows only the ship. Typed alone the year was stripped out of the query as a
+    year should be, leaving nothing at all to search for."""
+    hits = search(ROWS, "1924")
+    assert hits and all(h["year"] == 1924 for h in hits)
+    assert hits[0]["matched"] == "year"
+
+
+def test_a_year_nobody_indexed_finds_nothing():
+    assert search(ROWS, "1931") == []
+
+
+def test_a_name_and_a_year_is_still_a_name_search():
+    """The year narrows; it does not take over."""
+    hits = search(ROWS, "Camtadore 1924")
+    assert hits[0]["text"] == "Guudo Camtadore"
+    assert "matched" not in hits[0]

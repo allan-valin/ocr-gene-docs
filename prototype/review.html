@@ -179,7 +179,7 @@
     <div class="sidehead" id="sidehead">Documentos</div>
     <div id="indexbar"></div>
     <div id="corpusfind">
-      <input id="corpusq" placeholder="Nome, e o navio ou o ano se souber…" autocomplete="off"
+      <input id="corpusq" placeholder="Nome — ou só o navio, ou só o ano…" autocomplete="off"
              spellcheck="false" title="Procura em todos os documentos já indexados.
 Um ano ou o nome do navio na busca não competem com o nome: eles reordenam o que foi encontrado.">
       <div id="corpushits"></div>
@@ -569,7 +569,7 @@ function renderHits(d){
     <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
          data-row="${h.row||0}" title="Abrir o documento nesta linha">
       <b>${h.text}</b>
-      <span>${h.matched==="ship"?"a bordo · ":""}${[h.ship, h.year].filter(Boolean).join(" · ")}${h.ship||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
+      <span>${h.matched?"a bordo · ":""}${[h.ship, h.year].filter(Boolean).join(" · ")}${h.ship||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
         ${h.conf==null?"":`<span class="dot ${h.conf<0.5?"lo":h.conf<0.8?"mid":"hi"}"
           role="img" aria-label="confiança da leitura: ${Math.round(h.conf*100)}%"
           title="confiança da leitura: ${Math.round(h.conf*100)}%"></span>`}</span>
