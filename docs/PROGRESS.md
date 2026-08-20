@@ -145,6 +145,38 @@ Scaling turned out to read *better*, not worse: the detector groups the lines
 the way the form is printed, so the ship and its nationality come back on the
 one line they share instead of three.
 
+### The ship's name, measured three ways
+
+The ship is the field that would let somebody search *Valdivia 1924* and get one
+dossier instead of three thousand rows, and it is the field the recogniser loses
+most often. Measured on the first twenty-odd dossiers of each run:
+
+| | dossiers naming a ship | junk among them |
+|---|---|---|
+| by reading order | 4% | — |
+| paired by position | 41% | most of them |
+| position + the form's own words refused | **26%** | 2 in 20 |
+
+Pairing by reading order fails because reading order is not layout: a value
+written a little above its printed baseline is reported *before* the label it
+belongs to. On BS.ENT.013942 the ship `INDIANA` is two fragments away from the
+word `vapor` by reading order and sits directly beside it on the page. The
+engine now keeps each fragment's box and pairs the label with the nearest thing
+to its right that shares its line.
+
+That found something beside the label far more often, and most of what it found
+was the form talking about itself — `Paguete`, `(2) papor hespanhol`,
+`Repartição da Pette`, `de antos`. A wrong ship is worse than no ship: it
+answers a search that should have found nothing, with the confidence of a
+printed record. A candidate is now refused if any word of it belongs to the
+form, the port stamps or the nationalities.
+
+Two junk readings survive in twenty — `RI IVEO`, twice, which is a stamp. The
+next filter is a minimum word length: ship names in this archive run to five
+letters and up, and `iveo` does not. It is deliberately **not** being added at
+the end of a session, because it would refuse a real four-letter vessel and
+because every such change makes the whole corpus stale again.
+
 ### Where this leaves the corpus, and what is running
 
 A full re-index is running as this is written — 660 dossiers, four workers,
