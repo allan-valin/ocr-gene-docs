@@ -61,12 +61,19 @@ RENDER_DPI = 300
 # crops; only this pass is scaled, and only when the page is bigger than this.
 TEXT_MAX_SIDE = int(os.environ.get("DESEMBARQUE_TEXT_MAX_SIDE", "2000"))
 
-# Every row is read twice, from the PDF's ink mask and from a composited
-# render, and the two disagree exactly where the hand is hard. Keeping the
-# losing reading is what lets a person pick `Raymundo` over `Nayomgo` instead of
-# retyping it. It costs a render and a second pass of the recogniser per page —
-# recognition is the cheap half — and can be turned off here.
+# Every row is read twice and the two readings disagree exactly where the hand
+# is hard: `Nayomgo` and `Raymundo` are one word on one page. Keeping the losing
+# reading is what lets a person pick the right one instead of retyping it.
+#
+# The second reading cannot come from a second *image*, because most of these
+# dossiers only have one usable one — BS.ENT.013990 has no exposable ink mask,
+# so the render is all there is, and reading it twice says the same thing twice.
+# It comes from framing the same pixels differently: the recogniser is handed a
+# band trimmed close to the ink, and again with room around it. That is enough
+# to change the decode on exactly the words that are hard, and it costs one more
+# pass of the recogniser — the cheap half of the work — and no rendering at all.
 SECOND_READING = os.environ.get("DESEMBARQUE_SECOND_READING", "1") != "0"
+SECOND_MARGIN = int(os.environ.get("DESEMBARQUE_SECOND_MARGIN", "14"))
 
 # A page with a grid was never read as prose, so the printed header above the
 # table — which states the ship, the port it sailed from and the date — was seen
@@ -572,7 +579,8 @@ class PaddleEngine:
         return rows_from_bands(geo, im.size, self._recognize,
                                self._carved_crops(im, geo))
 
-    def _carved_crops(self, im, geo) -> Callable[[int, tuple], object]:
+    def _carved_crops(self, im, geo, margin: int = INK_MARGIN
+                      ) -> Callable[[int, tuple], object]:
         """A crop function that hands each band its own ink and nobody else's.
 
         The page is carved once: the name column is cut into rows along paths
@@ -603,8 +611,8 @@ class PaddleEngine:
 
         def crop(i: int, box: tuple) -> object:
             if i < len(cuts) and cuts[i].size:
-                return refine(Image.fromarray(cuts[i]))
-            return refine(im.crop(box))
+                return refine(Image.fromarray(cuts[i]), margin)
+            return refine(im.crop(box), margin)
         return crop
 
     def transcribe_page(self, image: Path, kind: str = "unknown",
@@ -638,15 +646,26 @@ class PaddleEngine:
             im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
             rows = rows_from_bands(geo, im.size, self._recognize,
                                    self._carved_crops(im, geo))
-            # The second reading is now taken whether or not the first came
-            # back thin, because what it says about a word is worth having even
-            # when it read no more names than the mask did. Which reading wins
-            # is unchanged: that was settled by measurement across ten pages.
-            alt = (self._render_rows(source, page, geo, im.size, image.parent)
-                   if SECOND_READING else None)
-            mask_rows = rows
-            rows, from_render = with_fallback(rows, lambda: alt)
-            rows = attach_alternatives(rows, alt if rows is mask_rows else mask_rows)
+            # The render is still the fallback it always was: a second opinion
+            # asked for only when the first reading came back nearly empty, and
+            # kept only when it reads more. That was settled by measurement and
+            # is unchanged.
+            first = rows
+            rows, from_render = with_fallback(
+                rows,
+                lambda: self._render_rows(source, page, geo, im.size, image.parent),
+            )
+            # The alternatives are a different question: what else the
+            # recogniser said about a word it found. Reading the same bands with
+            # room around the ink rather than trimmed to it changes the decode
+            # on the hard words and on almost nothing else.
+            if SECOND_READING:
+                loose = rows_from_bands(
+                    geo, im.size, self._recognize,
+                    self._carved_crops(im, geo, SECOND_MARGIN))
+                rows = attach_alternatives(rows, loose)
+                if rows is not first and first is not None:
+                    rows = attach_alternatives(rows, first)
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
                 **self.read_header(image, geo, text),
