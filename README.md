@@ -48,6 +48,13 @@ Working:
   names came out of a cursive hand through a recogniser. Someone typing "Guido Contadore"
   finds the row read as "Guudo Camtadore". Clicking a result opens the document at that row
   with the scan beside it, which is the only thing that makes a fuzzy match trustworthy.
+  A ship's name or a year on its own lists who arrived, and either alongside a name
+  reorders the thin margins a mangled surname competes in — without ever filtering,
+  since most of the corpus has no voyage indexed yet and hiding those dossiers is the
+  failure this exists to prevent.
+* **Export**, as a spreadsheet a registrar can read: the notation, the ship, where she
+  sailed from and when she arrived, the page and line, the verbatim reading beside the
+  split into surname and given name, and whether a person or an engine produced the row.
 
 Honest about the limits:
 
