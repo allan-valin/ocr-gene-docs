@@ -569,7 +569,7 @@ function renderHits(d){
     <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
          data-row="${h.row||0}" title="Abrir o documento nesta linha">
       <b>${h.text}</b>
-      <span>${[h.ship, h.year].filter(Boolean).join(" · ")}${h.ship||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
+      <span>${h.matched==="ship"?"a bordo · ":""}${[h.ship, h.year].filter(Boolean).join(" · ")}${h.ship||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
         ${h.conf==null?"":`<span class="dot ${h.conf<0.5?"lo":h.conf<0.8?"mid":"hi"}"
           role="img" aria-label="confiança da leitura: ${Math.round(h.conf*100)}%"
           title="confiança da leitura: ${Math.round(h.conf*100)}%"></span>`}</span>

@@ -314,3 +314,34 @@ def test_no_catalogue_changes_nothing(tmp_path):
         "rows": [{"n": 1, "surname": "CONTADORE"}],
     }), encoding="utf-8")
     assert "ship" not in load_index(tmp_path)[0]
+
+
+def test_a_ship_s_name_on_its_own_lists_who_was_aboard():
+    """"Show me everyone on the Itapuca" is the other half of the tool. Typed
+    alone, a ship's name was compared against surnames and returned whatever
+    happened to look like it — `ITALIAS`, `Itabea Tevures` — while the dossier
+    filed under that exact name was nowhere in the results."""
+    hits = search(ROWS, "Valdivia")
+    assert hits, "the ship's own passengers were not returned"
+    assert all(h["ship"] == "Valdivia" for h in hits)
+    assert {h["text"] for h in hits} == {"Guudo Camtadore", "Jose Muerso"}
+
+
+def test_the_hits_say_it_was_the_ship_that_matched():
+    """A page of names that do not resemble what was typed needs to explain
+    itself, or it reads as a broken search."""
+    assert search(ROWS, "Valdivia")[0]["matched"] == "ship"
+    assert "matched" not in search(ROWS, "Camtadore")[0]
+
+
+def test_a_name_that_is_also_a_ship_still_searches_names():
+    """`Formosa` is a ship and a surname. Someone typing it means a person more
+    often than not, so the names come first and the ship's passengers after."""
+    rows = ROWS + [{"doc": "D3", "file": "d3.pdf", "page": 1, "row": 1,
+                    "text": "Maria Valdivia", "ship": "Baden", "year": 1925}]
+    hits = search(rows, "Valdivia")
+    assert hits[0]["text"] == "Maria Valdivia"
+
+
+def test_a_ship_nobody_indexed_still_finds_nothing():
+    assert search(ROWS, "Lusitania") == []

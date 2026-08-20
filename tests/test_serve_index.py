@@ -545,3 +545,19 @@ def test_the_filed_name_alone_is_enough_to_have_a_header():
     from desembarque.serve_shapes import ui_meta
     assert ui_meta(None, "X", catalogued="itapuca")["catalog_ship"] == "itapuca"
     assert ui_meta(None, "X") is None
+
+
+def test_a_hit_found_by_the_ship_says_so_over_the_wire(server, engine):
+    """A page of names that do not resemble what was typed has to explain
+    itself, or it reads as a broken search."""
+    import urllib.request
+    base, folder = server
+    serve.JOBS.store("h", {
+        "hash": "h", "engine": "paddle", "file": "d.pdf", "notation": "X",
+        "voyage": {"ship": "Valdivia"},
+        "rows": [{"n": 1, "surname": "CONTADORE", "given": "GUIDO", "page": 2}],
+    })
+    with urllib.request.urlopen(f"{base}/api/search?q=Valdivia") as r:
+        hits = json.loads(r.read())["hits"]
+    assert hits and hits[0]["matched"] == "ship"
+    assert hits[0]["ship"] == "Valdivia"

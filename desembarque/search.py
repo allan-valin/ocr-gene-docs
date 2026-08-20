@@ -263,4 +263,29 @@ def search(rows: list[dict], query: str, limit: int = 50,
             rank = max(0.0, min(1.0, s + voyage_bonus(r, year, terms)))
             scored.append({**r, "score": round(rank, 3), "name_score": round(s, 3)})
     scored.sort(key=lambda h: (-h["score"], h.get("file") or "", h["row"] or 0))
-    return scored[:limit]
+
+    # "Show me everyone on the Itapuca" is the other half of this tool, and a
+    # ship's name typed on its own used to be compared against surnames — it
+    # returned whatever happened to look like it while the dossier filed under
+    # that exact name was nowhere in the results. The people aboard are added
+    # after the name matches rather than instead of them: `Formosa` is a ship
+    # and a surname, and somebody typing it means a person more often than not.
+    aboard = _aboard(rows, query, {(h["doc"], h["row"]) for h in scored})
+    return (scored + aboard)[:limit]
+
+
+def _aboard(rows: list[dict], query: str, already: set) -> list[dict]:
+    """Rows from every document filed under the ship that was typed."""
+    ships = {r["ship"] for r in rows if r.get("ship")}
+    if not ships:
+        return []
+    best = max(ships, key=lambda sh: ship_similarity(query, sh))
+    if ship_similarity(query, best) < SHIP_FLOOR:
+        return []
+    out = [{**r, "score": round(ship_similarity(query, r["ship"]), 3),
+            "matched": "ship"}
+           for r in rows
+           if r.get("ship") and ship_similarity(query, r["ship"]) >= SHIP_FLOOR
+           and (r["doc"], r["row"]) not in already]
+    out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
+    return out
