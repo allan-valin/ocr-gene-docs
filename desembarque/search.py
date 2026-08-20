@@ -347,13 +347,14 @@ def _aboard(rows: list[dict], query: str, already: set) -> list[dict]:
     ships = {r["ship"] for r in rows if r.get("ship")}
     if not ships:
         return []
-    best = max(ships, key=lambda sh: ship_similarity(query, sh))
-    if ship_similarity(query, best) < SHIP_FLOOR:
+    # A hundred and twenty-eight ships against a million rows: the comparison
+    # is done once per ship, not once per passenger.
+    close = {sh: round(ship_similarity(query, sh), 3) for sh in ships}
+    close = {sh: sc for sh, sc in close.items() if sc >= SHIP_FLOOR}
+    if not close:
         return []
-    out = [{**r, "score": round(ship_similarity(query, r["ship"]), 3),
-            "matched": "ship"}
+    out = [{**r, "score": close[r["ship"]], "matched": "ship"}
            for r in rows
-           if r.get("ship") and ship_similarity(query, r["ship"]) >= SHIP_FLOOR
-           and (r["doc"], r["row"]) not in already]
+           if r.get("ship") in close and (r["doc"], r["row"]) not in already]
     out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
     return out
