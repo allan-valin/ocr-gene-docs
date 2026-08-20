@@ -145,6 +145,40 @@ Scaling turned out to read *better*, not worse: the detector groups the lines
 the way the form is printed, so the ship and its nationality come back on the
 one line they share instead of three.
 
+### Search stopped being only a name
+
+Three things the live index showed that the unit tests could not.
+
+**The archive already knows every ship.** `data/catalog.jsonl` files all 7,679
+dossiers under a typed ship's name; the tool reads one off the page in about a
+fifth of them, mangled by the same hand and recogniser as the surnames. Both are
+searchable now and they stay two claims — the page is the document and wins
+where it said anything, the catalogue is somebody's note about it. Where they
+differ the header carries both: *garonne*, then *lido "Jaronna"*. This needed no
+re-reading at all; the catalogue is joined at query time from the manifest that
+was already in the scans folder.
+
+**A ship's name, or a year, typed on its own now lists who arrived.** "Show me
+everyone on the Itapuca" is the other half of what this is for and it did not
+work: a ship's name was compared against surnames and returned whatever happened
+to look like it — `ITALIAS`, `Itabea Tevures` — while the dossier filed under
+that exact name was nowhere in the results. A year was stripped out of the query
+as a year should be, leaving nothing to search for.
+
+**The voyage now multiplies the name match instead of being added to it.** A flat
+bonus lifts every row on the named ship equally, and most rows on any ship
+resemble nothing that was typed: `Contadore belvedere` put `CONGE NGLONE A`
+above `Guudo Casrtadore`. Multiplied, the margin it moves is the thin one
+between two spellings of a name, which is the margin it was meant for.
+
+Also found live: an empty name query is not a query — trigrams are padded, so
+the similarity of nothing against a row read as `B   B` comes out at 0.25, and
+searching a year alone ranked a page of whitespace above the ship. And the row
+comb catches the printed form as well as the names, so `toneladas` and `pessoas
+de tripulação` were indexed as people; phrases of form words are dropped, single
+words are not, because no threshold that catches `consigr` spares `gomes`
+against `cognomes` or `romano` against `comando`.
+
 ### The ship's name, measured three ways
 
 The ship is the field that would let somebody search *Valdivia 1924* and get one
