@@ -579,7 +579,12 @@ class Handler(BaseHTTPRequestHandler):
             if not pdf or not pdf.exists():
                 return self._send(404, {"error": "no such pdf"})
             ident = identify(pdf)
-            if JOBS.cached(ident.doc_hash):
+            # Asking again is cheap by default: a page costs half a minute and
+            # most requests are somebody reopening a document. But `force`
+            # exists because without it an engine improvement could never reach
+            # a dossier already in the cache — the same silent staleness the
+            # schema stamp guards against, from the other end.
+            if JOBS.cached(ident.doc_hash) and q.get("force", "") in ("", "0"):
                 return self._send(200, {"status": "done", "cached": True,
                                         "hash": ident.doc_hash})
             job = JOBS.submit(ident.doc_hash, pdf.name, pdf_pages(pdf),

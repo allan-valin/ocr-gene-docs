@@ -561,3 +561,24 @@ def test_a_hit_found_by_the_ship_says_so_over_the_wire(server, engine):
         hits = json.loads(r.read())["hits"]
     assert hits and hits[0]["matched"] == "ship"
     assert hits[0]["ship"] == "Valdivia"
+
+
+def test_a_document_can_be_read_again_when_the_engine_has_learned_something(server, engine):
+    """`Transcrever documento` did nothing at all on a document already in the
+    cache: it answered `cached` and stopped. So an engine improvement could
+    never reach the dossier somebody was looking at without deleting its file
+    by hand — the same silent-staleness the schema stamp exists to prevent,
+    from the other end."""
+    import urllib.request
+    base, folder = server
+    docs(folder, 1)
+    from desembarque.identity import identify
+    ident = identify(folder / "doc0.pdf")
+    serve.JOBS.store(ident.doc_hash, {"hash": ident.doc_hash, "engine": "old",
+                                      "rows": [{"n": 1, "surname": "OLD"}]})
+    status, body = call(f"{base}/api/transcribe?pdf=doc0.pdf&dir=", method="POST")
+    assert body.get("cached") is True, "asking twice should still be cheap"
+
+    status, body = call(f"{base}/api/transcribe?pdf=doc0.pdf&dir=&force=1",
+                        method="POST")
+    assert status == 202 and not body.get("cached")

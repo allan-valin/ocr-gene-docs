@@ -185,6 +185,8 @@
   <button id="crop" aria-pressed="false" title="Isolar a coluna do nome">Coluna do nome</button>
   <button id="editmode" aria-pressed="false"
     title="Permitir corrigir as células. Desligado, a página é só de leitura.">✎ Corrigir</button>
+  <button id="reread"
+    title="Ler este documento de novo com o motor atual. Correções já salvas são mantidas.">↻ Reler</button>
   <a id="exportcsv" class="btn" download
     title="Baixar as linhas deste documento em CSV, com a origem de cada uma">⭳ Exportar</a>
 </header>
@@ -558,7 +560,11 @@ function renderEmpty(msg){
        <button id="dogrid" title="Detecta a grade da tabela sem modelo: linhas vazias para preencher à mão">Gerar tabela vazia</button>` : ""}`;
 }
 let ENGINE=null, poll=null;
-function startTranscription(){
+// Reading a document again is how an engine improvement reaches a dossier that
+// is already in the cache. Without it the only way was to delete the file by
+// hand, so the tool got better and the documents somebody was looking at did
+// not.
+function startTranscription(force){
   if(!SERVED||!D) return;
   clearInterval(poll);
   const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
@@ -566,7 +572,8 @@ function startTranscription(){
      ${D.ship||D.notation} · ${D.total_pages} páginas
      <div class="bar"><i style="width:2%"></i></div>
      <span id="prog">iniciando</span>`);
-  fetch(`/api/transcribe?pdf=${encodeURIComponent(D.file)}${dir}`,{method:"POST"})
+  fetch(`/api/transcribe?pdf=${encodeURIComponent(D.file)}${dir}${force?"&force=1":""}`,
+        {method:"POST"})
     .then(r=>r.json()).then(j=>{
       if(j.cached||j.status==="done") return finishTranscription();
       if(j.status==="unavailable") return renderEmpty(
@@ -995,6 +1002,7 @@ function chooseReading(i, w, word){
   r.verified = true;
   render(); select(i,false); scheduleSave();
 }
+$("#reread").onclick=()=>startTranscription(true);
 addEventListener("resize",()=>paintBand(sel));
 
 // ---- boot ----

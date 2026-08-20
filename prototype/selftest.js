@@ -239,6 +239,13 @@ window.addEventListener("load",async()=>{
     }
   }
 
+  // An engine improvement has to be able to reach a document already in the
+  // cache. Until now the only way was to delete its file by hand.
+  {
+    const b = document.getElementById("reread");
+    ok("a document can be asked for again", !!b);
+  }
+
   // A word the recogniser read two ways is offered as a choice rather than
   // left to be retyped. The alternatives are the engine's own output — the ink
   // mask reading and the render reading of the same band.
