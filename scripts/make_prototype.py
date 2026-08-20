@@ -26,6 +26,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# run directly, this script is not inside the package, and the package imports
+# below live inside functions — so without this the build died mid-corpus
+# rather than at startup, and left the previous index.html in place.
+sys.path.insert(0, str(ROOT))
 BUILD = ROOT / "prototype" / "build"
 PAGES = BUILD / "pages"
 

@@ -26,10 +26,33 @@ BUILD = ROOT / "prototype" / "build"
 PAGE = BUILD / "selftest.html"
 
 
+# What the built page is made of. If any of these is newer than the build, the
+# browser is being shown an older program than the one in the repository.
+SOURCES = [ROOT / "prototype" / "review.html", ROOT / "prototype" / "sample_rows.json"]
+
+
+def stale_reason(built: Path, sources: list[Path]) -> str | None:
+    """Why this build cannot be trusted, or None if it can.
+
+    The builder used to die on an import error, leaving the previous
+    index.html in place; the smoke test then drove a two-day-old page and
+    printed a green result for assertions the current code would have failed.
+    Age is the only evidence available here, and it is enough.
+    """
+    if not built.exists():
+        return f"no prototype build at {built.name} — run scripts/make_prototype.py first"
+    newer = [s.name for s in sources if s.exists() and s.stat().st_mtime > built.stat().st_mtime]
+    if newer:
+        return (f"{built.name} is older than {', '.join(newer)} — the build did not run "
+                "or it failed; rerun scripts/make_prototype.py")
+    return None
+
+
 def build_harness() -> str:
     index = BUILD / "index.html"
-    if not index.exists():
-        raise SystemExit("no prototype build — run scripts/make_prototype.py first")
+    reason = stale_reason(index, SOURCES)
+    if reason:
+        raise SystemExit(reason)
     body = (ROOT / "prototype" / "selftest.js").read_text(encoding="utf-8")
     html = index.read_text(encoding="utf-8").replace(
         "</body>", f"<script>\n{body}\n</script>\n</body>")
