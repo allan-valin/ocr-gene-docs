@@ -145,6 +145,24 @@ Scaling turned out to read *better*, not worse: the detector groups the lines
 the way the form is printed, so the ship and its nationality come back on the
 one line they share instead of three.
 
+### The year came from the stamp, not the writing
+
+Not one dossier in the run resolved a year: the arrival date is handwritten in a
+blank the clerk often left empty, and the year is the thing a searcher is most
+likely to know. The port stamped every sheet on arrival, in ink — `JUN 23 1917`,
+`JUL 5 1918`, `OUT 27 1917` — and those come through cleanly. In all ten pages
+that had kept a stamp, its year matched the only year printed anywhere on the
+page. **Year coverage went from 0% to 31%** on the dossiers read so far.
+
+Only the year is taken. The stamp's date is when the police filed the sheet,
+near the arrival and not the same claim — on BS.ENT.014037 the writing says
+January and the stamp says June. And the year has to be the *end* of the stamp
+rather than whatever in it looks like a year: hunting the digits reads `JUN 19
+1918` as 1919, because the day and the century run together.
+
+This was the first change tried on a branch and merged on a measurement rather
+than on an argument, because the kept pages made it a one-second question.
+
 ### Search stopped being only a name
 
 Three things the live index showed that the unit tests could not.
@@ -222,8 +240,15 @@ stopped and restarted at will and will skip whatever is already current:
 curl -X POST 'http://127.0.0.1:8799/api/index?dir='         # start / resume
 curl      'http://127.0.0.1:8799/api/index'                 # progress
 curl -X POST 'http://127.0.0.1:8799/api/index/stop'         # stop; workers finish the page
+.venv/bin/python scripts/reparse_voyages.py                 # re-read the forms already on disk
 .venv/bin/python scripts/voyages.py                         # what the corpus now knows
 ```
+
+**Run `reparse_voyages.py` after the indexing run**, and after pulling any change
+to the way the forms are read. A server that was started before a schema bump
+goes on stamping records with the number it was started with; the re-parse lifts
+them and costs a second. Only a change that needs the page *image* again — the
+engine, the geometry — needs the corpus read a second time.
 
 The schema stamp moved four times today (5 → 8) as the engine learned to read
 these forms, and each move makes every earlier record stale by design. **A
