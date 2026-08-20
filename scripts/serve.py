@@ -40,6 +40,7 @@ from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import BatchIndexer, collect_pdfs, is_indexed  # noqa: E402
 from desembarque.serve_shapes import ui_transcription  # noqa: E402
+from desembarque.export import csv_filename, rows_to_csv  # noqa: E402
 from desembarque import search as searchlib          # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
@@ -412,6 +413,17 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/index":
                 st = BATCH.state
                 return self._send(200, st.as_dict() if st else {"status": "idle"})
+
+            if u.path == "/api/export":
+                data = JOBS.cached(q.get("hash", ""))
+                if not data:
+                    return self._send(404, {"error": "not transcribed"})
+                # a download, not a page: the browser must offer to save it
+                # under a name that says which dossier it came from
+                return self._send(
+                    200, rows_to_csv(data), ctype="text/csv; charset=utf-8",
+                    extra={"Content-Disposition":
+                           f'attachment; filename="{csv_filename(data)}"'})
 
             if u.path == "/api/transcription":
                 data = JOBS.cached(q.get("hash", ""))

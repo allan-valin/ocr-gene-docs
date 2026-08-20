@@ -12,6 +12,8 @@ async function ready(ms=8000){
 }
 function rows_len(){ try{ return document.querySelectorAll("#rows tr").length; }catch(e){ return -1; } }
 window.addEventListener("load",async()=>{
+  // the page knows whether it was served; assertions that need the API ask this
+  const SERVED_RUN = typeof SERVED!=="undefined" && SERVED;
  const out=[]; const ok=(n,c)=>out.push((c?"PASS":"FAIL")+" "+n);
  const q=s=>document.querySelector(s);
  try{
@@ -136,7 +138,10 @@ window.addEventListener("load",async()=>{
   // search across the index: the control exists and answers, even when empty
   const cq=document.getElementById("corpusq");
   ok("corpus search box present", !!cq);
-  if(cq){
+  // Searching the corpus is a server call. Opened from disk the page has no
+  // API to ask, so these assertions describe a run that cannot happen there —
+  // and reporting them as failures buried the ones that mattered.
+  if(cq && SERVED_RUN){
     cq.value="amparo"; cq.dispatchEvent(new Event("input",{bubbles:true}));
     let answered=false;
     for(let i=0;i<24 && !answered;i++){
@@ -172,7 +177,7 @@ window.addEventListener("load",async()=>{
   }
 
   // folder indexing: the main action must be visible and must explain itself
-  if(location.pathname==="/selftest" || document.querySelector("#indexbar")){
+  if(SERVED_RUN){
     const bar=document.getElementById("indexbar");
     ok("index bar present", !!bar);
     if(bar){
@@ -232,6 +237,34 @@ window.addEventListener("load",async()=>{
         ok("geometry with nothing measured yields no band", band(0)===null);
       } finally { D = keep; }
     }
+  }
+
+  // Correcting a record is deliberate. Every cell used to be editable all the
+  // time, including the ones the engine never attempted, so the page invited
+  // typing into fields that had simply not been read — and a stray keystroke on
+  // a record meant as evidence is worse than one extra click.
+  {
+    const btn = document.getElementById("editmode");
+    ok("an edit-mode toggle exists", !!btn);
+    if(btn){
+      ok("editing is off until asked for", btn.getAttribute("aria-pressed") === "false");
+      ok("cells are not editable while it is off",
+         !document.querySelector('#rows span[contenteditable="true"]'));
+      btn.click();
+      await wait(150);
+      ok("turning it on makes cells editable",
+         !!document.querySelector('#rows span[contenteditable="true"]'));
+      ok("and the page shows that it is on", document.body.classList.contains("editing"));
+      btn.click();
+      await wait(150);
+      ok("turning it off puts the page back to read-only",
+         !document.querySelector('#rows span[contenteditable="true"]'));
+    }
+    const ex = document.getElementById("exportcsv");
+    ok("an export control exists", !!ex);
+    if(ex) ok("export points at the served document or is disabled",
+              (ex.getAttribute("href")||"").indexOf("/api/export") === 0
+              || ex.getAttribute("aria-disabled") === "true");
   }
 
  }catch(err){ out.push("THREW "+(err&&err.message)); }

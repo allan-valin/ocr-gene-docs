@@ -51,6 +51,13 @@
     padding:7px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
     z-index:2;display:flex;align-items:center;gap:6px}
   .sidehead button{margin-left:auto;padding:2px 7px;font-size:10.5px}
+  #exportcsv{display:inline-block;padding:3px 9px;font-size:11.5px;
+    border:1px solid var(--line);border-radius:4px;color:var(--ink);
+    text-decoration:none;cursor:pointer}
+  #exportcsv[aria-disabled="true"]{opacity:.45;pointer-events:none}
+  body.editing td[contenteditable="true"],
+  body.editing span[contenteditable="true"]{background:#fffbe6}
+  body.editing #editmode{background:var(--focus);color:#fff}
   #indexbar{padding:7px 10px;border-bottom:1.5px solid var(--line);display:flex;
     flex-direction:column;align-items:flex-start;gap:5px;background:var(--panel)}
   #indexbar button{padding:3px 9px;font-size:11.5px}
@@ -162,6 +169,10 @@
   <button id="side" aria-pressed="true" title="Mostrar ou ocultar a lista de documentos">☰</button>
   <button id="lock" aria-pressed="true" title="Travar os dois painéis juntos">⇅ Sincronizar</button>
   <button id="crop" aria-pressed="false" title="Isolar a coluna do nome">Coluna do nome</button>
+  <button id="editmode" aria-pressed="false"
+    title="Permitir corrigir as células. Desligado, a página é só de leitura.">✎ Corrigir</button>
+  <a id="exportcsv" class="btn" download
+    title="Baixar as linhas deste documento em CSV, com a origem de cada uma">⭳ Exportar</a>
 </header>
 <main id="main">
   <div id="sidebar">
@@ -210,6 +221,11 @@
 <script>
 const $ = s => document.querySelector(s);
 let DB=null, D=null, docIdx=0, pageIdx=0, rows=[], sel=0, hits=[], hitAt=-1, syncing=false;
+// Off by default. Every cell was editable all the time, including the ones the
+// engine never attempted, so the page invited typing into fields that were
+// simply not read yet — and an accidental keystroke on a legal-evidence record
+// is worse than one more click before correcting anything.
+let EDIT=false;
 const STATE={dir:""};
 
 // ---- fuzzy matching, standing in for the pg_trgm + phonetic + variant search ----
@@ -280,7 +296,7 @@ function cell(r,f,txt){
   // absent and null are different claims: the engine reads the name column
   // only, so the other fields were never attempted. Marking those "ilegível"
   // would report a failure that never happened.
-  if(!(f in r)) return `<td class="cellwrap"><span contenteditable="true"
+  if(!(f in r)) return `<td class="cellwrap"><span contenteditable="${EDIT}"
       data-f="${f}" title="não transcrito"></span></td>`;
   const isNull = txt==null;
   const d = r.ditto&&r.ditto.includes(f);
@@ -289,14 +305,14 @@ function cell(r,f,txt){
   const title = isNull ? "ilegível — registrado como nulo, nunca adivinhado"
               : d ? 'escrito como aspas de repetição (") — resolvido a partir da linha acima' : "";
   const mark = (r.conf && f in r.conf) ? dot(r,f) : "";
-  return `<td class="cellwrap"><span contenteditable="true" data-f="${f}" class="${cls}"
+  return `<td class="cellwrap"><span contenteditable="${EDIT}" data-f="${f}" class="${cls}"
            title="${title}">${val}</span>${mark}</td>`;
 }
 function render(){
   $("#rows").innerHTML = rows.map((r,i)=>`
     <tr data-i="${i}" class="${r.verified?"verified":""}">
       <td class="num">${r.n}</td>
-      <td class="name ${r.handwritten?'hw':''}"><span contenteditable="true" data-f="name"
+      <td class="name ${r.handwritten?'hw':''}"><span contenteditable="${EDIT}" data-f="name"
           title="${r.handwritten?'entrada manuscrita':''}">${r.given} ${r.surname}</span>${r.conf&&'surname' in r.conf?dot(r,'surname'):''}</td>
       ${cell(r,"nationality",r.nationality)}
       ${cell(r,"age",r.age)}
@@ -374,7 +390,7 @@ function openDoc(i,page){
   $("#tbl").hidden=!showRows;
   $("#empty").hidden=showRows;
   if(!showRows) renderEmpty();
-  renderDocList(); renderPageStrip(); render(); paintBand(0);
+  renderDocList(); renderPageStrip(); render(); paintBand(0); refreshExport();
   $("#stat").textContent = showRows ? "" : "sem transcrição";
 }
 $("#doclist").addEventListener("click",e=>{
@@ -837,6 +853,20 @@ $("#rows").addEventListener("input",e=>{
 });
 $("#lock").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",String(b.getAttribute("aria-pressed")!=="true"));};
 $("#crop").onclick=e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",String(b.getAttribute("aria-pressed")!=="true"));paintBand(sel);};
+$("#editmode").onclick=e=>{
+  const b=e.currentTarget;
+  EDIT = b.getAttribute("aria-pressed")!=="true";
+  b.setAttribute("aria-pressed",String(EDIT));
+  document.body.classList.toggle("editing",EDIT);
+  render(); select(sel,false);
+};
+function refreshExport(){
+  const a=$("#exportcsv");
+  if(!a) return;
+  const h = D && (D.hash || D.id);
+  if(SERVED && h){ a.href=`/api/export?hash=${encodeURIComponent(h)}`; a.removeAttribute("aria-disabled"); }
+  else { a.removeAttribute("href"); a.setAttribute("aria-disabled","true"); }
+}
 addEventListener("resize",()=>paintBand(sel));
 
 // ---- boot ----

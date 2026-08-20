@@ -253,3 +253,29 @@ def test_empty_geometry_is_not_invented():
     from desembarque.serve_shapes import ui_geometry
     assert ui_geometry(None) is None
     assert ui_geometry({}) == {}
+
+
+def test_the_export_endpoint_offers_a_download(server, engine):
+    """Exporting is how evidence leaves the tool, so it arrives as a file with
+    the dossier's notation on it rather than as text in a browser tab."""
+    import urllib.request
+    base, folder = server
+    docs(folder, 1)
+    from desembarque.identity import identify
+    ident = identify(folder / "doc0.pdf")
+    serve.JOBS.store(ident.doc_hash, {
+        "hash": ident.doc_hash, "engine": "paddle", "notation": "BS.ENT.013990",
+        "rows": [{"n": 1, "page": 2, "name_raw": "Jaim C. Gil"}],
+    })
+    with urllib.request.urlopen(f"{base}/api/export?hash={ident.doc_hash}") as r:
+        body = r.read().decode()
+        assert r.headers["Content-Type"].startswith("text/csv")
+        assert "BS.ENT.013990.csv" in r.headers["Content-Disposition"]
+    assert "Jaim C. Gil" in body and "notacao" in body
+
+
+def test_exporting_something_never_read_is_not_an_empty_file(server, engine):
+    """An empty spreadsheet would look like a page with nobody on it."""
+    base, folder = server
+    status, _ = call(f"{base}/api/export?hash=deadbeef")
+    assert status == 404
