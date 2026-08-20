@@ -127,3 +127,32 @@ def test_a_document_that_states_no_voyage_leaves_those_columns_empty():
     assert out[1][out[0].index("navio")] == ""
     assert out[1][out[0].index("data_chegada")] == ""
     assert out[1][out[0].index("procedencia")] == ""
+
+
+def test_the_ship_the_archive_filed_it_under_is_exported_when_the_page_lost_it():
+    """A registrar reading this spreadsheet needs the ship above almost
+    anything else, and the page gives one up in about a fifth of dossiers. The
+    archive filed all of them under a typed name."""
+    from desembarque.export import rows_to_csv
+    import csv as _csv
+    doc = {k: v for k, v in VOYAGE_DOC.items() if k != "voyage"}
+    out = list(_csv.reader(lines(rows_to_csv(doc, catalogued="itapuca"))))
+    assert out[1][out[0].index("navio")] == "itapuca"
+
+
+def test_what_the_page_said_is_what_is_exported():
+    """The catalogue is somebody's note about the document. The document wins."""
+    from desembarque.export import rows_to_csv
+    import csv as _csv
+    out = list(_csv.reader(lines(rows_to_csv(VOYAGE_DOC, catalogued="itapuca"))))
+    assert out[1][out[0].index("navio")] == "Valdivia"
+
+
+def test_the_company_and_the_port_travel_too():
+    from desembarque.export import rows_to_csv
+    import csv as _csv
+    doc = {**VOYAGE_DOC, "voyage": {**VOYAGE_DOC["voyage"],
+                                    "line": "Lloyd Brazileiro", "port": "Santos"}}
+    out = list(_csv.reader(lines(rows_to_csv(doc))))
+    assert out[1][out[0].index("companhia")] == "Lloyd Brazileiro"
+    assert out[1][out[0].index("porto_chegada")] == "Santos"

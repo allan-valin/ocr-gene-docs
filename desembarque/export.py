@@ -33,8 +33,9 @@ import csv
 import io
 
 FIELDS = [
-    "notacao", "arquivo", "navio", "procedencia", "data_chegada",
-    "pagina", "linha", "nome_lido", "sobrenome", "nome", "origem", "score_motor",
+    "notacao", "arquivo", "navio", "companhia", "procedencia", "porto_chegada",
+    "data_chegada", "pagina", "linha", "nome_lido", "sobrenome", "nome",
+    "origem", "score_motor",
 ]
 
 
@@ -55,8 +56,15 @@ def _origin(row: dict, doc: dict) -> str:
     return row.get("source") or doc.get("engine") or ""
 
 
-def rows_to_csv(doc: dict) -> str:
-    """One document's rows as CSV text, header included even when empty."""
+def rows_to_csv(doc: dict, catalogued: str | None = None) -> str:
+    """One document's rows as CSV text, header included even when empty.
+
+    `catalogued` is the ship the archive filed this dossier under. The page
+    gives up a ship in about a fifth of them and a registrar reading this needs
+    one above almost anything else, so the archive's typed name stands in where
+    the page said nothing. Where the page said something, it wins: it is the
+    document, and the catalogue is somebody's note about it.
+    """
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=FIELDS, lineterminator="\n")
     w.writeheader()
@@ -66,8 +74,10 @@ def rows_to_csv(doc: dict) -> str:
         w.writerow({
             "notacao": doc.get("notation") or "",
             "arquivo": doc.get("file") or "",
-            "navio": voyage.get("ship") or doc.get("ship") or "",
+            "navio": voyage.get("ship") or doc.get("ship") or catalogued or "",
+            "companhia": voyage.get("line") or "",
             "procedencia": voyage.get("origin") or "",
+            "porto_chegada": voyage.get("port") or "",
             "data_chegada": _arrival(voyage),
             "pagina": row.get("page") or "",
             "linha": row.get("n") or "",

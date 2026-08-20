@@ -503,8 +503,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(404, {"error": "not transcribed"})
                 # a download, not a page: the browser must offer to save it
                 # under a name that says which dossier it came from
+                ships = catalogue_ships(STATE["root"])
                 return self._send(
-                    200, rows_to_csv(data), ctype="text/csv; charset=utf-8",
+                    200, rows_to_csv(data, catalogued=ships.get(data.get("file") or "")),
+                    ctype="text/csv; charset=utf-8",
                     extra={"Content-Disposition":
                            f'attachment; filename="{csv_filename(data)}"'})
 
