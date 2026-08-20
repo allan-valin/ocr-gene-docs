@@ -279,3 +279,75 @@ def test_exporting_something_never_read_is_not_an_empty_file(server, engine):
     base, folder = server
     status, _ = call(f"{base}/api/export?hash=deadbeef")
     assert status == 404
+
+
+PARTE_TEXT = """MINISTERIO DA AGRICULTURA, INDUSTRIA E COMMERCIO
+SERVIÇO DE POVOAMENTO
+PARTE
+do Interprete Arthur K Fexxerria
+"Valdivia"
+que visitou o paquete Francer
+procedente de B. Aires e escalas
+entrado em 10 deDesembro de 1924
+SAUDE DOS PASSAGEIROS
+MORTALIDADE
+NASCIMENTOS
+OBSERVAÇÕES
+Entregou 1 lista com 12 immigrantes"""
+
+
+class VoyageEngine:
+    """A dossier whose second page is the interpreter's form, not a list.
+
+    This is the common shape in the corpus and it is currently thrown away: the
+    engine reads the page, finds no grid, returns the text, and nothing keeps
+    it. The ship, the port it sailed from and the arrival date are printed on
+    that page and are the only things a searcher reliably knows.
+    """
+    name = "fake-voyage"
+
+    def available(self):
+        return True
+
+    def transcribe_page(self, image, kind="unknown", source=None, page=None):
+        if page == 2:
+            return engines.PageResult(kind="unknown", engine=self.name,
+                                      text=PARTE_TEXT)
+        return engines.PageResult(kind=kind, engine=self.name, text="")
+
+
+def test_the_voyage_a_dossier_records_is_kept(server, monkeypatch):
+    """A page with no rows is not a page with nothing on it."""
+    base, folder = server
+    monkeypatch.setattr(engines, "_ACTIVE", VoyageEngine())
+    docs(folder, 1)
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+
+    from desembarque.identity import identify
+    ident = identify(folder / "doc0.pdf")
+
+    class Job:
+        total = 2
+        page = 0
+    data = serve.transcribe_document(folder / "doc0.pdf", Job())
+    voyage = data.get("voyage")
+    assert voyage, "the dossier's own statement of the voyage was thrown away"
+    assert voyage["ship"] == "Valdivia"
+    assert voyage["origin"] == "B. Aires e escalas"
+    assert voyage["arrival"] == "1924-12-10"
+    assert voyage["passengers"] == 12
+
+
+def test_a_dossier_that_states_no_voyage_carries_none(server, engine, monkeypatch):
+    """Absent and empty are different claims, here as everywhere else."""
+    base, folder = server
+    docs(folder, 1)
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+
+    class Job:
+        total = 1
+        page = 0
+    data = serve.transcribe_document(folder / "doc0.pdf", Job())
+    assert "voyage" not in data

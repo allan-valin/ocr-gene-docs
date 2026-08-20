@@ -41,6 +41,7 @@ from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import BatchIndexer, collect_pdfs, is_indexed  # noqa: E402
 from desembarque.serve_shapes import ui_transcription  # noqa: E402
 from desembarque.export import csv_filename, rows_to_csv  # noqa: E402
+from desembarque.voyage import parse_voyage            # noqa: E402
 from desembarque import search as searchlib          # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
@@ -234,7 +235,7 @@ def transcribe_document(pdf: Path, job) -> dict:
         return {"unavailable": True, "message": engines.status()["detail"]}
 
     ident = identify(pdf)
-    pages, rows, cover_text = [], [], ""
+    pages, rows, cover_text, voyage = [], [], "", None
     for n in range(1, job.total + 1):
         job.page = n
         img = page_image(pdf, n, CACHE) or render_page(pdf, n, dpi=200)
@@ -245,6 +246,14 @@ def transcribe_document(pdf: Path, job) -> dict:
         pages.append({"n": n, "kind": res.kind, "error": res.error})
         if res.kind == "cover" and res.text:
             cover_text = cover_text or res.text
+        # A page with no rows is not a page with nothing on it. Most of them
+        # are the interpreter's PARTE form, which states the ship, the port it
+        # sailed from and the arrival date in print — the three things a person
+        # searching for an ancestor actually knows.
+        if voyage is None and res.text:
+            found = parse_voyage(res.text)
+            if found:
+                voyage = found.as_dict()
         for r in res.rows:
             r["page"] = n
             rows.append(r)
@@ -259,6 +268,7 @@ def transcribe_document(pdf: Path, job) -> dict:
         "engine": eng.name,
         "pages": pages,
         "rows": rows,
+        **({"voyage": voyage} if voyage else {}),
     }
 
 

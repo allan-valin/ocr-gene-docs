@@ -4,6 +4,85 @@ Running checkpoint. Newest first. The design record is
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
 next actions.
 
+## 2026-08-20 — day session (Allan working)
+
+### The browser test had been green against a two-day-old page  (30e1726)
+
+`make_prototype.py` imports the package from inside its functions and the
+repository root was never on `sys.path`, so the build died with a
+`ModuleNotFoundError` the moment it reached a PDF — after argument parsing, in
+the middle of real work. The previous `prototype/build/index.html` stayed where
+it was, and the smoke run went on driving it: **35 assertions, all green,
+against a page older than the code**. Behind it were nine genuine failures.
+
+Fixed in two places, because they are two problems. Scripts that import the
+package now put the root on the path. And the smoke test refuses to run when the
+build is older than `review.html` — a stale artifact has to be an error, since
+everything downstream believes it.
+
+The assertions that need the API are now gated on the page being served: from
+disk there is nothing to answer them, and counting them as failures buried the
+ones that meant something. **44/44 from disk, 56/56 served, in Chromium and
+Firefox.**
+
+### A document can leave the tool as a spreadsheet  (3b4daa6)
+
+`/api/export` returns one dossier's rows as CSV, offered as a download named for
+its notation. Every row carries the notation, the page and line, the verbatim
+reading beside the split into surname and given name, and **who produced it** —
+a person or which engine. The recogniser's number is exported as `score_motor`,
+not `precisao`: it is a decode score that stays high on confident nonsense.
+Blank rows are kept, because a blank line on these forms is a fact about the
+page and dropping it renumbers everyone below it.
+
+Editing is now a mode rather than the default. Every cell was editable at all
+times, including fields the engine never attempted, so the page invited typing
+into places that had not been read. On a record meant as evidence, a stray
+keystroke is worse than one more click.
+
+### The tables whose rules print too faintly to be measured  (f0eed9f)
+
+`BR_..._16456` page 2 is a clean list of **thirty-seven passengers** and geometry
+returned nothing at all. The table's vertical extent is taken from its rules, and
+on this sheet they printed so faintly that the longest unbroken run of ink at
+each one is the blank paper below the last passenger. The extent came out as the
+bottom six per cent of the page; no comb fits inside that; the run reported
+success.
+
+The comb fitted to the *writing* was already computed as a challenger, but it
+could only win by overlapping the extent the rules reported — and that extent is
+exactly what is wrong here. When there is no first comb at all there is nothing
+to protect and the veto comes from the same broken measurement, so the challenger
+is now judged on its own: it must start on the page, cover at least eight rows,
+and account for at least half the writing detected. A comb explaining a third of
+the writing is a letterhead as often as it is a list.
+
+| | before | after |
+|---|---|---|
+| pages with no row at all | 15 of 89 | 10 of 89 |
+| mean coverage | 0.457 | 0.497 |
+| regressions | — | **0** |
+
+The five recovered pages went from zero coverage to 0.50–0.79. The choice
+between the two combs is now `choose_comb`, a function tested on the numbers real
+pages produce, which is how its thresholds were set.
+
+### What the remaining blank pages actually are
+
+Most of the ten are **not passenger lists**. They are the interpreter's *PARTE*
+form, and no rows is the right answer for them:
+
+> do Intérprete *Matheus H. Ferreira* / que visitou o paquete *Francez*
+> "*Valdivia*" / procedente de *B. Aires e escalas* / entrado em *10* de
+> *Dezembro* de 19*24* / Entregou *1* lista com *12* immigrantes
+
+Ship, nationality, port of origin, arrival date, headcount — printed labels
+around handwritten values, on a page currently thrown away. The same voyage is
+printed again in the header of every passenger list. **None of it is indexed**,
+which is why a search has nothing but the name to go on. That is the next piece
+of work, and it is the one that answers "search ranking should use more than the
+name".
+
 ## 2026-08-19 — night session (Allan away)
 
 Four fixes, all committed and pushed. The corpus is downloading toward ~570
