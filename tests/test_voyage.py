@@ -721,3 +721,13 @@ def test_a_vessel_name_survives_the_same_test():
     for ship in ("INDIANA", "Itapuca", "Jaronna", "Valdivia", "Formosa",
                  "Highland Rock", "Baden", "San-America"):
         assert plausible_ship(ship, None) == ship, ship
+
+
+def test_four_letters_is_not_a_ship_on_this_archive():
+    """`RI IVEO` came through the run twice — a port stamp, read as a vessel.
+    Ship names in this archive run to five letters and up, and nothing shorter
+    survived the readings that were checked against the scans."""
+    from desembarque.voyage import plausible_ship
+    assert plausible_ship("RI IVEO", None) is None
+    assert plausible_ship("Baden", None) == "Baden"
+    assert plausible_ship("San-America", None) == "San-America"

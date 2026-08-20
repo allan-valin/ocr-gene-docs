@@ -313,6 +313,7 @@ FORM_WORDS = """paquete paquetes vapor papor navio lista entrada entrados
     relacao relação desembarcaram neste este seus santos janeiro nacional
     imprensa""".split()
 FORM_WORD_FLOOR = 0.8
+MIN_SHIP_WORD = 5
 
 
 def _is_form_word(word: str) -> bool:
@@ -345,6 +346,11 @@ def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
     # `Repartição da Pette` is a rubber stamp with a misread word in it, not a
     # vessel with an office in its name.
     if any(_is_form_word(w) for w in word.split()):
+        return None
+    # `RI IVEO` came through the run twice: a port stamp read as a vessel. Ship
+    # names on this archive run to five letters and up, and nothing shorter
+    # survived a reading checked against the scan.
+    if max(len(w) for w in word.split()) < MIN_SHIP_WORD:
         return None
     if is_flag(value):
         return None
