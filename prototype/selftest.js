@@ -239,6 +239,45 @@ window.addEventListener("load",async()=>{
     }
   }
 
+  // A word the recogniser read two ways is offered as a choice rather than
+  // left to be retyped. The alternatives are the engine's own output — the ink
+  // mask reading and the render reading of the same band.
+  {
+    const saved = rows[0] && JSON.parse(JSON.stringify(rows[0]));
+    if(rows[0]){
+      rows[0].name_raw = "Nayomgo Cassaudii";
+      rows[0].name_alts = [["Raymundo"], ["Cassaudie"]];
+      render();
+      const pills = document.querySelectorAll("#rows tr[data-i='0'] .altword");
+      ok("a word read two ways is marked as changeable", pills.length === 2);
+      if(pills.length){
+        pills[0].click();
+        await wait(80);
+        const menu = document.querySelector(".altmenu");
+        ok("clicking it offers the other reading",
+           !!menu && menu.textContent.indexOf("Raymundo") >= 0);
+        ok("and shows the reading it currently has",
+           !!menu && menu.textContent.indexOf("Nayomgo") >= 0);
+        const btns = menu ? [...menu.querySelectorAll("button")] : [];
+        const pick = btns.find(b=>b.textContent === "Raymundo");
+        if(pick){
+          pick.click();
+          await wait(120);
+          ok("choosing it rewrites that word and leaves the other alone",
+             rows[0].name_raw === "Raymundo Cassaudii");
+          ok("and the row counts as checked by a person", rows[0].verified === true);
+          ok("the menu closes after choosing", !document.querySelector(".altmenu"));
+        }
+      }
+      // a word both readings agree on is not dressed up as a choice
+      rows[0].name_alts = [[], []];
+      render();
+      ok("a word the readings agree on is left alone",
+         !document.querySelector("#rows tr[data-i='0'] .altword"));
+      Object.assign(rows[0], saved); render();
+    }
+  }
+
   // The name cell shows what the page says. It was showing the *split* of the
   // name put back together the other way round: BS.ENT.013990 reads `Raymundo
   // Cassaudii` and the row showed `Cassaudii Nayomgo`. A transcription that

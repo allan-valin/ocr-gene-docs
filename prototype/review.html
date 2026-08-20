@@ -51,6 +51,20 @@
     padding:7px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
     z-index:2;display:flex;align-items:center;gap:6px}
   .sidehead button{margin-left:auto;padding:2px 7px;font-size:10.5px}
+  /* A word the engine read two ways. The outline says it can be changed; the
+     caret says there is something behind it. Same grammar as the other
+     changeable controls on this page. */
+  .altword{border:1px solid var(--line);border-radius:3px;padding:0 3px;cursor:pointer;
+    white-space:nowrap}
+  .altword:hover{border-color:var(--focus)}
+  .altword i{font-style:normal;color:var(--muted);font-size:9px;margin-left:2px}
+  .altmenu{position:absolute;z-index:20;background:var(--panel);border:1px solid var(--line);
+    border-radius:4px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:3px;min-width:120px}
+  .altmenu button{display:block;width:100%;text-align:left;padding:3px 7px;font-size:12px;
+    border:0;background:none;cursor:pointer;color:var(--ink)}
+  .altmenu button:hover{background:rgba(120,150,200,.18)}
+  .altmenu button.on{font-weight:600}
+  .altmenu .why{color:var(--muted);font-size:10px;padding:2px 7px 4px}
   #exportcsv{display:inline-block;padding:3px 9px;font-size:11.5px;
     border:1px solid var(--line);border-radius:4px;color:var(--ink);
     text-decoration:none;cursor:pointer}
@@ -355,12 +369,31 @@ function splitName(t){
   if(p.length===1) return [p[0],""];
   return [p.slice(0,-1).join(" "), p[p.length-1]];
 }
+// A word the recogniser read more than one way is shown as a control, so the
+// other reading can be chosen instead of retyped. The alternatives are the
+// engine's own output — the mask reading and the render reading of the same
+// band — never a dictionary and never a guess.
+//
+// Only when the cell is not being typed into: pills inside a contenteditable
+// region get torn apart by the first keystroke, and free typing already has a
+// mode of its own.
+function nameCell(r){
+  const text = nameText(r);
+  const alts = r.name_alts;
+  if(EDIT || !alts || !alts.some(a=>a && a.length)) return text;
+  return text.split(/\s+/).map((w,i)=>{
+    const a = alts[i];
+    if(!a || !a.length) return w;
+    return `<span class="altword" data-w="${i}" title="o motor também leu: ${a.join(", ")}"
+      >${w}<i>&#9662;</i></span>`;
+  }).join(" ");
+}
 function render(){
   $("#rows").innerHTML = rows.map((r,i)=>`
     <tr data-i="${i}" class="${r.verified?"verified":""}">
       <td class="num">${r.n}</td>
       <td class="name ${r.handwritten?'hw':''}"><span contenteditable="${EDIT}" data-f="name"
-          title="${r.handwritten?'entrada manuscrita':''}">${nameText(r)}</span>${r.conf&&'surname' in r.conf?dot(r,'surname'):''}</td>
+          title="${r.handwritten?'entrada manuscrita':''}">${nameCell(r)}</span>${r.conf&&'surname' in r.conf?dot(r,'surname'):''}</td>
       ${cell(r,"nationality",r.nationality)}
       ${cell(r,"age",r.age)}
       <td>${r.sex||""}</td>
@@ -922,6 +955,45 @@ function refreshExport(){
   const h = D && (D.hash || D.id);
   if(SERVED && h){ a.href=`/api/export?hash=${encodeURIComponent(h)}`; a.removeAttribute("aria-disabled"); }
   else { a.removeAttribute("href"); a.setAttribute("aria-disabled","true"); }
+}
+// ---- other readings of a word ----------------------------------------------
+function closeAltMenu(){ const m=document.querySelector(".altmenu"); if(m) m.remove(); }
+document.addEventListener("click",e=>{
+  const pill = e.target.closest(".altword");
+  if(!pill){ closeAltMenu(); return; }
+  closeAltMenu();
+  const tr = pill.closest("tr"), i = +tr.dataset.i, w = +pill.dataset.w;
+  const r = rows[i], alts = (r.name_alts||[])[w] || [];
+  const words = nameText(r).split(/\s+/);
+  const menu = document.createElement("div");
+  menu.className = "altmenu";
+  menu.innerHTML = `<div class="why">outras leituras do motor</div>`
+    + [words[w], ...alts].map(o =>
+        `<button data-o="${o}" class="${o===words[w]?"on":""}">${o}</button>`).join("");
+  document.body.appendChild(menu);
+  const box = pill.getBoundingClientRect();
+  menu.style.left = `${Math.round(box.left + scrollX)}px`;
+  menu.style.top = `${Math.round(box.bottom + scrollY + 2)}px`;
+  menu.addEventListener("click", ev=>{
+    const b = ev.target.closest("button"); if(!b) return;
+    chooseReading(i, w, b.dataset.o);
+    closeAltMenu();
+  });
+});
+// Choosing between readings the engine produced is a correction like any other:
+// it is recorded, the row counts as checked by a person, and it is saved.
+function chooseReading(i, w, word){
+  const r = rows[i], words = nameText(r).split(/\s+/);
+  if(words[w] === word) return;
+  words[w] = word;
+  const val = words.join(" ");
+  r.name_raw = val;
+  const [sur, giv] = splitName(val);
+  r.surname = sur; r.given = giv;
+  r.edits = r.edits || [];
+  r.edits.push({field:"name", to:val, at:new Date().toISOString(), from:"leitura alternativa"});
+  r.verified = true;
+  render(); select(i,false); scheduleSave();
 }
 addEventListener("resize",()=>paintBand(sel));
 

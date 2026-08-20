@@ -504,3 +504,52 @@ def test_a_page_with_no_measured_table_offers_its_top_third():
 
     box = header_box(Geo(), (3000, 4000))
     assert box and box[3] == 4000 // 3
+
+
+# ---- both readings of a row, not just the winning one ------------------------
+
+def test_the_losing_reading_is_kept_against_the_winning_one():
+    """The mask and the render disagree exactly where the hand is hard. One of
+    them won and the other was discarded, so a person correcting the row
+    retyped a name the engine had already produced."""
+    from desembarque.engine_paddle import attach_alternatives
+    mask = [{"n": 1, "name_raw": "Nayomgo Cassaudii"}]
+    render = [{"n": 1, "name_raw": "Raymundo Cassaudie"}]
+    rows = attach_alternatives(mask, render)
+    assert rows[0]["name_raw"] == "Nayomgo Cassaudii"
+    assert rows[0]["name_alts"] == [["Raymundo"], ["Cassaudie"]]
+
+
+def test_attaching_alternatives_does_not_change_which_reading_won():
+    """Which reading wins is `with_fallback`'s question, settled by measurement
+    across ten pages: the render is a second opinion, not an improvement to
+    adopt wholesale. Taking it here would quietly overturn that."""
+    from desembarque.engine_paddle import attach_alternatives
+    mask = [{"n": 1, "name_raw": "GUIDO"}]
+    render = [{"n": 1, "name_raw": "GUIDO CONTADORE ESQ"}]
+    assert attach_alternatives(mask, render)[0]["name_raw"] == "GUIDO"
+
+
+def test_a_row_the_two_readings_agree_on_carries_no_alternatives():
+    """An empty list on every row is noise in a file somebody may open."""
+    from desembarque.engine_paddle import attach_alternatives
+    rows = attach_alternatives([{"n": 1, "name_raw": "JOSE MUESSO"}],
+                               [{"n": 1, "name_raw": "JOSE MUESSO"}])
+    assert "name_alts" not in rows[0]
+
+
+def test_no_second_reading_leaves_the_rows_as_they_were():
+    from desembarque.engine_paddle import attach_alternatives
+    mask = [{"n": 1, "name_raw": "JOSE MUESSO"}]
+    assert attach_alternatives(mask, None) is mask
+
+
+def test_the_readings_are_paired_by_row_number_not_by_position():
+    """A reading that skipped a band would otherwise offer every name below it
+    as an alternative spelling of the name above."""
+    from desembarque.engine_paddle import attach_alternatives
+    mask = [{"n": 1, "name_raw": "GUIDO"}, {"n": 2, "name_raw": "EMMA"}]
+    render = [{"n": 2, "name_raw": "EMMO"}]
+    rows = attach_alternatives(mask, render)
+    assert "name_alts" not in rows[0]
+    assert rows[1]["name_alts"] == [["EMMO"]]

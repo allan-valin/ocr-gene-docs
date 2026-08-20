@@ -25,6 +25,7 @@ from typing import Callable
 
 from .engine import PageResult
 from .search import is_heading
+from .variants import token_alternatives
 
 # Recogniser choice and threading are set by measurement, not taste — see
 # scripts/spike_speed.py and docs/PROGRESS.md for the numbers behind these.
@@ -59,6 +60,13 @@ RENDER_DPI = 300
 # form, both of them large. The row recogniser still gets the full-resolution
 # crops; only this pass is scaled, and only when the page is bigger than this.
 TEXT_MAX_SIDE = int(os.environ.get("DESEMBARQUE_TEXT_MAX_SIDE", "2000"))
+
+# Every row is read twice, from the PDF's ink mask and from a composited
+# render, and the two disagree exactly where the hand is hard. Keeping the
+# losing reading is what lets a person pick `Raymundo` over `Nayomgo` instead of
+# retyping it. It costs a render and a second pass of the recogniser per page —
+# recognition is the cheap half — and can be turned off here.
+SECOND_READING = os.environ.get("DESEMBARQUE_SECOND_READING", "1") != "0"
 
 # A page with a grid was never read as prose, so the printed header above the
 # table — which states the ship, the port it sailed from and the date — was seen
@@ -283,6 +291,36 @@ def richer(mask_rows: list[dict], alt_rows: list[dict]) -> list[dict]:
     n_mask = sum(1 for r in mask_rows if (r.get("name_raw") or "").strip())
     n_alt = sum(1 for r in alt_rows if (r.get("name_raw") or "").strip())
     return alt_rows if n_alt > n_mask else mask_rows
+
+
+def attach_alternatives(chosen: list[dict],
+                        other: list[dict] | None) -> list[dict]:
+    """The chosen reading, carrying what the other reading said.
+
+    The two disagree exactly where the hand is hard — `Nayomgo` and `Raymundo`
+    are one word on one page — and until now the loser was thrown away, so a
+    person correcting the row retyped a name the engine had already produced.
+
+    This does not decide anything. Which reading wins is `with_fallback`'s
+    question and was settled by measurement: the render is a second opinion,
+    not an improvement to adopt wholesale. All that happens here is that the
+    opinion is kept.
+
+    Rows are paired by their number rather than by position: a reading that
+    skipped a band would otherwise offer every name below it as an alternative
+    spelling of the name above.
+    """
+    if not other:
+        return chosen
+    by_n = {r.get("n"): r for r in other}
+    out = []
+    for row in chosen:
+        twin = by_n.get(row.get("n"))
+        alts = token_alternatives([row.get("name_raw") or "",
+                                   (twin or {}).get("name_raw") or ""])
+        # an empty list on every row is noise in a file somebody may open
+        out.append({**row, "name_alts": alts} if any(alts) else row)
+    return out
 
 
 def with_fallback(mask_rows: list[dict], make_alt: Callable[[], list[dict] | None],
@@ -600,10 +638,15 @@ class PaddleEngine:
             im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
             rows = rows_from_bands(geo, im.size, self._recognize,
                                    self._carved_crops(im, geo))
-            rows, from_render = with_fallback(
-                rows,
-                lambda: self._render_rows(source, page, geo, im.size, image.parent),
-            )
+            # The second reading is now taken whether or not the first came
+            # back thin, because what it says about a word is worth having even
+            # when it read no more names than the mask did. Which reading wins
+            # is unchanged: that was settled by measurement across ten pages.
+            alt = (self._render_rows(source, page, geo, im.size, image.parent)
+                   if SECOND_READING else None)
+            mask_rows = rows
+            rows, from_render = with_fallback(rows, lambda: alt)
+            rows = attach_alternatives(rows, alt if rows is mask_rows else mask_rows)
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
                 **self.read_header(image, geo, text),
