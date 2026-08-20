@@ -229,6 +229,23 @@ letters and up, and `iveo` does not. It is deliberately **not** being added at
 the end of a session, because it would refuse a real four-letter vessel and
 because every such change makes the whole corpus stale again.
 
+### Checkpoint, 2026-08-20 midday
+
+The re-index is **running unattended** and resumes from cache: 119 of 660
+dossiers current, 0 failures, ~36 s each, roughly five hours left. Four workers
+is the setting that fits this machine — five and six were both *slower*, and six
+pushed it into swap.
+
+On the 86 dossiers read so far: **91% state a voyage, 90% name the shipping
+line, 41% give a year, 40% a port, 27% a ship, 13% a full date.** Years run
+1917-1920 throughout. Three of the twenty-three ships read off pages are still
+noise (`RII IEVEL`, a recurring stamp) — about one in eight, and the archive's
+own catalogue covers the ship for search regardless.
+
+When the run finishes: `scripts/reparse_voyages.py`, then
+`scripts/voyages.py`. A server started before a schema bump goes on stamping
+records with the number it started with, and the re-parse lifts them in a second.
+
 ### Where this leaves the corpus, and what is running
 
 A full re-index is running as this is written — 660 dossiers, four workers,
