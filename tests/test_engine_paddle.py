@@ -259,7 +259,7 @@ def test_a_page_read_from_the_render_says_so(monkeypatch):
 #   NotImplementedError: (Unimplemented) ConvertPirAttribute2RuntimeAttribute
 #     not support [pir::ArrayAttribute<pir::DoubleAttribute>]
 # and the run reported success anyway. The row recogniser is fine with oneDNN;
-# only the detection pipeline behind `_page_text` trips on it. That path reads
+# only the detection pipeline behind `read_page` trips on it. That path reads
 # the archive cover card, which is what `identify()` uses -- which is why every
 # stored record fell back to identifying itself by filename.
 #
@@ -286,7 +286,7 @@ def test_onednn_is_tried_first():
     eng = PaddleEngine(mkldnn=True)
     built = []
     eng._build_page = lambda mkldnn: built.append(mkldnn) or FakePipeline(mkldnn)
-    eng._page_text(Path("cover.png"))
+    eng.read_page(Path("cover.png"))["text"]
     assert built[0] is True, "oneDNN is worth having where it works"
 
 
@@ -296,7 +296,7 @@ def test_a_pipeline_that_dies_on_use_is_rebuilt_without_onednn():
     eng = PaddleEngine(mkldnn=True)
     built = []
     eng._build_page = lambda mkldnn: built.append(mkldnn) or FakePipeline(mkldnn)
-    text = eng._page_text(Path("cover.png"))
+    text = eng.read_page(Path("cover.png"))["text"]
     assert built == [True, False]
     assert "ARQUIVO NACIONAL" in text
 
@@ -309,7 +309,7 @@ def test_the_fallback_is_remembered_rather_than_rediscovered():
     built = []
     eng._build_page = lambda mkldnn: built.append(mkldnn) or FakePipeline(mkldnn)
     for _ in range(3):
-        eng._page_text(Path("cover.png"))
+        eng.read_page(Path("cover.png"))["text"]
     assert built == [True, False], "rebuilt once, not once per page"
 
 
@@ -325,7 +325,7 @@ def test_a_failure_that_is_not_onednn_still_raises():
 
     eng._build_page = lambda mkldnn: Broken()
     with pytest.raises(RuntimeError):
-        eng._page_text(Path("cover.png"))
+        eng.read_page(Path("cover.png"))["text"]
 
 
 # --- the line number is not part of the surname ------------------------------
@@ -437,7 +437,7 @@ def test_a_whole_page_is_read_at_a_workable_size(tmp_path, monkeypatch):
 
     eng = PaddleEngine()
     monkeypatch.setattr(eng, "_predict_page", lambda p: seen.append(Path(p)) or [])
-    eng._page_text(big)
+    eng.read_page(big)
 
     assert seen, "nothing was read"
     with Image.open(seen[0]) as im:
@@ -455,7 +455,7 @@ def test_a_page_already_small_enough_is_not_copied(tmp_path, monkeypatch):
     seen = []
     eng = PaddleEngine()
     monkeypatch.setattr(eng, "_predict_page", lambda p: seen.append(Path(p)) or [])
-    eng._page_text(small)
+    eng.read_page(small)
     assert seen == [small]
 
 

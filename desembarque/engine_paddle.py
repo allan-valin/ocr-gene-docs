@@ -494,8 +494,14 @@ class PaddleEngine:
                             "x1": max(xs), "y1": max(ys)})
         return out
 
-    def _page_text(self, image: Path) -> str:
-        return self._texts_of(self._predict_page(self._readable_copy(image)))
+    def read_page(self, image: Path, wanted: bool = True) -> dict:
+        """A whole page read as prose: its text and the boxes it came from."""
+        return self._read(lambda: self._predict_page(self._readable_copy(image)),
+                          wanted)
+
+    def read_header(self, image: Path, geo, wanted: bool = True) -> dict:
+        """Only what is printed above the table, which is where the voyage is."""
+        return self._read(lambda: self._header(image, geo), wanted)
 
     def _render_rows(self, source: Path | None, page: int | None, geo,
                      size: tuple[int, int], workdir: Path) -> list[dict] | None:
@@ -576,8 +582,7 @@ class PaddleEngine:
             # the cover card carries the archival notation, and has no grid
             if kind == "cover":
                 return PageResult(kind="cover", engine=self.name,
-                                  **self._read(lambda: self._predict_page(
-                                      self._readable_copy(image)), text))
+                                  **self.read_page(image, text))
 
             import sys
             sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -589,8 +594,7 @@ class PaddleEngine:
             if not geo.rows or not geo.name_column(0):
                 # no grid is a legitimate answer: many pages are not tables
                 return PageResult(kind="unknown", engine=self.name,
-                                  **self._read(lambda: self._predict_page(
-                                      self._readable_copy(image)), text))
+                                  **self.read_page(image, text))
 
             im = Image.open(image).convert("L")
             im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
@@ -602,7 +606,7 @@ class PaddleEngine:
             )
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
-                **self._read(lambda: self._header(image, geo), text),
+                **self.read_header(image, geo, text),
                 geometry={"rows": geo.normalized_rows(),
                           "columns": geo.normalized_cols(),
                           "skew": geo.skew,
