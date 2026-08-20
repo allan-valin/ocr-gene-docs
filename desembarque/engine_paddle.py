@@ -49,6 +49,17 @@ INK_MARGIN = 4
 RETRY_FLOOR = 0.5
 RENDER_DPI = 300
 
+# Reading a *whole page* — the archival notation on a cover card, the printed
+# form that states the voyage — is detection over the entire scan, and these
+# scans are around 5300x3800. That measured about five minutes a page on this
+# machine, twice per dossier, which is twenty-seven hours for the corpus: not a
+# run anybody leaves going, and the reason indexing had to be stopped.
+#
+# What is wanted off a whole page is printed letterhead and a clerk filling in a
+# form, both of them large. The row recogniser still gets the full-resolution
+# crops; only this pass is scaled, and only when the page is bigger than this.
+TEXT_MAX_SIDE = int(os.environ.get("DESEMBARQUE_TEXT_MAX_SIDE", "2000"))
+
 
 def refine(im, margin: int = INK_MARGIN):
     """Trim a row band down to the writing inside it.
@@ -375,8 +386,31 @@ class PaddleEngine:
                         float(d.get("rec_score") or 0.0)))
         return out
 
+    def _readable_copy(self, image: Path) -> Path:
+        """The page at a size detection can cross, cached beside the original.
+
+        A page already small enough is passed through untouched: rewriting it
+        would cost a disk write and a generation of JPEG to change nothing.
+        """
+        from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None
+        try:
+            with Image.open(image) as im:
+                if max(im.size) <= TEXT_MAX_SIDE:
+                    return image
+                dest = image.with_name(f"{image.stem}-text{TEXT_MAX_SIDE}.jpg")
+                if not (dest.exists() and dest.stat().st_size):
+                    small = im.convert("L")
+                    small.thumbnail((TEXT_MAX_SIDE, TEXT_MAX_SIDE), Image.LANCZOS)
+                    small.save(dest, quality=88)
+        except (OSError, ValueError):
+            # scaling is an optimisation; a page that cannot be opened is the
+            # recogniser's error to report, in its own words
+            return image
+        return dest
+
     def _page_text(self, image: Path) -> str:
-        res = self._predict_page(image)
+        res = self._predict_page(self._readable_copy(image))
         parts = []
         for r in res:
             d = r.json.get("res", r.json) if hasattr(r, "json") else {}

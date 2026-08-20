@@ -418,3 +418,42 @@ def test_a_single_misread_number_is_not_a_break():
     the count picks up where it left off straight after."""
     from desembarque.engine_paddle import list_breaks
     assert list_breaks(["5", "6", "1", "8", "9"]) == []
+
+
+# ---- reading a whole page, at a size that does not cost five minutes ---------
+
+def test_a_whole_page_is_read_at_a_workable_size(tmp_path, monkeypatch):
+    """Detection over a 5287x3817 scan takes about five minutes on this
+    machine. Two of those per dossier is twenty-seven hours for the corpus,
+    which is not a run anybody leaves going. The text wanted from a whole page
+    is printed letterhead and a clerk's hand filling in a form — both large —
+    so it is read from a copy scaled to something detection can cross."""
+    from PIL import Image
+    from desembarque.engine_paddle import PaddleEngine, TEXT_MAX_SIDE
+
+    big = tmp_path / "page.jpg"
+    Image.new("L", (5287, 3817), 255).save(big)
+    seen = []
+
+    eng = PaddleEngine()
+    monkeypatch.setattr(eng, "_predict_page", lambda p: seen.append(Path(p)) or [])
+    eng._page_text(big)
+
+    assert seen, "nothing was read"
+    with Image.open(seen[0]) as im:
+        assert max(im.size) <= TEXT_MAX_SIDE, f"read at {im.size}"
+
+
+def test_a_page_already_small_enough_is_not_copied(tmp_path, monkeypatch):
+    """Rewriting a file to change nothing costs a disk write per page and loses
+    a generation of JPEG on the way."""
+    from PIL import Image
+    from desembarque.engine_paddle import PaddleEngine
+
+    small = tmp_path / "page.jpg"
+    Image.new("L", (1200, 900), 255).save(small)
+    seen = []
+    eng = PaddleEngine()
+    monkeypatch.setattr(eng, "_predict_page", lambda p: seen.append(Path(p)) or [])
+    eng._page_text(small)
+    assert seen == [small]

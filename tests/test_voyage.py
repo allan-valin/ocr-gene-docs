@@ -431,3 +431,46 @@ def test_the_parte_form_is_still_read_as_a_parte_form():
     form into it — they disagree about what the word beside `paquete` means."""
     for text in (PARTE_19845, PARTE_18224, PARTE_19032, PARTE_20039):
         assert parse_voyage(text).source == "parte"
+
+
+# The same page read at a workable size. Scaling the scan down before detection
+# also groups the lines better: the ship and its nationality, split across three
+# lines at full resolution, come back on the one printed line they share.
+PARTE_19845_SCALED = """BR.AN.RIO. OL.O. RPV. PR.J, 19845
+TM.
+MODELO N. 4
+MINISTERIO DA AGRICULTURA, INDUSTRIA E COMMERCIO
+1
+SERVIÇO DE POVOAMENTO
+Intendencia de Immigração do Porto do Rio de Janeiro
+PARTE
+do Interprete Arthur K Fexerria
+que visiton o paquete trancer "Valdivia"
+procedente de B. Aires e escalas
+entrado em 10 de Desembro de 1924
+SAUDE DOS PASSAGEIROS
+Bom
+MORTALIDADE
+Venhum
+NÁSCIMENTOS
+Nao forve
+OBSERVAÇÕES
+Entregou 1 lista com 12 immigrantes"""
+
+
+def test_the_ship_is_not_left_inside_its_own_nationality():
+    """Where the whole printed line comes back at once, the words beside
+    `paquete` are the nationality *and* the quoted ship. Reporting both as the
+    nationality would file the Valdivia's flag as `trancer "Valdivia"`."""
+    v = parse_voyage(PARTE_19845_SCALED)
+    assert v.ship == "Valdivia"
+    assert v.flag == "trancer"
+
+
+def test_the_same_page_reads_the_same_at_either_size():
+    """Scaling is a speed decision, and it must not be a transcription
+    decision. The two readings of this page differ in how the detector grouped
+    the lines, not in what the page says."""
+    big, small = parse_voyage(PARTE_19845), parse_voyage(PARTE_19845_SCALED)
+    for field in ("ship", "origin", "arrival", "year", "month", "passengers"):
+        assert getattr(big, field) == getattr(small, field), field

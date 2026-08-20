@@ -340,6 +340,11 @@ def parse_voyage(text: str) -> Voyage | None:
         if m and not month_number(m.group(1)):
             quoted = _clean(m.group(1))
             break
+    if quoted and v.flag and quoted in v.flag:
+        # The whole printed line came back at once, so the words beside
+        # `paquete` are the nationality *and* the ship it belongs to. The
+        # nationality is written first, before the quotation mark opens.
+        v.flag = _clean(v.flag[:v.flag.index(quoted)]) or None
     v.ship = quoted or _above(RE_PAQUETE, lines, skip=v.flag)
 
     v.origin = _beside(RE_ORIGIN, lines)
