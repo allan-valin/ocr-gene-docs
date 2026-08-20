@@ -297,6 +297,37 @@ def plausible_value(value: str | None) -> str | None:
     return value
 
 
+# Everything printed on these forms, plus what the port stamps add. A candidate
+# made only of these words is the form talking about itself: from the corpus
+# run, `Paguete`, `Repartição da Pette`, `toneladas de registro` and `de antos`
+# were all filed as vessels. A wrong ship is worse than no ship — it answers a
+# search that should have found nothing.
+FORM_WORDS = """paquete paquetes vapor papor navio lista entrada entrados
+    passageiros passagiras passageiro policia porto portos reparticao repartição
+    toneladas tonelada registro pessoas tripulacao tripulação procedente
+    procedencia commando comando consignado observacoes observações classe
+    nacionalidade idade estado civil profissao profissão destino nome nomes
+    cognomes numero ordem modelo ministerio agricultura industria commercio
+    servico povoamento intendencia immigracao imigracao parte interprete
+    interprete saude passageiros mortalidade nascimentos dias horas viagem
+    relacao relação desembarcaram neste este seus santos janeiro nacional
+    imprensa""".split()
+FORM_WORD_FLOOR = 0.8
+
+
+def _is_form_word(word: str) -> bool:
+    """Whether this word belongs to the form rather than to a vessel.
+
+    Nationalities count: `papor hespanhol` is the printed `vapor` and the flag
+    written after it, and neither half of that names a ship.
+    """
+    if len(word) < 3:
+        return False         # `La Plata` is a ship; `la` decides nothing
+    return (max(difflib.SequenceMatcher(None, word, w).ratio()
+                for w in FORM_WORDS) >= FORM_WORD_FLOOR
+            or is_flag(word))
+
+
 def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
     """The value, if it can be a vessel's name at all.
 
@@ -310,6 +341,13 @@ def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
     if not value:
         return None
     word = fold(value)
+    # One word of the form's own printing is enough to condemn the phrase:
+    # `Repartição da Pette` is a rubber stamp with a misread word in it, not a
+    # vessel with an office in its name.
+    if any(_is_form_word(w) for w in word.split()):
+        return None
+    if is_flag(value):
+        return None
     for printed in fold(letterhead or "").split():
         if len(printed) > 3 and difflib.SequenceMatcher(None, word, printed).ratio() >= 0.85:
             return None

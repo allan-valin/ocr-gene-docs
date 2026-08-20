@@ -701,3 +701,23 @@ def test_without_fragments_it_reads_the_text_as_before():
     """Every stored transcription written before the boxes were kept is text
     only, and has to go on being read."""
     assert parse_voyage(PARTE_19845).ship == "Valdivia"
+
+
+def test_the_form_s_own_printing_is_never_a_ship():
+    """From the corpus run, filed as vessels: `Paguete`, `(2) papor hespanhol`,
+    `Repartição da Pette`, `de antos`. They are the form's own words, a rubber
+    stamp and half the port — everything a label has beside it that is not a
+    ship. A wrong ship in the index is worse than no ship: it answers a search
+    that should have found nothing."""
+    from desembarque.voyage import plausible_ship
+    for junk in ("Paguete", "(2) papor hespanhol", "Repartição da Pette",
+                 "de antos", "Lista de entrada", "Policia do Porto",
+                 "toneladas de registro", "Observações"):
+        assert plausible_ship(junk, None) is None, junk
+
+
+def test_a_vessel_name_survives_the_same_test():
+    from desembarque.voyage import plausible_ship
+    for ship in ("INDIANA", "Itapuca", "Jaronna", "Valdivia", "Formosa",
+                 "Highland Rock", "Baden", "San-America"):
+        assert plausible_ship(ship, None) == ship, ship
