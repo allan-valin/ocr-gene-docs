@@ -321,6 +321,130 @@ which is why a search has nothing but the name to go on. That is the next piece
 of work, and it is the one that answers "search ranking should use more than the
 name".
 
+### Checkpoint, 2026-08-20 evening — the corpus was read, and two things it read are wrong
+
+The re-index finished: **660 dossiers, 198 read and 462 already current, no
+failures, 3 h 36 m** — about 65 s a dossier on the afternoon's larger files,
+against 24 s on the first stretch. `reparse_voyages.py` changed nothing, which
+is the right answer: the server was started after the last schema bump, so every
+record already carried schema 14.
+
+346 Python tests and 73 of 74 browser assertions pass. The one failure is not
+cosmetic, and neither is what it led to.
+
+#### What the whole corpus knows, against what twenty dossiers suggested
+
+The midday figures came from the 86 dossiers read by then, and those are the
+small early ones. On all 658 records at schema 14:
+
+| | midday, n=86 | now, n=658 |
+|---|---|---|
+| states a voyage | 91% | 69.8% |
+| names a shipping line | 90% | 63.5% |
+| gives a year | 41% | 24.8% |
+| gives a port | 40% | 26.3% |
+| names a ship | 27% | 26.0% |
+| gives a full date | 13% | 5.6% |
+
+The ship holds; everything else roughly halves. 134 distinct ships are named.
+The line list still carries the form talking about itself — `No. 461B` fifteen
+times, `Repartição da Policia` eleven, `BR.AN.RiO.O2.O.RPV.PRJ.1GGS.8` ten —
+about one in eight of the lines read is letterhead or the archive's own
+notation.
+
+#### The stamp is not a reliable year, and the record cannot be audited
+
+Years came out spanning 1913-1928, which is wider than this corpus should be.
+**1928 is a misreading of 1923.** In every case the port's stamp and the date
+printed on the same page disagree, and the stamp wins because the stamp is where
+the year is taken from:
+
+| dossier | stamp, as read | the date printed on the same page |
+|---|---|---|
+| BS.ENT.016669 | `DEZ 29 1928` | `Dec.de 1923.` |
+| BS.ENT.016672 | `DEZ 80 1928` | `de 19123` |
+| BS.ENT.016331 | `JUN 19 1928` | `de 192.3` |
+
+A `3` reads as an `8`, and `DEZ 80` is not a day this or any month has. The
+morning's rule — the stamp's year matched the only year printed on the page, in
+all ten pages that had kept a stamp — held at n=10 and has three counterexamples
+at n=660. The lower bound, 1913, is one dossier (OL.PRJ.19068, `entrado em 23 de
+Novenlo de 1913`) read off an interpreter's PARTE, and is plausible but
+unconfirmed. What the corpus actually reads as is **1917-1925**.
+
+The second half of this is worse than the first: **a record does not say where
+its year came from.** The stamp and the printed date are two different claims —
+the stamp is when the police filed the sheet — and only one number is kept.
+Nothing on disk distinguishes a year read from a stamp from a year read from the
+form, so these three could only be found by going back to the page text. A year
+should carry its source, and where the two disagree the *printed* date should
+win: a clerk's pen and a rubber stamp fail in different ways, and the stamp
+fails on digits.
+
+#### Every row was stored without the geometry it was cut from
+
+The failing browser assertion is `the scan band follows the hit`: click a search
+hit, the right row is selected, and no band is drawn on the scan beside it.
+Across the corpus:
+
+```
+records 660 | rows and geometry 2 | rows, no geometry 634 | no rows 24
+```
+
+**658 of 660 records store an empty `geometry`.** The two that have it were
+measured through `/api/grid`, one page at a time, by hand.
+
+`transcribe_document()` in `scripts/serve.py` builds each page as `{"n", "kind",
+"error"}` and a `form`, and never copies `res.geometry` — which the engine does
+return (`engine.py:35`, set in `engine_paddle.py:672`) and which the review UI
+already knows how to read (`serve_shapes.py:57` normalises per-page geometry for
+exactly this). The measurement was taken, used to cut the rows, and dropped on
+the way to disk.
+
+What that costs: a search hit can say *which row* but cannot show *where on the
+scan* — which is the one thing that makes a mangled reading usable as evidence,
+because the person checks the image and not the transcription. It was reported
+as a success for three and a half hours.
+
+The repair does not need the engine. Row geometry is `page_geometry.analyze`, a
+measurement on the page image, and `data/pagecache` still holds every extracted
+image — so recomputing it for the one transcribed page of each dossier is
+roughly half an hour, not another 3 h 36 m. **Do not start another full re-index
+for this.**
+
+#### Also today
+
+Reading the voyage off both forms a dossier carries, pairing a printed label
+with the handwriting beside it by box rather than by reading order, the ship and
+the year as things a searcher can type on their own, CSV export, the second
+reading offered as an alternative instead of a retype, and the browser test
+stopped passing against a stale build. Forty-seven commits, all pushed.
+
+#### Next, in order
+
+1. **Keep the geometry** on every page a document is read from, and backfill the
+   660 records already on disk from `data/pagecache`. Both halves matter: the
+   fix stops the loss, the backfill is what makes the corpus usable.
+2. **A year must record its source, and the printed date must outrank the
+   stamp.** Then re-parse — this needs no page image, so it costs a second.
+3. **The corpus is a sample, not the target.** 660 dossiers were downloaded from
+   the eleven index PDFs in `indices/`; the catalogue extracted from those same
+   PDFs lists **7,679**. Allan's instruction is that the full set is downloaded
+   once the implementation is done, so nothing here should be tuned to 660.
+4. The shipping line takes letterhead and archive notation as a company name,
+   about one in eight.
+5. Confidence is still Paddle's raw decode score, shown as if it meant
+   trustworthiness.
+6. `data/transcriptions/` is 660 files read into memory on every search. At
+   7,679 it wants SQLite.
+
+#### Open, and Allan's to answer
+
+* The full download is ~7,679 dossiers. At the measured 65 s each that is
+  **about five and a half days** of indexing on this laptop, unattended. That
+  number, not the engine, is what decides whether the fast forms-only first pass
+  gets built before the download.
+
 ## 2026-08-19 — night session (Allan away)
 
 Four fixes, all committed and pushed. The corpus is downloading toward ~570
