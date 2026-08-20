@@ -20,9 +20,14 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+# The forms are Brazilian; the shipping companies printing them are not. A list
+# from the Compagnie de Navigation Sud Atlantique has its date written in French,
+# and reading only Portuguese loses the year of every French line in the corpus.
 MONTHS = [
-    "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
-    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+    ("janeiro", "janvier"), ("fevereiro", "fevrier"), ("marco", "mars"),
+    ("abril", "avril"), ("maio", "mai"), ("junho", "juin"),
+    ("julho", "juillet"), ("agosto", "aout"), ("setembro", "septembre"),
+    ("outubro", "octobre"), ("novembro", "novembre"), ("dezembro", "decembre"),
 ]
 
 # How close a mangled word has to be to a month name before it counts as one.
@@ -45,12 +50,21 @@ def month_number(text: str) -> int | None:
     word = fold(text)
     if not word:
         return None
-    best, score = None, 0.0
-    for i, name in enumerate(MONTHS, start=1):
-        s = difflib.SequenceMatcher(None, word, name).ratio()
-        if s > score:
-            best, score = i, s
-    return best if score >= MONTH_FLOOR else None
+    best, won, score = None, "", 0.0
+    for i, names in enumerate(MONTHS, start=1):
+        for name in names:
+            s = difflib.SequenceMatcher(None, word, name).ratio()
+            if s > score:
+                best, won, score = i, name, s
+    if score < MONTH_FLOOR:
+        return None
+    # A three-letter name is a third of a word, and the threshold means almost
+    # nothing on one: `mai` is within a letter of a great many things that are
+    # not months. Short spellings have to be exact; the long spelling of the
+    # same month still absorbs a bad hand.
+    if len(won) <= 3 and word != won:
+        return None
+    return best
 
 
 # The printed labels on the two forms. They are what the recogniser reads well,
@@ -79,13 +93,22 @@ PARTE_MARKS = ["parte", "interprete", "que visitou o paquete",
 # that kept theirs. The two are told apart because they mean different things by
 # the word beside `paquete`: the PARTE form writes the ship's nationality there,
 # this one writes the ship.
+# Each shipping line had its own forms printed, and the recogniser mangles each
+# of them differently: one sheet reads `consignado meste porte`, and the whole
+# phrase never matches. So the marks are the shortest wording that is still
+# particular to this form — `consignado` appears nowhere else on these pages,
+# and `porto de` is the label above the port, not the `Porto do Rio de Janeiro`
+# in the other form's letterhead.
 LISTA_MARKS = ["lista de entra", "de passageiros no", "toneladas de registro",
-               "pessoas de tripulacao", "sob o commando de",
-               "consignado neste porto", "policia do porto"]
+               "pessoas de tripulacao", "sob o commando de", "consignado",
+               "policia do porto", "porto de"]
 
 # The letterhead is the first thing printed on the sheet, above everything the
 # clerk filled in. These two lines come before it and are not it.
-NOT_LETTERHEAD = ["policia do porto", "br.an.rio", "branrio", "modelo n"]
+NOT_LETTERHEAD = ["policia do porto", "modelo n"]
+# The archival notation is stamped at the top of most sheets, above the printed
+# letterhead. It is the one line up there that carries a long run of digits.
+RE_NOTATION = re.compile(r"\d{4,}")
 
 
 @dataclass
@@ -101,6 +124,7 @@ class Voyage:
     flag: str | None = None
     origin: str | None = None
     line: str | None = None
+    port: str | None = None
     arrival: str | None = None
     arrival_raw: str | None = None
     year: int | None = None
@@ -190,7 +214,7 @@ def _letterhead(lines: list[str]) -> str | None:
         folded = fold(line)
         if not folded or any(mark in folded for mark in NOT_LETTERHEAD):
             continue
-        if _is_label(line) or len(folded) < 8:
+        if _is_label(line) or len(folded) < 8 or RE_NOTATION.search(line):
             continue
         return _clean(line)
     return None
@@ -222,14 +246,72 @@ def _read_date(v: Voyage, lines: list[str]) -> None:
         return
 
 
+RE_YEAR_TAIL = re.compile(r"\bde\s*(\d{2}\s*\d{0,2})\b", re.I)
+RE_PORT = re.compile(r"^(.{3,24}?)\s*,\s*$")
+
+
+def _read_port(lines: list[str]) -> str | None:
+    """The port, written where the letterhead leaves room for it.
+
+    The form prints `_______, ___ de ______ de 19__` under the company name, so
+    the port is the short line ending in the form's own comma. It is reported as
+    read: `Nio Sumalos` is what the page gives for Rio de Janeiro, and correcting
+    it here would be inventing a reading nobody can check against the scan.
+    """
+    for line in lines[:8]:
+        m = RE_PORT.match(line.strip())
+        if m and not month_number(m.group(1)) and not m.group(1).strip().isdigit():
+            return _clean(m.group(1))
+    return None
+
+
+def _read_dateline(v: Voyage, lines: list[str]) -> None:
+    """The date on a list header, which has no `entrado em` to anchor on.
+
+    It sits under the letterhead as `port, day de month de 19yy`, and the
+    detector usually reports it in pieces. The month is the anchor: it is one of
+    a couple of dozen known words, in Portuguese or French, and nothing else on
+    this part of the page looks like one.
+    """
+    for i, line in enumerate(lines[:10]):
+        month = next((month_number(w) for w in line.split()
+                      if month_number(w)), None)
+        if not month:
+            continue
+        v.month = month
+        # the day is the token before the month, where there is one that reads
+        # as a number; `em 19 de Marco` is the common shape
+        words = line.split()
+        at = next(i for i, w in enumerate(words) if month_number(w))
+        prev = words[at - 1] if at else ""
+        if fold(prev) in ("de", "do") and at >= 2:
+            prev = words[at - 2]        # `19 de Marco`, not `de Marco`
+        prev = "".join(c for c in prev if c.isdigit())
+        day = int(prev) if prev and 1 <= int(prev) <= 31 else None
+        window = " ".join(lines[i:i + 3])
+        m = RE_YEAR_TAIL.search(window)
+        if m:
+            digits = re.sub(r"\s+", "", m.group(1))
+            v.year = int(digits) if len(digits) == 4 else None
+        if day and v.year and v.month:
+            v.arrival = f"{v.year:04d}-{v.month:02d}-{day:02d}"
+        v.arrival_raw = _clean(window[:60])
+        return
+
+
 def parse_voyage(text: str) -> Voyage | None:
     """The voyage a page states, or None when the page is not one of the forms."""
     lines = [l.strip() for l in (text or "").splitlines() if l.strip()]
     if not lines:
         return None
     parte, lista = _marks(lines, PARTE_MARKS), _marks(lines, LISTA_MARKS)
-    if max(parte, lista) < 3:
-        return None            # not one of the forms; no page is made to fit
+    # The PARTE form is recognised by short words — `parte`, `mortalidade` —
+    # which turn up elsewhere, so it takes three of them. The list header is
+    # recognised by whole printed phrases that appear nowhere else on a page,
+    # and two of those are already more evidence. Neither form is made to fit:
+    # a page that is neither is left alone.
+    if parte < 3 and lista < 2:
+        return None
     v = Voyage(source="parte" if parte >= lista else "lista")
     if v.source == "lista":
         v.line = _letterhead(lines)
@@ -245,7 +327,10 @@ def parse_voyage(text: str) -> Voyage | None:
         # wrong word.
         v.ship = _beside(RE_PAQUETE, lines)
         v.origin = _beside(RE_ORIGIN, lines)
+        v.port = _read_port(lines)
         _read_date(v, lines)
+        if v.year is None:
+            _read_dateline(v, lines)
         return v
 
     v.flag = _beside(RE_PAQUETE, lines)

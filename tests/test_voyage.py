@@ -332,3 +332,102 @@ def test_a_blank_date_on_the_form_is_not_read_as_a_date():
     worst kind of wrong: plausible."""
     v = parse_voyage(LISTA_16456)
     assert v.arrival is None and v.year is None
+
+
+def test_the_months_are_read_in_french_too():
+    """The forms are Brazilian and the shipping companies are not. A list
+    printed by the Compagnie de Navigation Sud Atlantique has its date written
+    `Octobre`, and reading only Portuguese loses the year of every French line
+    in the corpus."""
+    assert month_number("Octobre") == 10
+    assert month_number("Juillet") == 7
+    assert month_number("Février") == 2
+    assert month_number("décembre") == 12
+
+
+def test_the_extra_vocabulary_does_not_soften_the_test():
+    """Twice as many words to match against is twice as many ways to match
+    something that is not a month."""
+    for word in ("Buenos Aires", "entrado", "paquete", "Bordeaux", "Santos",
+                 "immigrantes", "Interprete", "Marseille"):
+        assert month_number(word) is None, word
+
+
+# BR_..._16583 page 2, verbatim. A French line's list, dated in French, with the
+# port written where the form asks for it.
+LISTA_16583 = """POLICIA DO PORTO
+1
+COMPAGNIE DE NAVIGATION SUD ATLANTIQUE
+Nio Sumalos,
+Octobre
+de 1919
+de
+de5224
+Bondeaux
+pessoas de tripulação procedente de
+(2)
+Jouay Theodore
+dias"""
+
+
+def test_a_list_dated_in_french_still_gives_up_its_year():
+    """This form has no `entrado em`. The date is written where the letterhead
+    leaves room for it, and on a French line it is written in French."""
+    v = parse_voyage(LISTA_16583)
+    assert v.month == 10
+    assert v.year == 1919
+
+
+def test_a_date_with_no_readable_day_is_still_not_a_date():
+    v = parse_voyage(LISTA_16583)
+    assert v.arrival is None
+
+
+def test_the_port_is_taken_from_where_the_form_asks_for_it():
+    """`Santos,` and `Rio de Janeiro,` are printed or written above the date,
+    and the comma is the form's, not the clerk's."""
+    assert parse_voyage(LISTA_16456).port == "Santos"
+    assert parse_voyage(LISTA_16583).port == "Nio Sumalos"
+
+
+# BR_..._014486 page 2, verbatim. A third printing of the same list header, from
+# a Brazilian coastal line, with the port on its own labelled line.
+LISTA_014486 = """B5.RPV. ENT 014486
+CA S
+EMPREZA NACIONAL DE NAVEGAÇÃO HOEPCKE
+HOEPCKE
+EXT  EO
+Santos
+em 19 de Marco
+Porto de
+de 1919
+entrrds
+lime e  comande dAthur Loe Cad
+consignado meste porte a Vietar Broithaupt
+LASSE
+NUMERO
+NOMES
+ORDEM"""
+
+
+def test_a_list_header_no_two_companies_print_the_same_way():
+    """Each shipping line had its own forms printed. Matching only the exact
+    wording of one of them leaves the rest of the corpus unread — this sheet
+    says `consignado meste porte`, and the phrase never matches."""
+    v = parse_voyage(LISTA_014486)
+    assert v is not None and v.source == "lista"
+    assert v.line == "EMPREZA NACIONAL DE NAVEGAÇÃO HOEPCKE"
+
+
+def test_a_date_written_without_entrado_still_resolves():
+    """`em 19 de Marco` / `de 1919`. The month anchors it, the day is beside the
+    month, and the year is on the line the detector split off."""
+    v = parse_voyage(LISTA_014486)
+    assert v.arrival == "1919-03-19"
+
+
+def test_the_parte_form_is_still_read_as_a_parte_form():
+    """Widening what counts as a list header must not start pulling the other
+    form into it — they disagree about what the word beside `paquete` means."""
+    for text in (PARTE_19845, PARTE_18224, PARTE_19032, PARTE_20039):
+        assert parse_voyage(text).source == "parte"
