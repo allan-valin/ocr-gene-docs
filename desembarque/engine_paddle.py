@@ -485,7 +485,8 @@ class PaddleEngine:
 
     def transcribe_page(self, image: Path, kind: str = "unknown",
                         source: Path | None = None,
-                        page: int | None = None) -> PageResult:
+                        page: int | None = None,
+                        text: bool = True) -> PageResult:
         try:
             self._import()
         except Exception as e:
@@ -495,7 +496,7 @@ class PaddleEngine:
             # the cover card carries the archival notation, and has no grid
             if kind == "cover":
                 return PageResult(kind="cover", engine=self.name,
-                                  text=self._page_text(image))
+                                  text=self._page_text(image) if text else "")
 
             import sys
             sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -507,7 +508,7 @@ class PaddleEngine:
             if not geo.rows or not geo.name_column(0):
                 # no grid is a legitimate answer: many pages are not tables
                 return PageResult(kind="unknown", engine=self.name,
-                                  text=self._page_text(image))
+                                  text=self._page_text(image) if text else "")
 
             im = Image.open(image).convert("L")
             im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)

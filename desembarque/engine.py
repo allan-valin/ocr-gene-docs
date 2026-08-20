@@ -39,7 +39,8 @@ class Engine(Protocol):
     def available(self) -> bool: ...
     def transcribe_page(self, image: Path, kind: str = "unknown",
                         source: Path | None = None,
-                        page: int | None = None) -> PageResult: ...
+                        page: int | None = None,
+                        text: bool = True) -> PageResult: ...
 
 
 class NullEngine:
@@ -58,7 +59,8 @@ class NullEngine:
 
     def transcribe_page(self, image: Path, kind: str = "unknown",
                         source: Path | None = None,
-                        page: int | None = None) -> PageResult:
+                        page: int | None = None,
+                        text: bool = True) -> PageResult:
         return PageResult(
             kind=kind,
             engine=self.name,

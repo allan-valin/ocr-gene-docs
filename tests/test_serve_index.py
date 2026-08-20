@@ -29,7 +29,8 @@ class FakeEngine:
     def available(self):
         return True
 
-    def transcribe_page(self, image, kind="unknown", source=None, page=None):
+    def transcribe_page(self, image, kind="unknown", source=None, page=None,
+                        text=True):
         return engines.PageResult(kind=kind, engine=self.name, rows=[{"name": "TEST"}])
 
 
@@ -309,7 +310,8 @@ class VoyageEngine:
     def available(self):
         return True
 
-    def transcribe_page(self, image, kind="unknown", source=None, page=None):
+    def transcribe_page(self, image, kind="unknown", source=None, page=None,
+                        text=True):
         if page == 2:
             return engines.PageResult(kind="unknown", engine=self.name,
                                       text=PARTE_TEXT)
@@ -383,3 +385,43 @@ def test_a_field_the_page_never_stated_is_absent_rather_than_empty(server, engin
     assert "arrival" not in meta and "origin" not in meta
     assert meta["notation"] == "OL.PRJ.20039"
     assert ui_meta(None, "OL.PRJ.1") is None
+
+
+# ---- how many times a dossier has to be read as prose ------------------------
+#
+# Reading a whole page is detection over the entire scan and costs about twenty
+# seconds even scaled down. A nine-page dossier with five pages the geometry
+# cannot grid was paying that six times over, for two facts: the archival
+# notation and the voyage.
+
+def test_the_cover_is_not_read_when_the_filename_already_says_which_dossier():
+    from serve import text_wanted
+    assert not text_wanted(1, have_notation=True, have_voyage=True)
+
+
+def test_the_cover_is_read_when_nothing_else_identifies_the_document():
+    """The notation is the document's own name for itself, and a filename is
+    whatever the last person typed."""
+    from serve import text_wanted
+    assert text_wanted(1, have_notation=False, have_voyage=True)
+
+
+def test_reading_stops_once_the_voyage_has_been_found():
+    from serve import text_wanted
+    assert text_wanted(2, have_notation=True, have_voyage=False)
+    assert not text_wanted(3, have_notation=True, have_voyage=True)
+
+
+def test_a_long_dossier_is_not_read_to_the_end_looking_for_a_form():
+    """The forms are at the front — a cover card, the interpreter's PARTE, the
+    printed header above the first list. A dossier that has none of them must
+    not cost twenty seconds a page to establish that."""
+    from serve import text_wanted, TEXT_PAGES
+    assert text_wanted(TEXT_PAGES, have_notation=True, have_voyage=False)
+    assert not text_wanted(TEXT_PAGES + 1, have_notation=True, have_voyage=False)
+
+
+def test_a_document_nothing_identifies_is_still_read_past_that_limit():
+    """Losing the notation means the dossier is filed under nothing at all."""
+    from serve import text_wanted, TEXT_PAGES
+    assert text_wanted(TEXT_PAGES + 3, have_notation=False, have_voyage=True)

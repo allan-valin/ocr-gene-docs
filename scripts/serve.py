@@ -224,6 +224,31 @@ def build_grid(pdf: Path, page_n: int) -> dict:
     }
 
 
+# How far into a dossier the printed forms can be. The cover card, the
+# interpreter's PARTE and the printed header above the first list are all at the
+# front; a dossier carrying none of them must not cost twenty seconds a page to
+# establish that.
+TEXT_PAGES = int(os.environ.get("DESEMBARQUE_TEXT_PAGES", "4"))
+
+
+def text_wanted(page_n: int, have_notation: bool, have_voyage: bool,
+                limit: int = TEXT_PAGES) -> bool:
+    """Whether this page still needs reading as prose.
+
+    Reading a whole page is detection over the entire scan, and it is done for
+    exactly two facts: the archival notation, and the voyage. A nine-page
+    dossier with five ungriddable pages was paying for it six times.
+
+    Losing the notation files a dossier under nothing at all, so a document
+    nothing else identifies is read as far as it takes.
+    """
+    if not have_notation:
+        return True
+    if have_voyage:
+        return False
+    return page_n <= limit
+
+
 def classify(page_n: int) -> str:
     """Placeholder classification. Real page typing is a model job; the cover
     card is not reliably page 1 (conservation varies), so this only biases the
@@ -245,7 +270,10 @@ def transcribe_document(pdf: Path, job) -> dict:
         if img is None:
             pages.append({"n": n, "error": "render failed"})
             continue
-        res = eng.transcribe_page(img, classify(n), source=pdf, page=n)
+        want = text_wanted(n, bool(ident.notation) or bool(cover_text),
+                           voyage is not None)
+        res = eng.transcribe_page(img, classify(n), source=pdf, page=n,
+                                  text=want)
         pages.append({"n": n, "kind": res.kind, "error": res.error})
         if res.kind == "cover" and res.text:
             cover_text = cover_text or res.text
