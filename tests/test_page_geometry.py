@@ -321,3 +321,127 @@ def test_blank_rows_inside_the_table_do_not_cut_the_comb_short():
         d.rectangle([120, cy - 20, 900, cy + 20], fill=255)
     geo = detect_rules(ink_mask(im))
     assert written_span(geo, im.height) > 0.7
+
+
+def broken_rules_table(rows=20, pitch=100, w=1200, h=2600):
+    """A ruled table whose vertical rules are interrupted by the writing.
+
+    This is the real corpus's most damaging layout. Ink crossing a rule breaks
+    it, so the longest *unbroken* run of a rule is the empty stretch below the
+    last passenger — and an extent taken from those runs puts the table in the
+    blank paper under the list. Each rule is cut in a different place here, the
+    way handwriting cuts them, so no single line of the page breaks all of them.
+    """
+    from PIL import Image, ImageDraw
+
+    im = Image.new("L", (w, h), 255)
+    d = ImageDraw.Draw(im)
+    x0, x1, y0 = 100, w - 100, 400
+    cols = [x0, 400, 700, x1]
+    written = 14                      # the rest of the form is blank ruled paper
+    d.text((120, 150), "MINISTERIO DA FAZENDA", fill=0)
+    for i, c in enumerate(cols):
+        d.line([(c, y0), (c, y0 + rows * pitch)], fill=0, width=3)
+    for r in range(rows + 1):
+        d.line([(x0, y0 + r * pitch), (x1, y0 + r * pitch)], fill=0, width=3)
+    for r in range(written):
+        cy = y0 + r * pitch + pitch // 2
+        d.rectangle([x0 + 30, cy - 14, 380, cy + 14], fill=0)
+        d.rectangle([420, cy - 14, 680, cy + 14], fill=0)
+        # the writing overruns its cell and wipes out one rule on this row
+        c = cols[1 + (r % 3)]
+        d.rectangle([c - 6, cy - 40, c + 6, cy + 40], fill=255)
+    return im
+
+
+def test_a_table_whose_rules_the_writing_broke_is_still_found():
+    """Fourteen written rows above blank ruled paper. The bands have to sit on
+    the writing; landing on the empty half is the failure this pins."""
+    g = detect_rules(ink_mask(broken_rules_table()))
+    assert g.rows, "no rows at all — the page came back blank"
+    top = g.rows[0][0]
+    assert top < 600, f"the comb starts at {top}, below the first written row"
+    assert len(g.rows) >= 14, f"only {len(g.rows)} rows for fourteen written ones"
+
+
+def test_the_letterhead_is_still_left_out():
+    """Reaching further up must not mean reaching all the way up."""
+    g = detect_rules(ink_mask(broken_rules_table()))
+    assert g.rows[0][0] > 200, "the comb climbed into the letterhead"
+
+
+# ---- which of the two row combs to keep -------------------------------------
+#
+# The numbers in these cases are measured, not invented: they come from running
+# the two candidate fits over the eighty-nine-page geometry bench and recording
+# what each page offered. A comb is (edges, pitch).
+
+def comb_of(first, count, pitch=94.0):
+    return ([float(first + i * pitch) for i in range(count + 1)], pitch)
+
+
+def test_a_working_narrow_comb_is_not_displaced_by_a_hair():
+    """The narrow fit is the better-tested path. Without a margin the two traded
+    places on pages where neither was clearly right, and fifteen of eighty-nine
+    got worse."""
+    from page_geometry import choose_comb
+    narrow = comb_of(400, 20)
+    wider = comb_of(300, 22)
+    lines = [410 + i * 94 for i in range(20)]
+    assert choose_comb(narrow, wider, lines, reaches=True) is narrow
+
+
+def test_the_wider_comb_wins_when_it_explains_much_more_writing():
+    from page_geometry import choose_comb
+    narrow = comb_of(4000, 3)
+    wider = comb_of(400, 30)
+    lines = [410 + i * 94 for i in range(30)]
+    assert choose_comb(narrow, wider, lines, reaches=True) is wider
+
+
+def test_a_page_with_no_narrow_fit_at_all_takes_the_wider_comb():
+    """BR_..._16456 page 2: thirty-seven passengers, and the table's rules are
+    printed so faintly that the extent taken from them lands in the blank paper
+    below the list. No narrow comb exists, the wider one sits on 37 of the 48
+    detected lines, and the page came back completely empty."""
+    from page_geometry import choose_comb
+    wider = comb_of(830, 37)
+    lines = [840 + i * 94 for i in range(37)] + [200, 300, 4800, 4900]
+    assert choose_comb(None, wider, lines, reaches=False) is wider
+
+
+def test_a_wider_comb_that_explains_little_is_still_refused():
+    """BR_..._013991 page 2: eleven bands against thirty detected lines. A comb
+    that accounts for a third of the writing is not evidence of a table, and a
+    document with invented rows is worse than one with none."""
+    from page_geometry import choose_comb
+    wider = comb_of(1300, 11)
+    lines = [1310 + i * 94 for i in range(11)] + [100 + i * 60 for i in range(19)]
+    assert choose_comb(None, wider, lines, reaches=False) is None
+
+
+def test_a_handful_of_bands_is_not_a_table():
+    """BR_..._18763 page 2: six bands. Six lines that happen to be evenly spaced
+    are a letterhead as often as they are a list."""
+    from page_geometry import choose_comb
+    wider = comb_of(100, 6)
+    lines = [110 + i * 94 for i in range(6)]
+    assert choose_comb(None, wider, lines, reaches=False) is None
+
+
+def test_a_comb_that_starts_off_the_top_of_the_page_is_refused():
+    from page_geometry import choose_comb
+    wider = comb_of(-120, 20)
+    lines = [-110 + i * 94 for i in range(20)]
+    assert choose_comb(None, wider, lines, reaches=False) is None
+
+
+def test_a_small_comb_the_rules_agree_with_is_kept():
+    """No narrow fit, but the challenger sits inside the extent the vertical
+    rules reported. Nothing is being displaced and the page's own rules
+    corroborate it, so the size gate that guards an unvouched-for comb does not
+    apply. BR_..._17347 lost its ten bands to that gate."""
+    from page_geometry import choose_comb
+    wider = comb_of(1000, 4)
+    lines = [1010 + i * 94 for i in range(4)]
+    assert choose_comb(None, wider, lines, reaches=True) is wider

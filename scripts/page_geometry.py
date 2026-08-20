@@ -26,6 +26,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import shutil
+import sys
+
+# importable from the server, which sets this up, and runnable on its own,
+# which does not
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 from PIL import Image
@@ -425,6 +430,57 @@ def _comb_score(edges: list[float], lines: list[int], floor: float = 0.5) -> int
     return inside if inside / bands >= floor else -1
 
 
+# A page with no comb at all is not the safe outcome it looks like. Eight per
+# cent of indexed documents came back with no readable row, the run reported
+# success, and a dossier that yields nothing is a ship nobody can search.
+MIN_STANDALONE_BANDS = 8
+MIN_STANDALONE_SHARE = 0.5
+
+
+def choose_comb(narrow: tuple[list[float], float] | None,
+                wider: tuple[list[float], float] | None,
+                all_lines: list[int],
+                reaches: bool) -> tuple[list[float], float] | None:
+    """Which of the two row fits to keep.
+
+    The narrow fit is bounded by the table's own vertical rules and is the
+    better-tested path, so it wins ties and is only displaced by a challenger
+    that has found substantially more of the page's writing.
+
+    When there is no narrow fit the calculation changes, because there is then
+    no working comb to protect and the extent that would have vetoed the
+    challenger is the same broken measurement that produced no comb. On
+    BR_..._16456 the rules print so faintly that their longest unbroken run is
+    the blank paper below the list; the extent came out as the bottom six per
+    cent of the sheet, the narrow fit found nothing there, and thirty-seven
+    passengers were invisible to every search.
+
+    Standing alone the challenger has to look like a table rather than like a
+    letterhead: it must start on the page, cover at least eight rows, and
+    account for at least half the writing that was detected. A document with
+    invented rows is worse than one with none.
+    """
+    if not (wider and wider[0]):
+        return narrow
+    ws = _comb_score(wider[0], all_lines)
+    if narrow:
+        ns = _comb_score(narrow[0], all_lines, floor=0.0)
+        if reaches and (ns < 0 or ws > max(ns * 1.5, ns + 3)):
+            return wider
+        return narrow
+    if reaches:
+        # No narrow fit, but the challenger lands where the rules said the table
+        # is. Nothing is being displaced and the extent corroborates it, so it
+        # is kept whatever its size — as it always has been.
+        return wider
+    bands = len(wider[0]) - 1
+    if (wider[0][0] >= 0 and bands >= MIN_STANDALONE_BANDS
+            and ws >= MIN_STANDALONE_BANDS
+            and all_lines and ws >= MIN_STANDALONE_SHARE * len(all_lines)):
+        return wider
+    return None
+
+
 def detect_rules(mask: np.ndarray, vth: float | None = None) -> Geometry:
     """Recover the table grid: column rules, table extent, and row bands."""
     h, w = mask.shape
@@ -504,26 +560,17 @@ def detect_rules(mask: np.ndarray, vth: float | None = None) -> Geometry:
 
     narrow = comb(top)
     wider = comb(by0)
-    best = narrow
-    # The narrow fit is the default and the better-tested path, so the wider one
-    # has to earn the swap rather than win by a hair. Without the margin the two
-    # traded places on pages where neither was clearly right and fifteen of
-    # eighty-nine got worse; with it, only a comb that has found substantially
-    # more of the page's writing displaces one that already works.
-    if wider and wider[0]:
-        # The wider comb may only *extend* the table upward, never relocate to
-        # some other part of the sheet. On BS_ENT_015953 the page carries two
-        # separate blocks of ruled lines; the rules put the table in the lower
-        # one, the narrow comb sat on it correctly, and an unconstrained wider
-        # fit moved wholesale to the upper block and lost half the coverage.
-        # Overlapping the rule-derived extent is what makes this the same table.
-        # within a row of the table's top counts as reaching it: a comb that
-        # ends exactly at the first ruled line is the same table, not another one
-        reaches = wider[0][-1] >= top - wider[1] and wider[0][0] <= bottom
-        ns = _comb_score(best[0], all_lines, floor=0.0) if best else -1
-        ws = _comb_score(wider[0], all_lines)
-        if reaches and (ns < 0 or ws > max(ns * 1.5, ns + 3)):
-            best = wider
+    # The wider comb may only *extend* the table upward, never relocate to some
+    # other part of the sheet. On BS_ENT_015953 the page carries two separate
+    # blocks of ruled lines; the rules put the table in the lower one, the
+    # narrow comb sat on it correctly, and an unconstrained wider fit moved
+    # wholesale to the upper block and lost half the coverage. Overlapping the
+    # rule-derived extent is what makes this the same table. Within a row of the
+    # table's top counts as reaching it: a comb that ends exactly at the first
+    # ruled line is the same table, not another one.
+    reaches = bool(wider and wider[0]
+                   and wider[0][-1] >= top - wider[1] and wider[0][0] <= bottom)
+    best = choose_comb(narrow, wider, all_lines, reaches)
     if best is None:
         return geo
     geo.row_edges, geo.row_pitch = best

@@ -50,8 +50,13 @@ Honest about the limits:
   3,430 rows) and handwritten ones erode: 5 of 6 names ranked first at a thousand rows,
   4 of 6 at three thousand, with one lost to an unrelated word printed on another page.
   A recogniser that reads handwriting is the next thing this needs.
-* **About 8% of documents yield nothing** — a layout whose rows the geometry cannot find.
-  The run reports success, which is the part that needs fixing first.
+* **Some documents still yield nothing.** Of eighty-nine benchmarked pages, ten come back
+  without a row; on inspection most are not passenger lists at all but the interpreter's
+  *PARTE* form, where no rows is the right answer — and that form names the ship, the port
+  it sailed from and the arrival date, none of which is indexed yet. The five that *were*
+  lists have been recovered: their rules print too faintly for the table's extent to be
+  measured from them, so a page of thirty-seven passengers came back empty. Coverage across
+  the benchmark went from 0.457 to 0.497 with no page regressing.
 * **No engine installed is a supported state.** The application says so and writes nothing,
   rather than showing empty rows that could be mistaken for an empty page.
 
