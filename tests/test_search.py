@@ -598,3 +598,24 @@ def test_a_single_word_row_does_not_outrank_a_whole_name():
     rows = idx("Martinez Maria", "Maria")
     hits = search(rows, "Martinez Maria")
     assert hits[0]["text"] == "Martinez Maria"
+
+
+def test_a_year_the_searcher_got_wrong_never_hides_the_person():
+    """The voyage reorders and does not decide. The reward for agreeing is large
+    — it is what rescues a common name from a pool of twenty thousand — and the
+    penalty for contradicting has to stay small enough that a row survives it,
+    because the searcher is the one more likely to be wrong about a date."""
+    rows = idx("MARIA ROSA CARRANA")
+    for r in rows:
+        r["year"] = 1922
+    hits = search(rows, "Maria Rosa Carrana 1924")
+    assert hits, "a wrong year removed the person from the results"
+    assert hits[0]["score"] > 0
+
+
+def test_naming_the_right_year_lifts_the_row_it_belongs_to():
+    rows = idx("MARIA ROSA CARRANA", "MARIA ROSA CARRARA")
+    rows[0]["year"] = 1922
+    rows[1]["year"] = 1917
+    hits = search(rows, "Maria Rosa Carrara 1922")
+    assert hits[0]["text"] == "MARIA ROSA CARRANA"

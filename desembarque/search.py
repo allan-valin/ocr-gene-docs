@@ -33,8 +33,21 @@ MIN_QUERY = 3
 MIN_SCORE = 0.10
 
 # What the voyage is worth as a proportion of the name match it applies to. It
-# is meant to break the tie a recogniser cannot, not to overrule the name.
-VOYAGE_BONUS = 0.25
+# breaks the tie a recogniser cannot; it does not overrule the name.
+#
+# Measured against the hand-read pages, searching each name with the crossing
+# named the way somebody who knows it would: findable names go from 96 of 142 at
+# 0.25 to 109 at 0.6. Higher is better on that measure and wrong twice over. At
+# 0.7 a weak name on the named ship outranks a good name elsewhere — `CONGE
+# NGLONE A` above `Guudo Casrtadore`, the failure this repository hit in July,
+# guarded by a test. And a reward past 1.0 would, if the penalty matched it, take
+# a contradicted row's score to zero: the person would disappear because the
+# searcher misremembered a date, which is the failure the tool exists to prevent.
+#
+# So the reward for agreeing is large, the penalty for contradicting is small,
+# and neither can remove a row from the results.
+VOYAGE_BONUS = 0.6
+VOYAGE_PENALTY = 0.15
 # A ship's name is one token, and trigrams are harsh on single tokens: changing
 # the last letter of `Valdivia` to `Valdivin` — exactly what the recogniser does
 # to it — costs a third of the trigram score. Edit distance is the right measure
@@ -350,7 +363,8 @@ def voyage_bonus(row: dict, year: int | None, terms: list[str]) -> float:
     """
     bonus = 0.0
     if year and row.get("year"):
-        bonus += VOYAGE_BONUS if int(row["year"]) == year else -VOYAGE_BONUS
+        bonus += (VOYAGE_BONUS if int(row["year"]) == year
+                  else -VOYAGE_PENALTY)
     ship = row.get("ship")
     if ship and terms:
         # the ship's name came off the page through the same recogniser as the
