@@ -421,3 +421,77 @@ def test_a_changed_catalogue_is_not_served_from_the_cache(tmp_path):
     first = load_index(tmp_path, ships={"d.pdf": "gelria"})[0]["ship"]
     second = load_index(tmp_path, ships={"d.pdf": "itapuca"})[0]["ship"]
     assert (first, second) == ("gelria", "itapuca")
+
+
+def test_the_index_narrows_the_rows_a_query_is_scored_against():
+    """Every keystroke scores the query against every row in the corpus. At 660
+    dossiers that is 19,373 rows and 100 ms; the archive holds 7,679, which is
+    the same work eleven times over on every letter typed.
+
+    A row can only score above zero if it shares a trigram with the query, so
+    the rows that share none can be skipped without changing a single result.
+    """
+    from desembarque.search import RowIndex, candidates
+    rows = RowIndex(idx("JOSE MUESSO", "EMMA CONTADORE", "MARIA SILVA"))
+    pool = [r["text"] for r in candidates(rows, "muesso")]
+    assert "JOSE MUESSO" in pool
+    # It narrows rather than filters: the padding trigrams a query shares with
+    # any row beginning the same way keep a few strangers in the pool, and they
+    # are scored and dropped exactly as before. Cheap is the point, not exact.
+    assert "EMMA CONTADORE" not in pool
+
+
+def test_narrowing_returns_exactly_what_scanning_everything_returned():
+    """The index is an optimisation and nothing else: same hits, same order,
+    same scores. A search that quietly returns less is the failure this tool
+    exists to prevent."""
+    from desembarque.search import RowIndex
+    names = ["Guudo Camtadore", "Jose Muerso", "Nemma Comtadiie", "MARIA SILVA",
+             "JOAO GOMES", "Anna Contadore", "CEZARIO SAMMAMED"]
+    plain = idx(*names)
+    indexed = RowIndex(idx(*names))
+    for q in ("contadore", "jose", "gomes", "sammamed", "silva", "kowalczyk"):
+        assert search(indexed, q) == search(plain, q), f"{q} came out different"
+
+
+def test_a_query_sharing_nothing_with_the_corpus_scores_nothing():
+    from desembarque.search import RowIndex, candidates
+    rows = RowIndex(idx("JOSE MUESSO"))
+    assert list(candidates(rows, "kowalczyk")) == []
+
+
+def test_rows_that_were_not_built_as_an_index_are_still_searched():
+    """`load_index` returns one; a script that assembles rows by hand passes a
+    plain list, and it has to keep working."""
+    hits = search(idx("JOSE MUESSO", "MARIA SILVA"), "muesso")
+    assert hits and hits[0]["text"] == "JOSE MUESSO"
+
+
+def test_the_posting_list_is_not_rebuilt_on_every_keystroke(tmp_path):
+    """`/api/search` loads the index per request — that is what makes a changed
+    transcription searchable immediately — and rebuilding the postings each
+    time would cost more than the scan they replace."""
+    import json
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "h", "file": "d.pdf", "engine": "paddle",
+        "rows": [{"n": 1, "page": 2, "name_raw": "JOSE MUESSO"}]}))
+    first = load_index(tmp_path)
+    second = load_index(tmp_path)
+    assert first.postings is second.postings
+
+
+def test_a_changed_transcription_gets_a_new_posting_list(tmp_path):
+    """Rows that are no longer on disk must not stay findable."""
+    import json
+    f = tmp_path / "a.json"
+    f.write_text(json.dumps({
+        "hash": "h", "file": "d.pdf", "engine": "paddle",
+        "rows": [{"n": 1, "page": 2, "name_raw": "JOSE MUESSO"}]}))
+    before = load_index(tmp_path)
+    before.postings
+    f.write_text(json.dumps({
+        "hash": "h", "file": "d.pdf", "engine": "paddle",
+        "rows": [{"n": 1, "page": 2, "name_raw": "MARIA SILVA"}]}))
+    after = load_index(tmp_path)
+    assert [h["text"] for h in search(after, "silva")] == ["MARIA SILVA"]
+    assert search(after, "muesso") == []

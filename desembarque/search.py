@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import difflib
 import json
+from array import array
 import re
 import unicodedata
 from pathlib import Path
@@ -129,6 +130,11 @@ def row_text(row: dict) -> str:
 # holds until the corpus outgrows memory, at which point it wants a database
 # rather than a bigger dictionary.
 _ROWS: dict[str, tuple[tuple[int, int], list[dict]]] = {}
+# Bumped whenever a stored transcription is read or drops out of the cache, so
+# the posting list can be kept across requests and rebuilt only when the corpus
+# it describes has actually changed.
+_VERSION = 0
+_POSTINGS: tuple[tuple[int, int], dict] | None = None
 
 
 def _rows_of(f: Path, engine_only: bool,
@@ -145,8 +151,10 @@ def _rows_of(f: Path, engine_only: bool,
     hit = _ROWS.get(key)
     if hit is not None and hit[0] == stamp:
         return hit[1]
+    global _VERSION
     rows = _parse(f, engine_only, ships)
     _ROWS[key] = (stamp, rows)
+    _VERSION += 1
     return rows
 
 
@@ -168,10 +176,12 @@ def load_index(cache: Path, engine_only: bool = True,
     for f in sorted(Path(cache).glob("*.json")):
         present.add(f"{f}|{int(engine_only)}")
         out.extend(_rows_of(f, engine_only, ships, token))
+    global _VERSION
     for gone in [k for k in _ROWS if k.endswith(f"|{int(engine_only)}")
                  and k not in present]:
         del _ROWS[gone]        # a deleted transcription leaves the index
-    return out
+        _VERSION += 1
+    return RowIndex(out, version=_VERSION)
 
 
 def _parse(f: Path, engine_only: bool,
@@ -287,6 +297,66 @@ def voyage_bonus(row: dict, year: int | None, terms: list[str]) -> float:
     return bonus
 
 
+class RowIndex(list):
+    """The searchable rows, with a trigram posting list built beside them.
+
+    Every keystroke scored the query against every row: 100 ms over the 660
+    dossiers indexed so far, and the archive holds 7,679 — the same work eleven
+    times over, on every letter. Memory is not what runs out first, which is
+    what the note about SQLite in the progress log assumed: 19,373 rows load in
+    3.8 s and cost 22 MB.
+
+    A row can only score above zero if it shares a trigram with the query, and
+    the floor is 0.10, so scoring only the rows that share one returns exactly
+    the same hits with the same scores. The postings are arrays of row indices —
+    four bytes each rather than a Python int apiece, which is what makes this
+    affordable at a million rows.
+
+    It is a `list`, so everything that already takes the index as a list of rows
+    keeps working, and a plain list handed to `search` is still scanned whole.
+    """
+
+    def __init__(self, rows=(), version: int | None = None):
+        super().__init__(rows)
+        self.version = version
+
+    @property
+    def postings(self) -> dict[str, "array"]:
+        # The search endpoint loads the index on every request — that is what
+        # makes a correction searchable the moment it is typed — so the
+        # postings are kept beside the row cache and rebuilt only when the
+        # rows themselves were re-read.
+        global _POSTINGS
+        key = (self.version, len(self))
+        if self.version is not None and _POSTINGS and _POSTINGS[0] == key:
+            return _POSTINGS[1]
+        post: dict[str, array] = {}
+        for i, r in enumerate(self):
+            for g in trigrams(r.get("text") or ""):
+                post.setdefault(g, array("i")).append(i)
+        if self.version is not None:
+            _POSTINGS = (key, post)
+        return post
+
+
+def candidates(rows: list[dict], query: str) -> list[dict]:
+    """The rows worth scoring against this query.
+
+    Everything, unless the rows carry a posting list. The union is taken over
+    the query's trigrams: a row missing from all of them scores zero and would
+    be dropped by the floor anyway.
+    """
+    post = getattr(rows, "postings", None)
+    if post is None:
+        return rows
+    hit: set[int] = set()
+    for g in trigrams(query):
+        ids = post.get(g)
+        if ids:
+            hit.update(ids)
+    return [rows[i] for i in sorted(hit)]
+
+
 def search(rows: list[dict], query: str, limit: int = 50,
            min_score: float = MIN_SCORE) -> list[dict]:
     """Ranked matches, best first. An unrecognisable query returns nothing."""
@@ -299,7 +369,8 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # An empty name query is not a query. Trigrams are padded, so `similarity`
     # of nothing against a row read as `B   B` comes out at 0.25 — a page of
     # whitespace ranked above the ship somebody actually typed.
-    for r in (rows if len(fold(name_q)) >= MIN_QUERY else ()):
+    pool = candidates(rows, name_q) if len(fold(name_q)) >= MIN_QUERY else ()
+    for r in pool:
         s = similarity(name_q, r["text"])
         # the floor is applied to the name alone: the voyage orders what was
         # found, it does not decide what counts as found
