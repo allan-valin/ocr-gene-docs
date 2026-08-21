@@ -35,8 +35,17 @@ import io
 FIELDS = [
     "notacao", "arquivo", "navio", "companhia", "procedencia", "porto_chegada",
     "data_chegada", "pagina", "linha", "nome_lido", "sobrenome", "nome",
-    "origem", "score_motor",
+    "origem", "sobrenome_origem", "score_motor",
 ]
+
+
+# Where a row's surname came from. A surname the clerk wrote and a surname
+# inherited from the row above are different claims, and on a family list most
+# rows are the second kind: a spreadsheet that does not say which is which
+# invites somebody to take an inference to a registry as a reading.
+SURNAME_SOURCE = {"mark": "aspas de repetição",
+                  "indent": "recuo sob as aspas",
+                  "position": "posição na lista (inferido)"}
 
 
 def _arrival(voyage: dict) -> str:
@@ -85,6 +94,8 @@ def rows_to_csv(doc: dict, catalogued: str | None = None) -> str:
             "sobrenome": row.get("surname") or "",
             "nome": row.get("given") or "",
             "origem": _origin(row, doc),
+            "sobrenome_origem": (SURNAME_SOURCE.get(row.get("ditto_source"), "herdado")
+                                 if row.get("ditto") else "lido"),
             "score_motor": conf.get("surname") if conf.get("surname") is not None else "",
         })
     return buf.getvalue()

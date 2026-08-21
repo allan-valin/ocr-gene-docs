@@ -162,6 +162,11 @@
   .null{color:var(--bad);font-style:italic;opacity:.75}
   .ditto{color:var(--muted)}
   .ditto::before{content:"❝ ";font-size:9px;vertical-align:2px;opacity:.6}
+  /* A surname read off a repetition mark is what the page says. One taken from
+     the row above because this row had no surname at all is an inference, and
+     it has to look like one. */
+  .ditto.guessed{border-bottom:1px dotted var(--warn)}
+  .ditto.guessed::before{content:"≈ ";opacity:.8;color:var(--warn)}
   .hw{border-left:2px solid var(--warn);padding-left:4px}
   mark{background:var(--focus);color:#fff;border-radius:2px;padding:0 1px}
   tr.hit{box-shadow:inset 3px 0 0 var(--focus)}
@@ -347,10 +352,17 @@ function cell(r,f,txt){
       data-f="${f}" title="não transcrito"></span></td>`;
   const isNull = txt==null;
   const d = r.ditto&&r.ditto.includes(f);
-  const cls = [isNull?"null":"", d?"ditto":""].filter(Boolean).join(" ");
+  const guessed = d && r.ditto_source==="position";
+  const cls = [isNull?"null":"", d?"ditto":"", guessed?"guessed":""].filter(Boolean).join(" ");
   const val = isNull ? "ilegível" : txt;
+  const DITTO_TITLE = {
+    mark: 'escrito como aspas de repetição (") — resolvido a partir da linha acima',
+    indent: "escrito sob as aspas da linha acima — resolvido pelo recuo",
+    position: "sobrenome inferido: a linha não trouxe sobrenome legível e segue "
+            + "a família acima. Confira no original.",
+  };
   const title = isNull ? "ilegível — registrado como nulo, nunca adivinhado"
-              : d ? 'escrito como aspas de repetição (") — resolvido a partir da linha acima' : "";
+              : d ? (DITTO_TITLE[r.ditto_source] || DITTO_TITLE.mark) : "";
   const mark = (r.conf && f in r.conf) ? dot(r,f) : "";
   return `<td class="cellwrap"><span contenteditable="${EDIT}" data-f="${f}" class="${cls}"
            title="${title}">${val}</span>${mark}</td>`;

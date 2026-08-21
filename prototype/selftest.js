@@ -93,6 +93,16 @@ window.addEventListener("load",async()=>{
   ok("verify marks row", document.querySelector('#rows tr[data-i="0"]').classList.contains("verified"));
   ok("unreadable shown as ilegivel", document.querySelectorAll("#rows .null").length>0);
   ok("ditto marked", document.querySelectorAll("#rows .ditto").length>0);
+  // A surname read off a repetition mark is what the page says; one taken from
+  // the row above because this row had none is an inference, and a registrar
+  // reading the table has to be able to tell them apart.
+  ok("an inferred surname is marked as inferred, not as read",
+     document.querySelectorAll("#rows .ditto.guessed").length>0);
+  ok("a surname off the mark is not marked as inferred",
+     [...document.querySelectorAll("#rows .ditto")].some(e=>!e.classList.contains("guessed")));
+  ok("the inference says so when you hover it",
+     [...document.querySelectorAll("#rows .ditto.guessed")]
+       .every(e=>/inferido/i.test(e.getAttribute("title")||"")));
 
   // the engine's decode score must not read as a claim that it got it right
   const dots=document.querySelectorAll("#rows .dot");

@@ -1,628 +1,652 @@
 {
-  "document": {
-    "notation": "BR RJANRIO BS.0.RPV, ENT.17397",
-    "ship": "gelria",
-    "line": "Koninklijke Hollandsche Lloyd",
-    "port": "Santos",
-    "arrival": "1924-12-23",
-    "origin": "Buenos Aires",
-    "archive_url": "https://imagem.sian.an.gov.br/acervo/derivadas/BR_RJANRIO_BS/0/RPV/ENT/017397/BR_RJANRIO_BS_0_RPV_ENT_017397_d0001de0001.pdf"
+ "document": {
+  "notation": "BR RJANRIO BS.0.RPV, ENT.17397",
+  "ship": "gelria",
+  "line": "Koninklijke Hollandsche Lloyd",
+  "port": "Santos",
+  "arrival": "1924-12-23",
+  "origin": "Buenos Aires",
+  "archive_url": "https://imagem.sian.an.gov.br/acervo/derivadas/BR_RJANRIO_BS/0/RPV/ENT/017397/BR_RJANRIO_BS_0_RPV_ENT_017397_d0001de0001.pdf"
+ },
+ "geometry": {
+  "bands_source": "hand-fitted",
+  "note": "As faixas de linha são ajustadas a um passo constante, NÃO detectadas. As réguas de coluna são reais (deskew + projeção); a detecção de linhas nesta página ainda não funciona. O protótipo exercita, portanto, também o caminho alternativo.",
+  "name_column": [
+   0.078,
+   0.295
+  ],
+  "first_row_top": 0.2895,
+  "row_pitch": 0.02193,
+  "row_height": 0.0205
+ },
+ "rows": [
+  {
+   "n": 1,
+   "surname": "ROCA REBULLIDA",
+   "given": "AMPARO",
+   "nationality": "ESPANHOLA",
+   "age": 23,
+   "sex": "F",
+   "status": "SOLT",
+   "occupation": "Sirvienta",
+   "origin": "BUENOS AIRES",
+   "class": "1",
+   "notes": "Hotel Esplanada",
+   "conf": {
+    "surname": 0.93,
+    "given": 0.95,
+    "nationality": 0.9,
+    "age": 0.78,
+    "occupation": 0.42
+   }
   },
-  "geometry": {
-    "bands_source": "hand-fitted",
-    "note": "As faixas de linha são ajustadas a um passo constante, NÃO detectadas. As réguas de coluna são reais (deskew + projeção); a detecção de linhas nesta página ainda não funciona. O protótipo exercita, portanto, também o caminho alternativo.",
-    "name_column": [
-      0.078,
-      0.295
-    ],
-    "first_row_top": 0.2895,
-    "row_pitch": 0.02193,
-    "row_height": 0.0205
+  {
+   "n": 2,
+   "surname": "G. GALVAO",
+   "given": "FERNANDO",
+   "nationality": "BRASILEIRO",
+   "age": 24,
+   "sex": "M",
+   "status": "SOLT",
+   "occupation": "comercio",
+   "origin": "BUENOS AIRES",
+   "class": "1",
+   "notes": "S.P. Frei Caneca 151",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.88,
+    "given": 0.9,
+    "nationality": 0.92,
+    "age": 0.85,
+    "occupation": 0.86
+   },
+   "ditto_source": "mark"
   },
-  "rows": [
-    {
-      "n": 1,
-      "surname": "ROCA REBULLIDA",
-      "given": "AMPARO",
-      "nationality": "ESPANHOLA",
-      "age": 23,
-      "sex": "F",
-      "status": "SOLT",
-      "occupation": "Sirvienta",
-      "origin": "BUENOS AIRES",
-      "class": "1",
-      "notes": "Hotel Esplanada",
-      "conf": {
-        "surname": 0.93,
-        "given": 0.95,
-        "nationality": 0.9,
-        "age": 0.78,
-        "occupation": 0.42
-      }
-    },
-    {
-      "n": 2,
-      "surname": "G. GALVAO",
-      "given": "FERNANDO",
-      "nationality": "BRASILEIRO",
-      "age": 24,
-      "sex": "M",
-      "status": "SOLT",
-      "occupation": "comercio",
-      "origin": "BUENOS AIRES",
-      "class": "1",
-      "notes": "S.P. Frei Caneca 151",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.88,
-        "given": 0.9,
-        "nationality": 0.92,
-        "age": 0.85,
-        "occupation": 0.86
-      }
-    },
-    {
-      "n": 3,
-      "surname": "SCHRADER",
-      "given": "JOHN",
-      "nationality": "DINAMARQUES",
-      "age": 37,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "Engenheiro",
-      "origin": "BUENOS AIRES",
-      "class": "1",
-      "notes": "Legação Dinamarquesa",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.72,
-        "given": 0.94,
-        "nationality": 0.83,
-        "age": 0.88,
-        "occupation": 0.8
-      }
-    },
-    {
-      "n": 4,
-      "surname": "SEMER",
-      "given": "MEYER",
-      "nationality": "BELGICA",
-      "age": 53,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "comercio",
-      "origin": "BUENOS AIRES",
-      "class": "1",
-      "notes": "S.P. Hotel",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.86,
-        "given": 0.87,
-        "nationality": 0.91,
-        "age": 0.8,
-        "occupation": 0.84
-      }
-    },
-    {
-      "n": 5,
-      "surname": "MEIBOOM DE SEMER",
-      "given": "CLARA",
-      "nationality": "BELGICA",
-      "age": null,
-      "sex": "F",
-      "status": "CASADA",
-      "occupation": "SEM",
-      "origin": "BUENOS AIRES",
-      "class": "1",
-      "notes": "Sucesso",
-      "ditto": [
-        "nationality",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.68,
-        "given": 0.9,
-        "nationality": 0.55,
-        "age": null,
-        "occupation": 0.74
-      }
-    },
-    {
-      "n": 6,
-      "surname": "DE CAMPOS FREIRE",
-      "given": "JOAQUIM",
-      "nationality": "BRASILEIRO",
-      "age": 37,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "COMERCIO",
-      "origin": "BUENOS AIRES",
-      "class": "1",
-      "notes": "Espirito Santo 14",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.81,
-        "given": 0.89,
-        "nationality": 0.9,
-        "age": 0.76,
-        "occupation": 0.85
-      }
-    },
-    {
-      "n": 7,
-      "surname": "PEREZ VAZQUEZ",
-      "given": "LUIS",
-      "nationality": "ESPANHOLA",
-      "age": 46,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "COMERCIO",
-      "origin": "BUENOS AIRES",
-      "class": "2",
-      "notes": "Praça Mauá 4, Santos",
-      "ditto": [
-        "occupation",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.84,
-        "given": 0.92,
-        "nationality": 0.87,
-        "age": 0.7,
-        "occupation": 0.5
-      }
-    },
-    {
-      "n": 8,
-      "surname": "HOFER",
-      "given": "WALTER",
-      "nationality": "SUISSA",
-      "age": 24,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "COMERCIO",
-      "origin": "BUENOS AIRES",
-      "class": "2",
-      "notes": "20 Rua Fluviaria",
-      "ditto": [
-        "occupation",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.79,
-        "given": 0.91,
-        "nationality": 0.82,
-        "age": 0.66,
-        "occupation": 0.5
-      }
-    },
-    {
-      "n": 9,
-      "surname": "VASQUEZ",
-      "given": "FRANCISCA",
-      "nationality": "ESPANHOLA",
-      "age": 30,
-      "sex": "F",
-      "status": "SOLT",
-      "occupation": "SEM",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "R. Cruz do Rio Pardo, SP",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.62,
-        "given": 0.88,
-        "nationality": 0.85,
-        "age": 0.79,
-        "occupation": 0.83
-      }
-    },
-    {
-      "n": 10,
-      "surname": "OLIVEIRA",
-      "given": "GABRIEL",
-      "nationality": "PORTUGUESA",
-      "age": 19,
-      "sex": "M",
-      "status": "SOLT",
-      "occupation": "JORNALEIRO",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Rua Dr. Vgm Carvalho, Santos 409",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.87,
-        "given": 0.9,
-        "nationality": 0.72,
-        "age": 0.58,
-        "occupation": 0.8
-      }
-    },
-    {
-      "n": 11,
-      "surname": "LUCCHETI",
-      "given": "UMBERTO",
-      "nationality": "ITALIANA",
-      "age": null,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "AGRICULTOR",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Rua João Bricola 13",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.66,
-        "given": 0.83,
-        "nationality": 0.86,
-        "age": null,
-        "occupation": 0.71
-      }
-    },
-    {
-      "n": 12,
-      "surname": "LUCCHETI",
-      "given": "MARIO",
-      "nationality": "ITALIANA",
-      "age": 19,
-      "sex": "M",
-      "status": "SOLT",
-      "occupation": null,
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Osasco, SP",
-      "ditto": [
-        "nationality",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.7,
-        "given": 0.9,
-        "nationality": 0.55,
-        "age": 0.81,
-        "occupation": null
-      }
-    },
-    {
-      "n": 13,
-      "surname": "KORTZ",
-      "given": "KONRAD",
-      "nationality": "ALEMANHA",
-      "age": 42,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "MECANICO",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Rua Volunt. da Patria 627, SP",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.59,
-        "given": 0.84,
-        "nationality": 0.88,
-        "age": 0.83,
-        "occupation": 0.76
-      }
-    },
-    {
-      "n": 14,
-      "surname": "IRESCHOV GTZ",
-      "given": "FREDERICO",
-      "nationality": "ALEMANHA",
-      "age": null,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": null,
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Rua Victoria 78, SP",
-      "ditto": [
-        "nationality",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.31,
-        "given": 0.79,
-        "nationality": 0.55,
-        "age": null,
-        "occupation": null
-      }
-    },
-    {
-      "n": 15,
-      "surname": "HELD",
-      "given": "PAUL",
-      "nationality": "ALEMANHA",
-      "age": null,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "COMERCIO",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Hotel Terminus",
-      "ditto": [
-        "nationality",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.9,
-        "given": 0.93,
-        "nationality": 0.55,
-        "age": null,
-        "occupation": 0.78
-      }
-    },
-    {
-      "n": 16,
-      "surname": "L. DE HELD",
-      "given": "ELISABETH",
-      "nationality": "ALEMANHA",
-      "age": 34,
-      "sex": "F",
-      "status": "CASADA",
-      "occupation": "SEM",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "São Paulo",
-      "ditto": [
-        "nationality",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.74,
-        "given": 0.86,
-        "nationality": 0.55,
-        "age": 0.8,
-        "occupation": 0.82
-      }
-    },
-    {
-      "n": 17,
-      "surname": "ZLAY",
-      "given": "BERKO",
-      "nationality": "RUSSIA",
-      "age": 21,
-      "sex": "M",
-      "status": "SOLT",
-      "occupation": "JORNALEIRO",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Rua Gliserio 17, SP",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.44,
-        "given": 0.61,
-        "nationality": 0.87,
-        "age": 0.84,
-        "occupation": 0.79
-      }
-    },
-    {
-      "n": 18,
-      "surname": "SOSA",
-      "given": "MANUEL",
-      "nationality": "ESPANHOLA",
-      "age": 26,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "EBANISTA",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Rua 13 de Maio 25, Itiznga, SP",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.83,
-        "given": 0.91,
-        "nationality": 0.78,
-        "age": 0.77,
-        "occupation": 0.39
-      }
-    },
-    {
-      "n": 19,
-      "surname": "VALVERDE",
-      "given": "ANTONIO",
-      "nationality": "BRASILEIRO",
-      "age": 21,
-      "sex": "M",
-      "status": "SOLT",
-      "occupation": "COMERCIO",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Rua Alfandega 38, SP",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.85,
-        "given": 0.92,
-        "nationality": 0.89,
-        "age": 0.8,
-        "occupation": 0.86
-      }
-    },
-    {
-      "n": 20,
-      "surname": "CORREA",
-      "given": "MATEUS",
-      "nationality": "PORTUGUESA",
-      "age": 30,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "LAVRADOR",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Rua Alfredo Pujol 85, SP",
-      "ditto": [
-        "origin"
-      ],
-      "handwritten": true,
-      "conf": {
-        "surname": 0.47,
-        "given": 0.51,
-        "nationality": 0.8,
-        "age": 0.72,
-        "occupation": 0.63
-      }
-    },
-    {
-      "n": 21,
-      "surname": "DA COSTA SOLANO",
-      "given": "ANTONIO",
-      "nationality": "PORTUGUESA",
-      "age": 45,
-      "sex": "M",
-      "status": "CASADO",
-      "occupation": "MECANICO",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "Rua Lat...ura",
-      "ditto": [
-        "nationality",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.8,
-        "given": 0.9,
-        "nationality": 0.55,
-        "age": 0.69,
-        "occupation": 0.75
-      }
-    },
-    {
-      "n": 22,
-      "surname": "DE JESUS SOLANO",
-      "given": "RITA",
-      "nationality": "PORTUGUESA",
-      "age": 49,
-      "sex": "F",
-      "status": "CASADA",
-      "occupation": "SEM",
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "de Carvalho 21",
-      "ditto": [
-        "nationality",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.77,
-        "given": 0.88,
-        "nationality": 0.55,
-        "age": 0.74,
-        "occupation": 0.81
-      }
-    },
-    {
-      "n": 23,
-      "surname": "SOLANO",
-      "given": "JOSEFA",
-      "nationality": "PORTUGUESA",
-      "age": 14,
-      "sex": "F",
-      "status": "SOLT",
-      "occupation": null,
-      "origin": "BUENOS AIRES",
-      "class": "3",
-      "notes": "São Paulo",
-      "ditto": [
-        "nationality",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.72,
-        "given": 0.85,
-        "nationality": 0.55,
-        "age": 0.71,
-        "occupation": null
-      }
-    },
-    {
-      "n": 24,
-      "surname": "DE AZEVEDO OLIVEIRA",
-      "given": "JOSE",
-      "nationality": "BRASILEIRO",
-      "age": 30,
-      "sex": "M",
-      "status": "SOLT",
-      "occupation": "COMERCIO",
-      "origin": "MONTEVIDEO",
-      "class": "3",
-      "notes": "Av. Angelica 148, SP",
-      "conf": {
-        "surname": 0.86,
-        "given": 0.93,
-        "nationality": 0.9,
-        "age": 0.68,
-        "occupation": 0.82
-      }
-    },
-    {
-      "n": 25,
-      "surname": "FERNANDES LOPEZ",
-      "given": "CEOLINDO",
-      "nationality": "ESPANHOLA",
-      "age": 20,
-      "sex": "M",
-      "status": "SOLT",
-      "occupation": "JORNALEIRO",
-      "origin": "MONTEVIDEO",
-      "class": "3",
-      "notes": "Rua do Rosario 15",
-      "ditto": [
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.75,
-        "given": 0.36,
-        "nationality": 0.79,
-        "age": 0.7,
-        "occupation": 0.8
-      }
-    },
-    {
-      "n": 26,
-      "surname": "GONZALEZ FERNANDEZ",
-      "given": "EULGIO",
-      "nationality": "ESPANHOLA",
-      "age": 28,
-      "sex": "M",
-      "status": "SOLT",
-      "occupation": null,
-      "origin": "MONTEVIDEO",
-      "class": "3",
-      "notes": "Rua da Comercio 118, Santos",
-      "ditto": [
-        "nationality",
-        "origin"
-      ],
-      "conf": {
-        "surname": 0.82,
-        "given": 0.4,
-        "nationality": 0.55,
-        "age": 0.76,
-        "occupation": null
-      }
-    }
-  ]
+  {
+   "n": 3,
+   "surname": "SCHRADER",
+   "given": "JOHN",
+   "nationality": "DINAMARQUES",
+   "age": 37,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "Engenheiro",
+   "origin": "BUENOS AIRES",
+   "class": "1",
+   "notes": "Legação Dinamarquesa",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.72,
+    "given": 0.94,
+    "nationality": 0.83,
+    "age": 0.88,
+    "occupation": 0.8
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 4,
+   "surname": "SEMER",
+   "given": "MEYER",
+   "nationality": "BELGICA",
+   "age": 53,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "comercio",
+   "origin": "BUENOS AIRES",
+   "class": "1",
+   "notes": "S.P. Hotel",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.86,
+    "given": 0.87,
+    "nationality": 0.91,
+    "age": 0.8,
+    "occupation": 0.84
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 5,
+   "surname": "MEIBOOM DE SEMER",
+   "given": "CLARA",
+   "nationality": "BELGICA",
+   "age": null,
+   "sex": "F",
+   "status": "CASADA",
+   "occupation": "SEM",
+   "origin": "BUENOS AIRES",
+   "class": "1",
+   "notes": "Sucesso",
+   "ditto": [
+    "nationality",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.68,
+    "given": 0.9,
+    "nationality": 0.55,
+    "age": null,
+    "occupation": 0.74
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 6,
+   "surname": "DE CAMPOS FREIRE",
+   "given": "JOAQUIM",
+   "nationality": "BRASILEIRO",
+   "age": 37,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "COMERCIO",
+   "origin": "BUENOS AIRES",
+   "class": "1",
+   "notes": "Espirito Santo 14",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.81,
+    "given": 0.89,
+    "nationality": 0.9,
+    "age": 0.76,
+    "occupation": 0.85
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 7,
+   "surname": "PEREZ VAZQUEZ",
+   "given": "LUIS",
+   "nationality": "ESPANHOLA",
+   "age": 46,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "COMERCIO",
+   "origin": "BUENOS AIRES",
+   "class": "2",
+   "notes": "Praça Mauá 4, Santos",
+   "ditto": [
+    "occupation",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.84,
+    "given": 0.92,
+    "nationality": 0.87,
+    "age": 0.7,
+    "occupation": 0.5
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 8,
+   "surname": "HOFER",
+   "given": "WALTER",
+   "nationality": "SUISSA",
+   "age": 24,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "COMERCIO",
+   "origin": "BUENOS AIRES",
+   "class": "2",
+   "notes": "20 Rua Fluviaria",
+   "ditto": [
+    "occupation",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.79,
+    "given": 0.91,
+    "nationality": 0.82,
+    "age": 0.66,
+    "occupation": 0.5
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 9,
+   "surname": "VASQUEZ",
+   "given": "FRANCISCA",
+   "nationality": "ESPANHOLA",
+   "age": 30,
+   "sex": "F",
+   "status": "SOLT",
+   "occupation": "SEM",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "R. Cruz do Rio Pardo, SP",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.62,
+    "given": 0.88,
+    "nationality": 0.85,
+    "age": 0.79,
+    "occupation": 0.83
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 10,
+   "surname": "OLIVEIRA",
+   "given": "GABRIEL",
+   "nationality": "PORTUGUESA",
+   "age": 19,
+   "sex": "M",
+   "status": "SOLT",
+   "occupation": "JORNALEIRO",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Rua Dr. Vgm Carvalho, Santos 409",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.87,
+    "given": 0.9,
+    "nationality": 0.72,
+    "age": 0.58,
+    "occupation": 0.8
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 11,
+   "surname": "LUCCHETI",
+   "given": "UMBERTO",
+   "nationality": "ITALIANA",
+   "age": null,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "AGRICULTOR",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Rua João Bricola 13",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.66,
+    "given": 0.83,
+    "nationality": 0.86,
+    "age": null,
+    "occupation": 0.71
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 12,
+   "surname": "LUCCHETI",
+   "given": "MARIO",
+   "nationality": "ITALIANA",
+   "age": 19,
+   "sex": "M",
+   "status": "SOLT",
+   "occupation": null,
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Osasco, SP",
+   "ditto": [
+    "nationality",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.7,
+    "given": 0.9,
+    "nationality": 0.55,
+    "age": 0.81,
+    "occupation": null
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 13,
+   "surname": "KORTZ",
+   "given": "KONRAD",
+   "nationality": "ALEMANHA",
+   "age": 42,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "MECANICO",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Rua Volunt. da Patria 627, SP",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.59,
+    "given": 0.84,
+    "nationality": 0.88,
+    "age": 0.83,
+    "occupation": 0.76
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 14,
+   "surname": "IRESCHOV GTZ",
+   "given": "FREDERICO",
+   "nationality": "ALEMANHA",
+   "age": null,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": null,
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Rua Victoria 78, SP",
+   "ditto": [
+    "nationality",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.31,
+    "given": 0.79,
+    "nationality": 0.55,
+    "age": null,
+    "occupation": null
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 15,
+   "surname": "HELD",
+   "given": "PAUL",
+   "nationality": "ALEMANHA",
+   "age": null,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "COMERCIO",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Hotel Terminus",
+   "ditto": [
+    "nationality",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.9,
+    "given": 0.93,
+    "nationality": 0.55,
+    "age": null,
+    "occupation": 0.78
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 16,
+   "surname": "L. DE HELD",
+   "given": "ELISABETH",
+   "nationality": "ALEMANHA",
+   "age": 34,
+   "sex": "F",
+   "status": "CASADA",
+   "occupation": "SEM",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "São Paulo",
+   "ditto": [
+    "nationality",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.74,
+    "given": 0.86,
+    "nationality": 0.55,
+    "age": 0.8,
+    "occupation": 0.82
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 17,
+   "surname": "ZLAY",
+   "given": "BERKO",
+   "nationality": "RUSSIA",
+   "age": 21,
+   "sex": "M",
+   "status": "SOLT",
+   "occupation": "JORNALEIRO",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Rua Gliserio 17, SP",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.44,
+    "given": 0.61,
+    "nationality": 0.87,
+    "age": 0.84,
+    "occupation": 0.79
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 18,
+   "surname": "SOSA",
+   "given": "MANUEL",
+   "nationality": "ESPANHOLA",
+   "age": 26,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "EBANISTA",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Rua 13 de Maio 25, Itiznga, SP",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.83,
+    "given": 0.91,
+    "nationality": 0.78,
+    "age": 0.77,
+    "occupation": 0.39
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 19,
+   "surname": "VALVERDE",
+   "given": "ANTONIO",
+   "nationality": "BRASILEIRO",
+   "age": 21,
+   "sex": "M",
+   "status": "SOLT",
+   "occupation": "COMERCIO",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Rua Alfandega 38, SP",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.85,
+    "given": 0.92,
+    "nationality": 0.89,
+    "age": 0.8,
+    "occupation": 0.86
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 20,
+   "surname": "CORREA",
+   "given": "MATEUS",
+   "nationality": "PORTUGUESA",
+   "age": 30,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "LAVRADOR",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Rua Alfredo Pujol 85, SP",
+   "ditto": [
+    "origin"
+   ],
+   "handwritten": true,
+   "conf": {
+    "surname": 0.47,
+    "given": 0.51,
+    "nationality": 0.8,
+    "age": 0.72,
+    "occupation": 0.63
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 21,
+   "surname": "DA COSTA SOLANO",
+   "given": "ANTONIO",
+   "nationality": "PORTUGUESA",
+   "age": 45,
+   "sex": "M",
+   "status": "CASADO",
+   "occupation": "MECANICO",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "Rua Lat...ura",
+   "ditto": [
+    "nationality",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.8,
+    "given": 0.9,
+    "nationality": 0.55,
+    "age": 0.69,
+    "occupation": 0.75
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 22,
+   "surname": "DE JESUS SOLANO",
+   "given": "RITA",
+   "nationality": "PORTUGUESA",
+   "age": 49,
+   "sex": "F",
+   "status": "CASADA",
+   "occupation": "SEM",
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "de Carvalho 21",
+   "ditto": [
+    "nationality",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.77,
+    "given": 0.88,
+    "nationality": 0.55,
+    "age": 0.74,
+    "occupation": 0.81
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 23,
+   "surname": "SOLANO",
+   "given": "JOSEFA",
+   "nationality": "PORTUGUESA",
+   "age": 14,
+   "sex": "F",
+   "status": "SOLT",
+   "occupation": null,
+   "origin": "BUENOS AIRES",
+   "class": "3",
+   "notes": "São Paulo",
+   "ditto": [
+    "nationality",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.72,
+    "given": 0.85,
+    "nationality": 0.55,
+    "age": 0.71,
+    "occupation": null
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 24,
+   "surname": "DE AZEVEDO OLIVEIRA",
+   "given": "JOSE",
+   "nationality": "BRASILEIRO",
+   "age": 30,
+   "sex": "M",
+   "status": "SOLT",
+   "occupation": "COMERCIO",
+   "origin": "MONTEVIDEO",
+   "class": "3",
+   "notes": "Av. Angelica 148, SP",
+   "conf": {
+    "surname": 0.86,
+    "given": 0.93,
+    "nationality": 0.9,
+    "age": 0.68,
+    "occupation": 0.82
+   }
+  },
+  {
+   "n": 25,
+   "surname": "FERNANDES LOPEZ",
+   "given": "CEOLINDO",
+   "nationality": "ESPANHOLA",
+   "age": 20,
+   "sex": "M",
+   "status": "SOLT",
+   "occupation": "JORNALEIRO",
+   "origin": "MONTEVIDEO",
+   "class": "3",
+   "notes": "Rua do Rosario 15",
+   "ditto": [
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.75,
+    "given": 0.36,
+    "nationality": 0.79,
+    "age": 0.7,
+    "occupation": 0.8
+   },
+   "ditto_source": "position"
+  },
+  {
+   "n": 26,
+   "surname": "GONZALEZ FERNANDEZ",
+   "given": "EULGIO",
+   "nationality": "ESPANHOLA",
+   "age": 28,
+   "sex": "M",
+   "status": "SOLT",
+   "occupation": null,
+   "origin": "MONTEVIDEO",
+   "class": "3",
+   "notes": "Rua da Comercio 118, Santos",
+   "ditto": [
+    "nationality",
+    "origin"
+   ],
+   "conf": {
+    "surname": 0.82,
+    "given": 0.4,
+    "nationality": 0.55,
+    "age": 0.76,
+    "occupation": null
+   },
+   "ditto_source": "position"
+  }
+ ]
 }

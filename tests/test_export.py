@@ -156,3 +156,26 @@ def test_the_company_and_the_port_travel_too():
     out = list(_csv.reader(lines(rows_to_csv(doc))))
     assert out[1][out[0].index("companhia")] == "Lloyd Brazileiro"
     assert out[1][out[0].index("porto_chegada")] == "Santos"
+
+
+def test_an_inherited_surname_says_it_was_inherited_and_how():
+    """Most rows on a family list carry a repetition mark rather than a name,
+    and some carry nothing at all and take the surname from their position.
+    A spreadsheet that cannot tell those from a reading invites somebody to take
+    an inference to a registry as evidence."""
+    doc = {**DOC, "rows": [
+        {"n": 1, "page": 2, "name_raw": "Martinez Francisco",
+         "surname": "Martinez", "given": "Francisco"},
+        {"n": 2, "page": 2, "name_raw": '" Maria', "surname": "Martinez",
+         "given": "Maria", "ditto": ["surname"], "ditto_source": "mark"},
+        {"n": 3, "page": 2, "name_raw": "Manuel", "surname": "Martinez",
+         "given": "Manuel", "ditto": ["surname"], "ditto_source": "position"},
+    ]}
+    rows = lines(rows_to_csv(doc))
+    head = rows[0]
+    assert "sobrenome_origem" in head
+    assert "lido" in rows[1]
+    assert "aspas de repetição" in rows[2]
+    assert "inferido" in rows[3]
+    # and the reading itself is untouched by any of it
+    assert '" Maria' in rows[2] and "Manuel" in rows[3]
