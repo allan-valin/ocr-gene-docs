@@ -32,8 +32,22 @@
     background:var(--bg);color:var(--ink);width:170px;min-width:110px}
   #find{flex:0 1 auto}
   #findq:focus{outline:2px solid var(--focus);outline-offset:1px}
-  #scope{font:inherit;font-size:11px;padding:5px 6px;border:1px solid var(--line);
-    border-radius:7px;background:var(--panel);color:var(--ink)}
+  /* The scope control sat on the header in the header's own colour with the
+     browser's default arrow — Allan could not see there was a control there at
+     all. It carries the page background against the panel, a border that reads
+     as an edge, and an arrow at text size. */
+  .combo{position:relative}
+  #scopebtn{display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 8px;
+    background:var(--bg);border:1px solid var(--line);border-radius:7px;min-width:104px}
+  #scopebtn:hover,#scopebtn[aria-expanded=true]{border-color:var(--accent)}
+  #scopebtn[aria-expanded=true]{background:var(--accent-soft)}
+  .chev{font-size:15px;line-height:1;color:var(--accent);margin-left:auto}
+  #scopemenu{position:absolute;z-index:40;top:calc(100% + 4px);left:0;min-width:100%;
+    margin:0;padding:4px;list-style:none;background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+  #scopemenu li{padding:6px 10px;border-radius:5px;font-size:12px;white-space:nowrap;cursor:pointer}
+  #scopemenu li:hover,#scopemenu li.on{background:var(--accent-soft)}
+  #scopemenu li[aria-selected=true]{font-weight:600}
   #findcount{font-size:11px;color:var(--muted);min-width:62px;font-variant-numeric:tabular-nums}
   main{flex:1;display:grid;grid-template-columns:230px 1fr 1fr;min-height:0}
   main.nosidebar{grid-template-columns:0 1fr 1fr}
@@ -169,7 +183,12 @@
   <span class="spacer"></span>
   <div id="find">
     <input id="findq" placeholder="Buscar no documento…  (Ctrl+F)" autocomplete="off" spellcheck="false">
-    <select id="scope" title="Coluna a pesquisar">
+    <div class="combo" id="scopewrap">
+      <button id="scopebtn" type="button" aria-haspopup="listbox" aria-expanded="false"
+              title="Coluna a pesquisar"><span id="scopelabel">Nome</span><span class="chev">▾</span></button>
+      <ul id="scopemenu" role="listbox" tabindex="-1" hidden></ul>
+    </div>
+    <select id="scope" title="Coluna a pesquisar" hidden>
       <option value="name" selected>Nome</option>
       <option value="nationality">Nacionalidade</option>
       <option value="age">Idade</option>
@@ -918,6 +937,37 @@ function step(d){
 }
 $("#findq").addEventListener("input",runFind);
 $("#scope").addEventListener("change",runFind);
+
+// The scope menu. A native <select> is kept as the value — every other piece of
+// code and every assertion reads `#scope.value` — and this drives it, because
+// the native popup could only be dismissed by choosing something: clicking the
+// control again did not close it, which makes a search scope feel like a
+// commitment rather than a look.
+const scopeMenu=$("#scopemenu"), scopeBtn=$("#scopebtn");
+function scopeOpen(){ return !scopeMenu.hidden; }
+function renderScopeMenu(){
+  const cur=$("#scope").value;
+  scopeMenu.innerHTML=[...$("#scope").options].map(o=>
+    `<li role="option" data-v="${o.value}" aria-selected="${o.value===cur}">${o.textContent}</li>`).join("");
+  $("#scopelabel").textContent=$("#scope").selectedOptions[0].textContent;
+}
+function setScopeOpen(open){
+  scopeMenu.hidden=!open;
+  scopeBtn.setAttribute("aria-expanded", open?"true":"false");
+  if(open) renderScopeMenu();
+}
+scopeBtn.addEventListener("click",e=>{ e.stopPropagation(); setScopeOpen(!scopeOpen()); });
+scopeMenu.addEventListener("click",e=>{
+  const li=e.target.closest("li"); if(!li) return;
+  $("#scope").value=li.dataset.v;
+  $("#scope").dispatchEvent(new Event("change"));
+  setScopeOpen(false); scopeBtn.focus();
+});
+document.addEventListener("click",e=>{ if(scopeOpen() && !e.target.closest("#scopewrap")) setScopeOpen(false); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && scopeOpen()){ setScopeOpen(false); scopeBtn.focus(); }});
+// the label follows the value however it was set, including from a test
+$("#scope").addEventListener("change",renderScopeMenu);
+renderScopeMenu();
 $("#next").onclick=()=>step(1); $("#prev").onclick=()=>step(-1);
 $("#findq").addEventListener("keydown",e=>{
   if(e.key==="Enter"){e.preventDefault();step(e.shiftKey?-1:1);}

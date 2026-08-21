@@ -23,7 +23,7 @@ indexed, out of the page images still in `data/pagecache`.
 | records that wanted geometry | 634 |
 | pages measured | 2,446 |
 | refused as disagreeing with the rows | **0** |
-| time, three workers | ~1 h 50 m |
+| time, three workers | 28 min (08:31–08:59) |
 | records now carrying page geometry | 634 of 660 |
 
 The remaining 26 are the two hand-measured records, which keep a

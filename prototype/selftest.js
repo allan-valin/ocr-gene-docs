@@ -34,6 +34,24 @@ window.addEventListener("load",async()=>{
   ok("band painted", !q("#bandBox").hidden && parseFloat(q("#bandBox").style.height)>0);
   ok("scope defaults to name", q("#scope").value==="name");
 
+  // The scope control was invisible on the header and its native popup could
+  // only be dismissed by choosing an option.
+  q("#scopebtn").click(); await wait(60);
+  ok("the scope menu opens on the control", !q("#scopemenu").hidden);
+  q("#scopebtn").click(); await wait(60);
+  ok("clicking the control again closes the menu", q("#scopemenu").hidden);
+  q("#scopebtn").click(); await wait(60);
+  document.body.click(); await wait(60);
+  ok("clicking away closes the menu", q("#scopemenu").hidden);
+  q("#scopebtn").click(); await wait(60);
+  [...document.querySelectorAll("#scopemenu li")].find(li=>li.dataset.v==="all").click();
+  await wait(80);
+  ok("choosing from the menu sets the scope", q("#scope").value==="all");
+  ok("and the control shows what was chosen",
+     /todas/i.test(q("#scopelabel").textContent));
+  q("#scope").value="name"; q("#scope").dispatchEvent(new Event("change")); await wait(60);
+  ok("the label follows a scope set from elsewhere", /nome/i.test(q("#scopelabel").textContent));
+
   q("#findq").value="paul"; q("#findq").dispatchEvent(new Event("input")); await wait();
   const paulHits=[...document.querySelectorAll("#rows tr.hit")];
   ok("name scope: paul -> 1 row (no Sao Paulo)", paulHits.length===1);
