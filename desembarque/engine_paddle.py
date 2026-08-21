@@ -105,6 +105,30 @@ def header_box(geo, size: tuple[int, int]) -> tuple[int, int, int, int] | None:
     return (0, 0, w, min(top, h))
 
 
+def ink_start(im) -> float | None:
+    """Where the writing begins across the band, as a fraction of its width.
+
+    A family list writes the surname once and indents every relative below it
+    under a repetition mark — and the mark is small enough that the recogniser
+    often returns the given name alone, with nothing to show the row was a
+    continuation. The indent is the other half of that evidence, and it is
+    measured here because the band is already in hand.
+    """
+    import numpy as np
+    a = np.asarray(im.convert("L"), dtype=np.uint8)
+    if a.size == 0:
+        return None
+    thr = max(60, int(a.mean()) - 35)
+    ink = a < thr
+    # A ruled line puts one or two pixels of ink in *every* column, so at the
+    # threshold the rest of this file uses, every band on a ruled page reports
+    # its writing as starting at the left edge. A stroke is taller than a rule.
+    xs = np.flatnonzero(ink.sum(axis=0) > max(2, int(0.12 * a.shape[0])))
+    if xs.size == 0:
+        return None
+    return float(xs[0]) / a.shape[1]
+
+
 def refine(im, margin: int = INK_MARGIN):
     """Trim a row band down to the writing inside it.
 
@@ -243,7 +267,9 @@ def rows_from_bands(geo, size: tuple[int, int],
         boxes.append((x0, a, x1, b))
         keep.append(i)
 
-    said = list(recognize([crop(i, box) for i, box in zip(keep, boxes)])) if boxes else []
+    crops = [crop(i, box) for i, box in zip(keep, boxes)]
+    indents = getattr(crop, "indents", {})
+    said = list(recognize(crops)) if boxes else []
     said += [("", 0.0)] * (len(boxes) - len(said))
     by_band = dict(zip(keep, said))
 
@@ -260,6 +286,8 @@ def rows_from_bands(geo, size: tuple[int, int],
             "name_raw": text or "",
             "conf": {"surname": round(float(score), 3)},
         }
+        if indents.get(i) is not None:
+            row["indent"] = round(indents[i], 3)
         if is_heading(text):
             # kept in the transcription, since it is genuinely on the page, but
             # marked so it is not offered as a person
@@ -614,10 +642,18 @@ class PaddleEngine:
         except Exception:
             cuts = []
 
+        indents: dict[int, float] = {}
+
         def crop(i: int, box: tuple) -> object:
-            if i < len(cuts) and cuts[i].size:
-                return refine(Image.fromarray(cuts[i]), margin)
-            return refine(im.crop(box), margin)
+            band = (Image.fromarray(cuts[i]) if i < len(cuts) and cuts[i].size
+                    else im.crop(box))
+            # measured before trimming, because trimming is what removes the
+            # blank the indent consists of
+            start = ink_start(band)
+            if start is not None:
+                indents[i] = start
+            return refine(band, margin)
+        crop.indents = indents
         return crop
 
     # ---- the table, measured from what is printed on it ---------------------

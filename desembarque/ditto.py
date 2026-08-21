@@ -24,6 +24,11 @@ MARK_WORDS = {"11", "n", "u", "ii", "il", "li", "y", "v"}
 # How many blank rows may sit between a mark and the name it points at. A blank
 # line is a ruled line nobody wrote on; a run of them is the end of the list.
 MAX_GAP = 4
+# How far into the name column the writing has to start before the row reads as
+# a continuation rather than a name. The clerk indents under the mark, and the
+# mark itself is small enough that the recogniser often returns the given name
+# with nothing else — on BS.ENT.013947 p3 that is most of the page.
+INDENT_FLOOR = 0.18
 
 
 def is_mark(text: str | None) -> bool:
@@ -54,7 +59,17 @@ def resolve(rows: list[dict]) -> list[dict]:
             since += 1
             out.append(row)
             continue
-        if _first_token_is_mark(raw) and last and since <= MAX_GAP:
+        indented = (row.get("indent") is not None
+                    and row["indent"] >= INDENT_FLOOR
+                    and len(parts) == 1
+                    and not is_mark(raw))
+        if indented and last and since <= MAX_GAP:
+            # the mark itself did not survive the recogniser; the indent it was
+            # written under did
+            row["surname"] = last
+            row["given"] = raw
+            row["ditto"] = ["surname"]
+        elif _first_token_is_mark(raw) and last and since <= MAX_GAP:
             rest = " ".join(parts[1:]).strip()
             row["surname"] = last
             row["given"] = rest or row.get("given") or ""

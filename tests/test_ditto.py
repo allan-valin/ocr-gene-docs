@@ -84,3 +84,35 @@ def test_the_engine_s_own_rows_keep_their_other_fields():
                     "conf": {"surname": 0.4}, "alternatives": ["x"]}])
     assert out[1]["conf"] == {"surname": 0.4}
     assert out[1]["alternatives"] == ["x"]
+
+
+def indented(text, indent):
+    from desembarque.engine_paddle import split_name
+    sur, giv = split_name(text)
+    return {"name_raw": text, "surname": sur, "given": giv, "indent": indent}
+
+
+def test_a_row_written_under_the_mark_is_a_continuation_even_unmarked():
+    """On 013947 p3 the mark is small and the recogniser mostly returns the
+    given name alone — `Fetipe`, `Maria` — with nothing to say the row belongs
+    to the family above it. What is left is where the writing starts: under the
+    mark, a third of the way into the column."""
+    out = resolve([indented("Santabarbara Salvador", 0.02),
+                   indented("Felipe", 0.34),
+                   indented("Maria", 0.31)])
+    assert [r["surname"] for r in out] == ["Santabarbara"] * 3
+    assert out[1]["given"] == "Felipe" and out[1]["ditto"] == ["surname"]
+
+
+def test_a_surname_written_at_the_margin_is_a_surname():
+    """`Turino Cettore` starts where the column starts, and a single name that
+    starts there is somebody whose surname the clerk wrote and nothing else."""
+    out = resolve([indented("Santa Nicolas", 0.02), indented("Turino", 0.03)])
+    assert "ditto" not in out[1] and out[1]["surname"] == "Turino"
+
+
+def test_two_names_at_an_indent_are_not_a_continuation():
+    """A whole name written a little to the right is still a whole name."""
+    out = resolve([indented("Santa Nicolas", 0.02),
+                   indented("De Pedres Miguel", 0.22)])
+    assert "ditto" not in out[1]
