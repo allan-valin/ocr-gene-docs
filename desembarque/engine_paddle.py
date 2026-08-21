@@ -482,9 +482,10 @@ class PaddleEngine:
             return False
         return True
 
-    def _make_recogniser(self):
+    def _make_recogniser(self, mkldnn: bool | None = None):
         from paddleocr import TextRecognition
-        kw = {"model_name": self.rec_model, "enable_mkldnn": self.mkldnn,
+        kw = {"model_name": self.rec_model,
+              "enable_mkldnn": self.mkldnn if mkldnn is None else mkldnn,
               "input_shape": REC_INPUT_SHAPE}
         if self.threads:
             kw["cpu_threads"] = self.threads
@@ -546,8 +547,22 @@ class PaddleEngine:
         if not crops:
             return []
         import numpy as np
-        rec = self._recogniser()
         arrs = [np.array(c.convert("RGB")) for c in crops]
+        try:
+            return self._read_crops(self._recogniser(), arrs)
+        except Exception:
+            # oneDNN refuses this model intermittently on this machine, the
+            # same way it refuses the page pipeline, and the page pipeline has
+            # retried without it since July. Here it did not: the page was
+            # stored with an error and no rows, and BS.ENT.013942 went from
+            # thirty-three rows to none in tonight's run.
+            if not self.mkldnn or getattr(self._local, "rec_plain", False):
+                raise
+            self._local.rec_plain = True
+            self._local.rec = self._make_recogniser(mkldnn=False)
+            return self._read_crops(self._local.rec, arrs)
+
+    def _read_crops(self, rec, arrs) -> list[tuple[str, float]]:
         out = []
         for r in rec.predict(arrs, batch_size=16):
             d = r.json.get("res", r.json) if hasattr(r, "json") else {}

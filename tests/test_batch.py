@@ -241,3 +241,20 @@ def test_an_empty_manual_note_does_not_shield_a_document_forever():
     existing = {"hash": "h", "source": "manual", "rows": []}
     fresh = {"hash": "h", "schema": 5, "rows": [{"n": 1}]}
     assert preserve_human_work(existing, fresh) == fresh
+
+
+def test_a_page_the_engine_failed_on_is_not_a_finished_document():
+    """The recogniser on this machine intermittently refuses a model with
+    `ConvertPirAttribute2RuntimeAttribute not support`. The page was stored with
+    that error, no rows and the current schema stamp — so every future run
+    skipped it. BS.ENT.013942 went from thirty-three rows to none that way, and
+    nothing told anybody."""
+    from desembarque.batch import is_indexed
+    failed = {"engine": "paddle", "schema": 18, "rows": [],
+              "pages": [{"n": 1, "kind": "cover"},
+                        {"n": 2, "kind": "list", "error": "NotImplementedError: ..."}]}
+    assert not is_indexed(failed, 18)
+    ok = {"engine": "paddle", "schema": 18, "rows": [{"n": 1}],
+          "pages": [{"n": 1, "kind": "cover", "error": None},
+                    {"n": 2, "kind": "list", "error": None}]}
+    assert is_indexed(ok, 18)

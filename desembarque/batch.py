@@ -32,11 +32,21 @@ def is_indexed(data: dict | None, schema: int) -> bool:
     nothing, and leaves, and treating that as done drops the document out of
     every future run with nobody told — the worst failure an archive index has,
     because the person is simply never found.
+
+    A page the engine *failed* on is the same trap wearing engine clothes. The
+    recogniser on this machine intermittently refuses a model with
+    `ConvertPirAttribute2RuntimeAttribute not support`; the page is stored with
+    that error, no rows, and the present schema stamp — and every future run
+    skips it. BS.ENT.013942 went from thirty-three rows to none that way, and
+    nothing told anybody.
     """
     if not data:
         return False
     if data.get("engine"):
-        return int(data.get("schema", 0)) >= schema
+        if int(data.get("schema", 0)) < schema:
+            return False
+        return not any(p.get("error") for p in data.get("pages") or []
+                       if isinstance(p, dict))
     return bool(data.get("rows"))
 
 
