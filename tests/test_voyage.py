@@ -785,10 +785,13 @@ Lista de entrada de passageiros no""")
 
 
 def test_the_years_the_archive_does_hold_are_kept():
+    """The upper bound came down from 1940 to 1935 on evidence: `de 19.40`, on a
+    page whose stamp reads `ABR 8 1920`, was accepted as 1940 exactly because it
+    sat on the boundary. Every year this corpus has produced is 1913-1928."""
     from desembarque.voyage import plausible_year
-    for y in (1888, 1917, 1925, 1938):
+    for y in (1888, 1917, 1925, 1930):
         assert plausible_year(y) == y
-    for y in (1799, 1980, 2011, 19):
+    for y in (1799, 1940, 1980, 2011, 19):
         assert plausible_year(y) is None
 
 

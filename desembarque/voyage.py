@@ -290,7 +290,10 @@ def _read_date(v: Voyage, lines: list[str]) -> None:
 
 # `daPoliciade 1917` is one printed line and one written year run together by
 # the detector, so the `de` before the year does not always start a word.
-RE_YEAR_TAIL = re.compile(r"de\s*(\d{2}\s*\d{0,2})\b", re.I)
+# `de 19.18`, `de 19 18`, `de 1918`: the detector puts a space or a stop inside
+# the year as readily as not, and the year is the half of a date that answers a
+# search.
+RE_YEAR_TAIL = re.compile(r"de\s*(\d{2}[\s.,]*\d{0,2})\b", re.I)
 # The form prints `_______,` and the clerk writes the date on past the comma,
 # so the port is what stands before the form's own comma, not the whole line.
 RE_PORT = re.compile(r"^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.' ]{2,23}?)\s*,")
@@ -483,7 +486,12 @@ RE_CENTURY = re.compile(r"(1[89]\d\d)")
 # is a misreading of a year in the 1920s, and a wrong year answers a search that
 # should have found nothing. This is an assumption about the corpus rather than
 # about any one page, and it is one line to move.
-FIRST_YEAR, LAST_YEAR = 1880, 1940
+#
+# The upper bound was 1940 and is 1935: `de 19.40` — the detector's account of a
+# date whose stamp on the same page reads `ABR 8 1920` — was accepted as 1940
+# exactly because it sat on the boundary. Every year this corpus has produced
+# falls between 1913 and 1928.
+FIRST_YEAR, LAST_YEAR = 1880, 1935
 
 
 def plausible_year(year: int | None) -> int | None:
@@ -527,13 +535,16 @@ def _read_dateline(v: Voyage, lines: list[str]) -> None:
     this part of the page looks like one.
     """
     for i, line in enumerate(lines[:10]):
-        month = next((month_number(w) for w in line.split()
-                      if month_number(w)), None)
+        # Split on the punctuation too: the detector runs the month into the
+        # words around it as often as not — `Santos,deMaio` is a port, a comma
+        # and a month, and read whole it contains no month at all.
+        pieces = re.split(r"[^\wÀ-ÿ]+", line)
+        month = next((month_number(w) for w in pieces if month_number(w)), None)
         if not month:
             continue
         # the day is the token before the month, where there is one that reads
         # as a number; `em 19 de Marco` is the common shape
-        words = line.split()
+        words = pieces
         at = next(i for i, w in enumerate(words) if month_number(w))
         prev = words[at - 1] if at else ""
         if fold(prev) in ("de", "do") and at >= 2:
@@ -542,7 +553,7 @@ def _read_dateline(v: Voyage, lines: list[str]) -> None:
         day = int(prev) if prev and 1 <= int(prev) <= 31 else None
         window = " ".join(lines[i:i + 3])
         m = RE_YEAR_TAIL.search(window)
-        digits = re.sub(r"\s+", "", m.group(1)) if m else ""
+        digits = re.sub(r"[^\d]", "", m.group(1)) if m else ""
         if len(digits) != 4:
             # There is no `entrado em` on this form to vouch for the word, and
             # one word in a badly-read line comes within reach of a month name
