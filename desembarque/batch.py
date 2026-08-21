@@ -43,7 +43,14 @@ def is_indexed(data: dict | None, schema: int) -> bool:
     if not data:
         return False
     if data.get("engine"):
-        if int(data.get("schema", 0)) < schema:
+        # `schema` says how the record was *parsed* and `read_schema` how it was
+        # *read*, and only the second answers this question. Re-parsing lifts the
+        # first — it costs a second and touches only the voyage — and for one
+        # evening that made every record look freshly read: four hundred dossiers
+        # carrying the old geometry would have been skipped by every future run,
+        # silently, which is the same failure as the empty note and the errored
+        # page wearing different clothes.
+        if int(data.get("read_schema", data.get("schema", 0))) < schema:
             return False
         return not any(p.get("error") for p in data.get("pages") or []
                        if isinstance(p, dict))

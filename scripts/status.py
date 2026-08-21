@@ -47,7 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError):
             continue
         records += 1
-        if d.get("engine") and int(d.get("schema", 0)) < SCHEMA:
+        # how it was read, not how it was parsed: a re-parse lifts the second
+        if d.get("engine") and int(d.get("read_schema", d.get("schema", 0))) < SCHEMA:
             stale += 1
         if any(p.get("error") for p in d.get("pages") or [] if isinstance(p, dict)):
             errors += 1
@@ -65,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{records} records for {scans} dossiers, schema {SCHEMA}")
     print(f"   {rows} rows, {named} with a reading")
     if stale:
-        print(f"   {stale} written by an older engine — a re-index would redo them")
+        print(f"   {stale} were read by an older engine — an index run redoes them")
     if errors:
         print(f"   {errors} carry a page the engine failed on — they will be read again")
     print("   voyage: " + ", ".join(

@@ -258,3 +258,19 @@ def test_a_page_the_engine_failed_on_is_not_a_finished_document():
           "pages": [{"n": 1, "kind": "cover", "error": None},
                     {"n": 2, "kind": "list", "error": None}]}
     assert is_indexed(ok, 18)
+
+
+def test_re_parsing_a_record_does_not_make_it_look_freshly_read():
+    """`schema` says how a record was parsed and `read_schema` how it was read.
+    Re-parsing costs a second and touches only the voyage, so it lifts the first
+    — and for one evening that made four hundred dossiers carrying the old
+    geometry look current to every future run."""
+    from desembarque.batch import is_indexed
+    reparsed = {"engine": "paddle", "schema": 18, "read_schema": 17,
+                "rows": [{"n": 1}], "pages": [{"n": 1}]}
+    assert not is_indexed(reparsed, 18)
+    read = {**reparsed, "read_schema": 18}
+    assert is_indexed(read, 18)
+    # a record from before the distinction existed is judged by what it has
+    old = {"engine": "paddle", "schema": 18, "rows": [{"n": 1}], "pages": [{"n": 1}]}
+    assert is_indexed(old, 18)
