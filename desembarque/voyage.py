@@ -76,7 +76,12 @@ RE_PAQUETE = re.compile(r"(?:paquete|vapor)\b(.*)", re.I)
 # Not every form names the kind of vessel. `Lista de entrada de passageiros no
 # _____` leaves the blank straight after `no`, so the ship is beside that.
 # Tried second, because a form that does say `vapor` says it after this phrase.
-RE_LISTA_SHIP = re.compile(r"passageiros(?:\s+entrados)?\s+no\b(.*)", re.I)
+RE_LISTA_SHIP = re.compile(r"passage\w*(?:\s+entrados?)?\s+no\b(.*)", re.I)
+# The ship is often written on a line of its own in quotes, and the closing
+# quote is the first thing a scan loses: BS.ENT.013983 reads `"Itabera` under
+# `Lista de entrada de passageios no Pague......`, and the closed-quote pattern
+# found nothing on a page that names its ship plainly.
+RE_QUOTED_OPEN = re.compile(r"^\s*[\"“”]\s*([A-Za-zÀ-ÿ][\w'’\- ]{2,30})\s*$")
 RE_QUOTED = re.compile(r"[\"“”]\s*([^\"“”]{2,40}?)\s*[\"“”]")
 RE_ORIGIN = re.compile(r"procedente\s+d[eo]\b(.*)", re.I)
 # The day is whatever was written where the day goes -- often a stroke the
@@ -438,6 +443,15 @@ def plausible_line(value: str | None) -> str | None:
     return plausible_value(stripped) and stripped
 
 
+def _quoted_alone(lines: list[str]) -> str | None:
+    """A line that is nothing but a quoted name, closing quote or not."""
+    for line in lines:
+        m = RE_QUOTED.search(line) or RE_QUOTED_OPEN.match(line)
+        if m and not month_number(m.group(1)):
+            return _clean(m.group(1))
+    return None
+
+
 def _read_port(lines: list[str]) -> str | None:
     """The port, written where the letterhead leaves room for it.
 
@@ -646,6 +660,13 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
         else:
             v.ship = beside
         v.ship = plausible_ship(v.ship, v.line)
+        if not v.ship:
+            # The ship is often written on a line of its own in quotes, and the
+            # closing quote is the first thing a scan loses. BS.ENT.013983 is
+            # typewritten and perfectly legible and stated no ship: its label
+            # reads `passageios no Pague......` and `"Itabera` sits on the line
+            # below it.
+            v.ship = plausible_ship(_quoted_alone(lines), v.line)
         v.origin = plausible_value(
             (_positional(RE_ORIGIN, fragments) if fragments else None)
             or _beside(RE_ORIGIN, lines))
@@ -667,6 +688,12 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
         if m and not month_number(m.group(1)):
             quoted = _clean(m.group(1))
             break
+    if not quoted:
+        for line in lines:
+            m = RE_QUOTED_OPEN.match(line)
+            if m and not month_number(m.group(1)):
+                quoted = _clean(m.group(1))
+                break
     if quoted and v.flag and quoted in v.flag:
         # The whole printed line came back at once, so the words beside
         # `paquete` are the nationality *and* the ship it belongs to. The

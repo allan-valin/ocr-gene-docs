@@ -923,3 +923,39 @@ def test_the_company_printed_at_the_top_is_not_the_vessel():
     assert plausible_ship("The Royal Mail Steam Packet Co", line) is None
     assert plausible_ship("Valdivia", "COMPAGNIE DE NAVIGATION SUD ATLANTIQUE") \
         == "Valdivia"
+
+
+# BS.ENT.013983 page 2, verbatim. Typewritten, legible, and it stated no ship:
+# the label is misread as `passageios no Pague` and the ship is on its own line
+# with the closing quote lost to the scan.
+LISTA_013983 = """BS.RPV. ENT 013983
+Lloyd Brazileiro
+POLICIA DO PORTO
+Santos, 17 de
+Maio
+Repartição daPoliciade 1917
+Lista de entrada de passageios no Pague......
+"Itabera
+com
+dias e horas de viagem, sob o commando de C. Matheison
+consignado neste porto a R. VASCONCELLOS & C."""
+
+
+def test_a_ship_written_under_the_label_in_an_open_quote_is_still_a_ship():
+    v = parse_voyage(LISTA_013983)
+    assert v is not None
+    assert v.ship == "Itabera"
+    assert v.line == "Lloyd Brazileiro"
+
+
+def test_the_year_printed_beside_the_police_stamp_is_read():
+    v = parse_voyage(LISTA_013983)
+    assert v.year == 1917 and v.year_source == "printed"
+
+
+def test_an_open_quote_around_a_month_is_not_a_ship():
+    v = parse_voyage("""Lloyd Brazileiro
+Lista de entrada de passageiros no vapor
+"Maio
+Santos, 3 de Maio de 1919""")
+    assert v is None or v.ship != "Maio"
