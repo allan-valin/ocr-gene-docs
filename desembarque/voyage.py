@@ -350,6 +350,13 @@ def _is_form_word(word: str) -> bool:
             or is_flag(word))
 
 
+# A vessel's name is short. The longest in this archive is `Hamburg-Südamerikanische
+# Dampfschifffahrts-Gesellschaft`, which is a company; the longest ship is under
+# thirty characters. `Yerzeichnis der Perfonen, kefördert durch den deutschen
+# Dampfer` is a printed German sentence that was filed as one.
+MAX_SHIP_CHARS = 40
+
+
 def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
     """The value, if it can be a vessel's name at all.
 
@@ -360,6 +367,9 @@ def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
     wearing a vessel's name.
     """
     value = plausible_value(value)
+    if not value or len(value) > MAX_SHIP_CHARS:
+        return None
+    value = _clean(value.lstrip("()[]{}·.,-— "))
     if not value:
         return None
     word = fold(value)
@@ -461,7 +471,10 @@ def _split_flag(value: str | None) -> tuple[str | None, str | None]:
     flag = None
     # `no vapor allemão (1) Cap Norte`: the nationality, the form's own footnote
     # marker, and then the ship. Both of the first two have to come off.
-    while words and (is_flag(words[0]) or RE_FOOTNOTE.fullmatch(words[0])):
+    # a token with nothing in it but punctuation is the footnote's brackets with
+    # the number lost: `()Duca degli Abruzzi`
+    while words and (is_flag(words[0]) or RE_FOOTNOTE.fullmatch(words[0])
+                     or not any(c.isalnum() for c in words[0])):
         if is_flag(words[0]):
             flag = words[0] if flag is None else f"{flag} {words[0]}"
         words = words[1:]

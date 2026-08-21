@@ -990,3 +990,18 @@ def test_the_form_s_footnote_marker_is_not_part_of_the_ship():
 Lista de entrada de passageiros no vapor (2) Duca degli Abruzzi
 Santos, 5 de Janeiro de 1922""")
     assert v is not None and v.ship == "Duca degli Abruzzi"
+
+
+def test_a_printed_sentence_is_not_a_vessel():
+    """`Yerzeichnis der Perfonen, kefördert durch den deutschen Dampfer` is the
+    German printing above the list, and it was filed as a ship."""
+    from desembarque.voyage import plausible_ship
+    assert plausible_ship(
+        "Yerzeichnis der Perfonen, kefördert durch den deutschen Dampfer",
+        None) is None
+    assert plausible_ship("Hamburg-Amerika", None) == "Hamburg-Amerika"
+
+
+def test_the_footnote_s_empty_brackets_come_off():
+    from desembarque.voyage import plausible_ship
+    assert plausible_ship("()Duca degli Abruzzi", None) == "Duca degli Abruzzi"
