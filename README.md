@@ -153,6 +153,16 @@ Measured against 142 hand-read names, that is the difference between 95 findable
 Every search result carries the ship it sailed on and offers `só <navio>` to ask again
 with it, and `↓ CSV` takes the whole list — notation, page and line — to the archive.
 
+## Where it stands right now
+
+```sh
+.venv/bin/python scripts/status.py
+```
+
+Records and rows on disk, how many were written by an older engine, how much of the
+corpus states its ship, year and port, how many surnames were inherited rather than read,
+and whether an index run is going.
+
 ## Checking a change
 
 Nothing here is trained. The recogniser's weights are fixed, so re-reading the archive
