@@ -59,7 +59,8 @@ PRINTED_WORDS = """consignado consignada tripulacao toneladas registro
     passageiros passageiro observacoes profissao nacionalidade procedencia
     cognomes sobrenomes commando comando desembarcaram entrados immigrantes
     imigrantes reparticao policia intendencia povoamento ministerio
-    documentos numero ordem estado civil destino classe pessoas""".split()
+    documentos numero ordem estado civil destino classe pessoas
+    total transporte transito tranzito""".split()
 PRINTED_FLOOR = 0.8
 
 
@@ -89,7 +90,16 @@ def is_heading(text: str) -> bool:
     # broken in two and filed as two people, scoring against anything beginning
     # `con` and belonging to no ship. A row made only of the form's own words is
     # the form, not a passenger.
-    words = [w for w in t.lower().split() if len(w) > 3]
+    # The detector runs words into their punctuation and into each other —
+    # `registro,`, `com/8pessoas` — and a comma was enough to make a line of the
+    # form's own prose look like a name.
+    # Digits carry no evidence about a name — the line number has its own
+    # column, and `Total34` is the tally with the count run into the word — so
+    # they are removed before the words are weighed. What is left has to be a
+    # word to count at all.
+    words = [re.sub(r"\d+", "", w)
+             for w in re.sub(r"[^\w\s]+", " ", t.lower()).split()]
+    words = [w for w in words if len(w) > 3]
     if not words:
         return False
     if len(words) == 1:

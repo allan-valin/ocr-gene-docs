@@ -495,3 +495,32 @@ def test_a_changed_transcription_gets_a_new_posting_list(tmp_path):
     after = load_index(tmp_path)
     assert [h["text"] for h in search(after, "silva")] == ["MARIA SILVA"]
     assert search(after, "muesso") == []
+
+
+# Read off real pages, and none of them is a passenger: the tally block at the
+# foot of a list, and the interpreter's prose caught by the row comb.
+NOT_PEOPLE = ["Total", "Total34", "Total 10412190", "Total.",
+              "EM Tranzito em 1a 28 em 3a 9 total 37",
+              "de registro, com/8pessoas de tripolação, entrado",
+              "Passageiros total in a Classe"]
+
+# Also read off real pages, and every one of them is somebody. Losing a
+# passenger is the failure this tool exists to prevent, so the filter is
+# measured against these first.
+PEOPLE = ["GUIDO CONTADORE", "CEZARIO SAMMAMED", "A. VIEIRA MIRANDA",
+          "JOSE MUESSO", "JOAO GOMES", "Anna Romano", "Maria Soma",
+          "Nemma Comtadiie", "Rosalena Piseguerra"]
+
+
+def test_the_tally_at_the_foot_of_the_list_is_not_a_passenger():
+    """The row comb fits the printed lines as well as the written ones, so the
+    total the clerk wrote under the last name is read as a person."""
+    from desembarque.search import is_heading
+    for junk in NOT_PEOPLE:
+        assert is_heading(junk), f"{junk!r} was indexed as a passenger"
+
+
+def test_the_passengers_are_still_passengers():
+    from desembarque.search import is_heading
+    for name in PEOPLE:
+        assert not is_heading(name), f"{name!r} was dropped as printing"
