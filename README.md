@@ -145,6 +145,14 @@ off until asked for and both labelled as what they are:
   those catch 81%, 46% and 4% of them respectively. `D` steps through the marked rows.
   About half the rows on a cursive page are marked, which is roughly how many are wrong.
 
+## Finding somebody
+
+Type a name. If it is a common one — Maria, José, Joaquim — it will be competing with
+thousands of equally close readings, so say what else you know: the ship, or the year.
+Measured against 142 hand-read names, that is the difference between 95 findable and 111.
+Every search result carries the ship it sailed on and offers `só <navio>` to ask again
+with it, and `↓ CSV` takes the whole list — notation, page and line — to the archive.
+
 ## Checking a change
 
 Nothing here is trained. The recogniser's weights are fixed, so re-reading the archive
