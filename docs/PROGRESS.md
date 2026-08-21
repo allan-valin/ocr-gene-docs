@@ -4,6 +4,77 @@ Running checkpoint. Newest first. The design record is
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
 next actions.
 
+## 2026-08-22 — checkpoint, machine idle
+
+Everything is committed and pushed, nothing is running, and the laptop is quiet.
+**Start here when picking this up.**
+
+### Where the corpus is
+
+```
+660 records for 660 dossiers, schema 18
+   69,257 rows, 35,957 with a reading
+   22 were read by an older engine — an index run redoes them
+   1 carries a page the engine failed on — it will be read again
+   voyage: ship 217 (33%), year 167 (25%), port 177 (27%), origin 247 (37%), line 407 (62%)
+   surnames inherited: position 4,585, mark 448, indent 189
+```
+
+`.venv/bin/python scripts/status.py` prints that, and says whether a run is going.
+
+The evening's index run was stopped at **235 of 660** by hand — the machine was
+loud and the night was not for it. Nothing was lost: it resumes from the
+content-hash cache and skips what is current. The re-parse and the name-list
+rebuild were run afterwards, so the ship coverage above (33%, up from 25%) and
+the 1,026-name dictionary are already in what is on disk.
+
+### To resume
+
+```sh
+.venv-ocr/bin/python scripts/serve.py --root data/scans     # then, in another shell
+curl -X POST 'http://127.0.0.1:8799/api/index?dir='         # start / resume
+curl      'http://127.0.0.1:8799/api/index'                 # progress
+curl -X POST 'http://127.0.0.1:8799/api/index/stop'         # stop; workers finish the page
+```
+
+It will read the 22 dossiers marked for re-reading and the ~400 that were never
+reached, at roughly a dossier a minute, four workers, and it leaves the machine
+usable but audible. Afterwards: `scripts/reparse_voyages.py`, then
+`scripts/build_names.py --min 2`.
+
+### Next, in order
+
+1. **Finish the refresh** — about seven hours of machine time, in whatever
+   stretches suit. Nothing else depends on it; the app works on what is there.
+2. **A common name in a large pool is the open problem.** BS.ENT.015061 p6 reads
+   at CER 0.08 in places and 18 of its 46 names are findable, because they are
+   Marias and Joses. Three scoring changes were tried and all three lost names;
+   the crossing is the lever that works, and it is now weighted as far as it can
+   go without deciding. What is left to try: narrowing by *shipping line* (62% of
+   dossiers state one, against 33% for the ship), and letting a searcher say a
+   year *range* rather than a year.
+3. **A dossier's later pages could skip the heading pass** when the columns are
+   already known from an earlier page — a recogniser batch per page, which is
+   most of what the geometry costs now.
+4. **The name list should be rebuilt after every refresh**; it is only as good as
+   the pages it was counted from, and 1,026 names came from a corpus that is
+   still two thirds old.
+5. **Handwriting recognition is the ceiling** — five things were measured against
+   it tonight and none moved it. What is left is a model that reads cursive
+   Portuguese and Spanish on a CPU, or a GPU, or training data of this
+   archive's own.
+
+### What not to redo
+
+* The corpus is not a test set. Nothing is trained; a re-index refreshes what the
+  app serves and proves nothing about a change. Use `pytest`,
+  `scripts/bench_search.py`, `scripts/bench_pages.py`, `scripts/bench_rec.py` —
+  between them about two minutes.
+* Measured and rejected tonight, with numbers in the entries below: recogniser
+  input at 960 and 1280 px, `PP-OCRv5_server_rec`, removing the printed rules
+  from each crop, word-by-word query matching, folding OCR-confusable letters,
+  splitting a joined name at its interior capital, and a wider ditto gap.
+
 ## 2026-08-21 — evening (Allan present, working to 23:00)
 
 ### The corpus is not a test set
