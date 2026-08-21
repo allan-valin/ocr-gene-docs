@@ -41,6 +41,10 @@ DEFAULT_REC = os.environ.get("DESEMBARQUE_REC_MODEL", "PP-OCRv6_medium_rec")
 DEFAULT_DET = os.environ.get("DESEMBARQUE_DET_MODEL", "PP-OCRv6_medium_det")
 DEFAULT_THREADS = int(os.environ.get("DESEMBARQUE_CPU_THREADS", "0")) or None
 REC_INPUT_SHAPE = (3, 48, 640)
+# What detection runs at when the cheap pass found no table worth the name, and
+# how few rows count as "no table". Four times the cost of the default pass.
+FINE_DETECT_SIDE = 2000
+MIN_PRINTED_ROWS = 5
 PAD_PX = 6
 MIN_ROW_PX = 12
 INK_MARGIN = 4
@@ -615,6 +619,100 @@ class PaddleEngine:
             return refine(im.crop(box), margin)
         return crop
 
+    # ---- the table, measured from what is printed on it ---------------------
+
+    def _make_detector(self, side: int | None = None):
+        from paddleocr import TextDetection
+        # oneDNN refuses this model the same way it refuses the pipeline, and
+        # here there is nothing to fall back to, so it is off from the start.
+        kw = {"model_name": self.det_model, "enable_mkldnn": False}
+        if side:
+            kw["limit_side_len"] = side
+            kw["limit_type"] = "max"
+        if self.threads:
+            kw["cpu_threads"] = self.threads
+        return TextDetection(**kw)
+
+    def _detector(self, side: int | None = None):
+        key = f"det{side or 0}"
+        det = getattr(self._local, key, None)
+        if det is None:
+            det = self._make_detector(side)
+            setattr(self._local, key, det)
+        return det
+
+    def _detect(self, image: Path, side: int | None = None) -> list[dict]:
+        """Every text box on the page, with no opinion about what it says.
+
+        Three seconds against the eighty a dense page costs to read, and the
+        table's geometry is a question about where the printing is.
+
+        `side` raises the resolution detection works at. At its default the
+        detector shrinks the page until the long side is under 960 px, and a
+        pencil line that survives the scan does not always survive that: on
+        OL.PRJ.17851 p2 a page of twenty-three names came back as thirty-two
+        boxes. Four times the cost, so it is asked for only when the cheap pass
+        found no table.
+        """
+        det = self._detector(side)
+        out = []
+        for r in det.predict(str(image)):
+            d = r.json.get("res", r.json) if hasattr(r, "json") else {}
+            for poly in (d.get("dt_polys") or []):
+                try:
+                    xs = [float(pt[0]) for pt in poly]
+                    ys = [float(pt[1]) for pt in poly]
+                except (TypeError, ValueError, IndexError):
+                    continue
+                out.append({"x0": min(xs), "y0": min(ys),
+                            "x1": max(xs), "y1": max(ys)})
+        return out
+
+    def _read_boxes(self, image: Path, boxes: list[dict]) -> list[dict]:
+        """What a handful of boxes say. Used only to find the column headings."""
+        if not boxes:
+            return []
+        from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None
+        with Image.open(image) as im:
+            crops = [im.crop((int(b["x0"]) - 2, int(b["y0"]) - 2,
+                              int(b["x1"]) + 2, int(b["y1"]) + 2)).convert("RGB")
+                     for b in boxes]
+        said = self._recognize(crops)
+        return [{**b, "text": t} for b, (t, _s) in zip(boxes, said)]
+
+    def _printed_table(self, image: Path):
+        """The table measured from the page's own printing, or None.
+
+        The boxes come from the readable copy — 2000 px on the long side — and
+        the geometry is normalised, so it applies to the full-resolution page
+        the rows are actually cut from.
+        """
+        from PIL import Image
+        from .tablegrid import heading_lines, table
+        Image.MAX_IMAGE_PIXELS = None
+        small = self._readable_copy(image)
+        try:
+            with Image.open(small) as im:
+                w, h = im.size
+        except (OSError, ValueError):
+            return None
+        for side in (None, FINE_DETECT_SIDE):
+            try:
+                boxes = self._detect(small, side)
+            except Exception:
+                return None   # a page detection cannot cross is not a table
+            if not boxes:
+                return None
+            labelled = self._read_boxes(small, heading_lines(boxes, h))
+            found = table(boxes, w, h, labelled=labelled)
+            if found is not None and len(found.rows) >= MIN_PRINTED_ROWS:
+                return found
+        # a page that has no table at this resolution either: the caller falls
+        # back to the rules, which is where it was before any of this
+        return found
+
+
     def transcribe_page(self, image: Path, kind: str = "unknown",
                         source: Path | None = None,
                         page: int | None = None,
@@ -636,7 +734,16 @@ class PaddleEngine:
             from page_geometry import analyze
             Image.MAX_IMAGE_PIXELS = None
 
-            geo = analyze(image)
+            # What is printed on the table beats what is ruled on it. The page
+            # is read once, whole: that pass carries the letterhead and the
+            # voyage, which were being read from a separate strip, and it also
+            # carries the column headings and the printed ordinals — from which
+            # the name column and the rows can be measured without trusting a
+            # rule the scan may have lost. See desembarque.tablegrid.
+            geo = self._printed_table(image)
+            printed = geo is not None
+            if geo is None:
+                geo = analyze(image)
             if not geo.rows or not geo.name_column(0):
                 # no grid is a legitimate answer: many pages are not tables
                 return PageResult(kind="unknown", engine=self.name,
@@ -672,6 +779,10 @@ class PaddleEngine:
                 geometry={"rows": geo.normalized_rows(),
                           "columns": geo.normalized_cols(),
                           "skew": geo.skew,
+                          # which measurement the rows were cut from, because
+                          # the two fail in different ways and a band that
+                          # disagrees with the scan has to be traceable
+                          "measured_by": "printing" if printed else "rules",
                           "read_from": "render" if from_render else "mask"},
             )
         except Exception as e:

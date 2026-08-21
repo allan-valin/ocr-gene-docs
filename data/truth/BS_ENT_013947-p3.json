@@ -1,0 +1,23 @@
+{
+  "source": "hand-read from the scan by eye, page 3 name column",
+  "caution": "A cursive Italian-Spanish hand read at 110 dpi. Several of these are uncertain — the surnames especially — and it exists to rank recognisers against each other, not to settle what the page says. Where the clerk wrote a ditto the surname above is repeated here, because that is what the row means.",
+  "pdf": "BR_RJANRIO_BS_0_RPV_ENT_013947_d0001de0001.pdf",
+  "page": 3,
+  "first_row": 1,
+  "names": [
+    "Santabarbara Salvador", "Santabarbara Jose", "Santabarbara Felipe",
+    "Santabarbara Maria", "Turino Cettore", "Turino Matalia", "Turino Angela",
+    "Turino Turino", "Turino Mario", "Santa Nicolas", "Santa Maria",
+    "Santa Jose", "Santa Pedro", "Arquentiri Jose", "Arquentiri Gabriela",
+    "Arquentiri Carina", "Arquentiri Cesar", "Arquentiri Josefa",
+    "Arquentiri Rosa", "Calzagari Alberto", "Calzagari Rosa", "Calzagari Jose",
+    "Calzagari Antonio", "Calzagari Pedro", "De Pedres Miguel",
+    "De Pedres Cristobal", "De Pedres Pascual", "De Pedres Elvira",
+    "De Pedres Francisca", "De Pedres Angela", "Martinez Francisco",
+    "Martinez Maria", "Martinez Manuel", "Martinez Clara", "Martinez Dolores",
+    "Martinez Juan", "Martinez Ramon", "Lorenzo Cipriano", "Lorenzo Maria",
+    "Lorenzo Angela", "Lorenzo Salvadora", "Lorenzo Rosario",
+    "Lorenzo Francisco", "Lorenzo Maria", "Castiello Cosme",
+    "Castiello Bernardina", "Castiello Jose", "Castiello Carancy"
+  ]
+}
