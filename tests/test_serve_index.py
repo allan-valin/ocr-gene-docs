@@ -640,3 +640,19 @@ def test_a_page_that_was_never_measured_carries_no_geometry(server, monkeypatch)
     data = serve.transcribe_document(folder / "doc0.pdf", Job())
     cover = next(p for p in data["pages"] if p["n"] == 1)
     assert "geometry" not in cover
+
+
+def test_the_header_says_a_year_came_off_the_stamp():
+    """1928 is a misread 1923 in every case in this corpus, and it wins because
+    it is inked where the writing failed. The number alone gives a person no way
+    to weigh it against the date printed on the same page."""
+    from desembarque.serve_shapes import ui_meta
+    meta = ui_meta({"ship": "Baden", "year": 1928, "year_source": "stamp"}, "X")
+    assert meta["year"] == 1928
+    assert meta["year_source"] == "stamp"
+
+
+def test_a_year_the_clerk_wrote_says_that_too():
+    from desembarque.serve_shapes import ui_meta
+    meta = ui_meta({"ship": "Baden", "year": 1925, "year_source": "printed"}, "X")
+    assert meta["year_source"] == "printed"

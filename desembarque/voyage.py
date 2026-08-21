@@ -153,6 +153,11 @@ class Voyage:
     arrival: str | None = None
     arrival_raw: str | None = None
     year: int | None = None
+    # where the year was read: "printed" from the date on the form, "stamp"
+    # from the port's rubber stamp. They fail differently — the stamp fails on
+    # digits, and `DEZ 80 1928` is a misread 1923 — so a record that cannot say
+    # which it is cannot be audited without going back to the page.
+    year_source: str | None = None
     month: int | None = None
     passengers: int | None = None
 
@@ -268,6 +273,8 @@ def _read_date(v: Voyage, lines: list[str]) -> None:
         v.month = month_number(month_word)
         digits = re.sub(r"\s+", "", year)
         v.year = plausible_year(int(digits)) if len(digits) == 4 else None
+        if v.year:
+            v.year_source = "printed"
         if v.month and v.year and day.isdigit() and 1 <= int(day) <= 31:
             v.arrival = f"{v.year:04d}-{v.month:02d}-{int(day):02d}"
         return
@@ -466,6 +473,7 @@ def _read_dateline(v: Voyage, lines: list[str]) -> None:
             v.arrival_raw = _clean(window[:60])
             return
         v.month, v.year = month, int(digits)
+        v.year_source = "printed"
         if day:
             v.arrival = f"{v.year:04d}-{v.month:02d}-{day:02d}"
         v.arrival_raw = _clean(window[:60])
@@ -579,6 +587,8 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
         if v.year is None:
             # the port's own stamp, which is inked where the date is written
             v.year = next((y for y in (stamp_year(l) for l in lines) if y), None)
+            if v.year:
+                v.year_source = "stamp"
         return v
 
     v.flag = _beside(RE_PAQUETE, lines)
@@ -600,6 +610,8 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
     _read_date(v, lines)
     if v.year is None:
         v.year = next((y for y in (stamp_year(l) for l in lines) if y), None)
+        if v.year:
+            v.year_source = "stamp"
 
     for a, b in zip(lines, lines[1:] + [""]):
         m = RE_LANDED.search(f"{a} {b}")
@@ -630,6 +642,16 @@ def merge_voyages(first: Voyage | None, second: Voyage | None) -> Voyage | None:
     for field, value in second.__dict__.items():
         if field != "source" and getattr(out, field) in (None, ""):
             setattr(out, field, value)
+    # The one place a later page does overrule an earlier one. A pen and a
+    # rubber stamp do not fail the same way: the stamp fails on digits, and
+    # 1928 in this corpus is a misread 1923 every time, disagreeing with the
+    # date printed on the same page. So a year the clerk wrote outranks a year
+    # the port inked, whichever form was read first.
+    if (out.year_source == "stamp" and second.year_source == "printed"
+            and second.year):
+        out.year, out.year_source = second.year, "printed"
+        if out.month is None:
+            out.month = second.month
     return out
 
 

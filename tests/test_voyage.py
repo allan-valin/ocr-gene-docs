@@ -800,3 +800,56 @@ Suntos,
 Lista de entrada de passageiros no
 consignado""")
     assert v is None or v.line != "POLICIA·DO PORTO"
+
+
+# BS.ENT.016669: the stamp and the date printed on the same page disagree, and
+# the stamp is a misreading — a 3 read as an 8. Both are on the page, verbatim.
+STAMPED_1928 = """POLICIA DO PORTO
+Lloyd Brazileiro
+DEZ 29 1928
+Santos, de Dec.de 1923.
+Lista de entrada de passageiros no paquete"""
+
+
+def test_a_year_says_where_it_was_read():
+    """1928 got onto three records because the stamp is read where the writing
+    fails, and nothing on the record said so — the year could not be audited
+    without going back to the page."""
+    v = parse_voyage(PARTE_19845)
+    assert v.year == 1924
+    assert v.year_source == "printed"
+
+
+def test_a_year_off_the_stamp_says_so():
+    v = parse_voyage(STAMPED_1928)
+    assert v.year == 1928
+    assert v.year_source == "stamp", (
+        "a year inked by a rubber stamp is not the date the clerk wrote, and a "
+        "record that cannot say which it is cannot be checked")
+
+
+def test_the_printed_date_outranks_the_stamp_across_the_two_forms():
+    """A pen and a rubber stamp fail differently: the stamp fails on digits,
+    and `DEZ 80 1928` is not a day any month has. Where a dossier's other form
+    states the year in writing, that is the year — whichever page was read
+    first."""
+    from desembarque.voyage import merge_voyages
+    stamped = parse_voyage(STAMPED_1928)
+    written = parse_voyage(PARTE_19845)
+    assert merge_voyages(stamped, written).year == 1924
+    assert merge_voyages(stamped, written).year_source == "printed"
+    assert merge_voyages(written, stamped).year == 1924
+
+
+def test_one_stamp_does_not_overrule_another_page_s_stamp():
+    """Only the *printed* date outranks. Two stamps disagreeing is the same
+    kind of claim twice, and the first still stands."""
+    from desembarque.voyage import merge_voyages
+    a = parse_voyage(STAMPED_1928)
+    b = parse_voyage("""POLICIA DO PORTO
+Lloyd Brazileiro
+JUN 19 1918
+Santos, de de 19
+Lista de entrada de passageiros no paquete""")
+    assert a.year_source == b.year_source == "stamp"
+    assert merge_voyages(a, b).year == 1928

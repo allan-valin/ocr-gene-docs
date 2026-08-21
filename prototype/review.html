@@ -345,7 +345,13 @@ function docmetaLine(){
   const route=[m.origin,m.port].filter(Boolean).join(" → ");
   if(route) bits.push(route);
   if(m.arrival) bits.push(m.arrival);
-  else if(m.year) bits.push(String(m.year));
+  // A year inked by the port's rubber stamp is not the date the clerk wrote:
+  // the stamp fails on digits, and every 1928 in this corpus is a misread 1923
+  // that disagrees with the date printed on the same page. Shown as a bare
+  // number it reads as a fact about the voyage.
+  else if(m.year) bits.push(m.year_source==="stamp"
+    ? `<span title="lido do carimbo do porto, não da data escrita">${m.year} (carimbo)</span>`
+    : String(m.year));
   if(m.passengers) bits.push(`${m.passengers} imigrantes`);
   if(m.notation) bits.push(m.notation);
   const read = m.source==="parte" ? "lido da PARTE do intérprete"

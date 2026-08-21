@@ -65,7 +65,12 @@ def ui_transcription(data: dict | None) -> dict | None:
 # What the review UI's document header shows, in the order it shows it. Every
 # one of these is absent on some page: conservation varies, and the clerk left
 # fields blank.
-META_FIELDS = ("ship", "line", "flag", "origin", "port", "arrival", "year", "passengers")
+META_FIELDS = ("ship", "line", "flag", "origin", "port", "arrival", "year",
+               # where the year was read. A year off the port's rubber stamp is
+               # not the date the clerk wrote — the stamp fails on digits, and
+               # every 1928 in this corpus is a misread 1923 — so the header
+               # says which one it is showing.
+               "year_source", "passengers")
 
 
 def ui_meta(voyage: dict | None, notation: str | None = None,
