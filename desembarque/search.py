@@ -127,28 +127,6 @@ def similarity(a: str, b: str) -> float:
     return shared / (len(A) + len(B) - shared)
 
 
-# What a bag-of-words match is worth against a match on the whole string. A
-# name matched word by word is a weaker claim — `Maria` scores 1.0 against
-# `Martinez Maria` on one of its two words — so it ranks below a row that
-# resembles the whole query.
-TOKEN_WEIGHT = 0.85
-
-
-def token_similarity(query: str, text: str) -> float:
-    """How well the words of the query are answered by the words of the row.
-
-    A family list writes one surname for eight people and the recogniser
-    mangles it once: `Martinez Dolores` is read as `artinies Dotores`, and
-    compared as one string the good half is dragged under by the bad half.
-    Compared word by word, the given name still answers.
-    """
-    a = fold(query).split()
-    b = fold(text).split()
-    if not a or not b:
-        return 0.0
-    return sum(max(similarity(t, u) for u in b) for t in a) / len(a)
-
-
 def row_text(row: dict) -> str:
     """What this row is searched by.
 
