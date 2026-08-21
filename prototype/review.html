@@ -665,7 +665,7 @@ function renderHits(d){
     <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
          data-row="${h.row||0}" title="Abrir o documento nesta linha">
       <b>${h.text}</b>
-      <span>${h.matched?"a bordo · ":""}${[h.ship, h.year].filter(Boolean).join(" · ")}${h.ship||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
+      <span>${h.matched?"a bordo · ":""}${[h.ship, h.year?`${h.year}${h.year_source==="stamp"?" (carimbo)":""}`:null].filter(Boolean).join(" · ")}${h.ship||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
         ${h.conf==null?"":`<span class="dot ${h.conf<0.5?"lo":h.conf<0.8?"mid":"hi"}"
           role="img" aria-label="score do motor: ${Math.round(h.conf*100)}%"
           title="score do motor: ${Math.round(h.conf*100)}% — não é medida de acerto"></span>`}</span>

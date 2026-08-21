@@ -227,7 +227,10 @@ def _parse(f: Path, engine_only: bool,
         out.append({
             "doc": d.get("hash", f.stem),
             "notation": d.get("notation"),
-            **{k: voyage[k] for k in ("ship", "year") if voyage.get(k)},
+            # the year travels with where it was read: a stamped year is a
+            # weaker claim than one the clerk wrote, and the hit list says so
+            **{k: voyage[k] for k in ("ship", "year", "year_source")
+               if voyage.get(k)},
             "file": d.get("file"),
             "page": r.get("page"),
             "row": r.get("n"),

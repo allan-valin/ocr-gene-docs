@@ -524,3 +524,16 @@ def test_the_passengers_are_still_passengers():
     from desembarque.search import is_heading
     for name in PEOPLE:
         assert not is_heading(name), f"{name!r} was dropped as printing"
+
+
+def test_a_hit_carries_where_its_year_came_from(tmp_path):
+    """The hit list shows the year beside the ship, and a year off the port's
+    rubber stamp is a weaker claim than one the clerk wrote — 1928 in this
+    corpus is a misread 1923 every time."""
+    import json
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "h", "file": "d.pdf", "engine": "paddle",
+        "voyage": {"ship": "Baden", "year": 1928, "year_source": "stamp"},
+        "rows": [{"n": 1, "page": 2, "name_raw": "JOSE MUESSO"}]}))
+    hits = search(load_index(tmp_path), "muesso")
+    assert hits[0]["year"] == 1928 and hits[0]["year_source"] == "stamp"
