@@ -315,6 +315,13 @@ def transcribe_document(pdf: Path, job) -> dict:
         # becomes a re-parse of what is already on disk.
         if res.text or res.fragments:
             page["form"] = {"text": res.text, "fragments": res.fragments}
+        # The grid the rows were cut from. It is measured on the page image to
+        # cut them and was then thrown away, so a search hit could name a row
+        # and not show where it sits on the scan — and checking the image is
+        # what makes a mangled reading usable as evidence. Absent means the
+        # page was never measured; the cover card has no grid.
+        if res.geometry:
+            page["geometry"] = res.geometry
         pages.append(page)
         if res.kind == "cover" and res.text:
             cover_text = cover_text or res.text

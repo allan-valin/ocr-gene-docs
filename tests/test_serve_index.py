@@ -582,3 +582,61 @@ def test_a_document_can_be_read_again_when_the_engine_has_learned_something(serv
     status, body = call(f"{base}/api/transcribe?pdf=doc0.pdf&dir=&force=1",
                         method="POST")
     assert status == 202 and not body.get("cached")
+
+
+class GeometryEngine:
+    """A page read as a list, with the measurement the rows were cut from.
+
+    The engine measures the grid to cut the rows out of the page, and returns
+    it. Until now `transcribe_document` dropped it on the way to disk, so a
+    search hit could name a row and not show where it sits on the scan — which
+    is the whole of what makes a mangled reading checkable against the image.
+    """
+    name = "fake-geometry"
+    GEO = {"rows": [[0.28, 0.30], [0.30, 0.32]],
+           "columns": [0.07, 0.29, 0.55],
+           "skew": -0.4, "read_from": "mask"}
+
+    def available(self):
+        return True
+
+    def transcribe_page(self, image, kind="unknown", source=None, page=None,
+                        text=True):
+        if page == 1:
+            return engines.PageResult(kind="cover", engine=self.name, text="")
+        return engines.PageResult(kind="list", engine=self.name,
+                                  rows=[{"name": "TEST"}], geometry=self.GEO)
+
+
+def test_the_page_keeps_the_measurement_its_rows_were_cut_from(server, monkeypatch):
+    """The row bands are what put a hit back on the scan."""
+    base, folder = server
+    monkeypatch.setattr(engines, "_ACTIVE", GeometryEngine())
+    docs(folder, 1)
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+
+    class Job:
+        total = 2
+        page = 0
+    data = serve.transcribe_document(folder / "doc0.pdf", Job())
+    page = next(p for p in data["pages"] if p["n"] == 2)
+    assert page.get("geometry") == GeometryEngine.GEO, \
+        "the geometry the rows were cut from was dropped on the way to disk"
+
+
+def test_a_page_that_was_never_measured_carries_no_geometry(server, monkeypatch):
+    """Absent and empty are different claims here too: a cover card has no grid,
+    and storing `{}` would say one was measured and came back empty."""
+    base, folder = server
+    monkeypatch.setattr(engines, "_ACTIVE", GeometryEngine())
+    docs(folder, 1)
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+
+    class Job:
+        total = 2
+        page = 0
+    data = serve.transcribe_document(folder / "doc0.pdf", Job())
+    cover = next(p for p in data["pages"] if p["n"] == 1)
+    assert "geometry" not in cover
