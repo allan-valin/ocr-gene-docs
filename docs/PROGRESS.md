@@ -173,6 +173,16 @@ it is already built — the ship and the year. `Maria Rosa Carrana` is hopeless;
 `Maria Rosa Carrana 1922` should not be, and whether it is now is the first thing
 to measure next.
 
+#### The blank-row skip, checked against the hand-read pages
+
+Skipping a row with no ink is a performance change that could quietly lose a
+faint name, so it was checked rather than assumed: of 142 hand-read names, **three
+have no reading at all**, and all three are rows the clerk struck through on
+BS.ENT.015061 — Jacintha, Olivia, Albertina, cancelled passengers with a line
+drawn across them. On that page the ink test judges **none** of the forty-six
+bands blank, so the skip did not drop them; the recogniser returns nothing for a
+name with a line through it, which is a different problem and a small one.
+
 #### Which rows are worth a person's time, measured
 
 The first version of this flagged a reading that resembles no name in the
