@@ -23,7 +23,13 @@ MARKS = set('"“”„«»\'‘’,.-=/|〃_~*:;`^·')
 MARK_WORDS = {"11", "n", "u", "ii", "il", "li", "y", "v"}
 # How many blank rows may sit between a mark and the name it points at. A blank
 # line is a ruled line nobody wrote on; a run of them is the end of the list.
-MAX_GAP = 4
+#
+# Two rather than four, on a measurement that came out flat: findable names are
+# 95 of 142 at a gap of two and of four, and 94 at eight or twenty. Since it buys
+# nothing, the tighter gap is right — it leaves 28.9% of rows with an inferred
+# surname instead of 30.9%, and an inference the tool did not have to make is one
+# nobody has to check.
+MAX_GAP = 2
 # How far into the name column the writing has to start before the row reads as
 # a continuation rather than a name. The clerk indents under the mark, and the
 # mark itself is small enough that the recogniser often returns the given name
