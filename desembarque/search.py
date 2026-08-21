@@ -128,6 +128,18 @@ def similarity(a: str, b: str) -> float:
 
 
 def row_text(row: dict) -> str:
+    """What this row is searched by.
+
+    Normally the verbatim reading, because the split into surname and given
+    name is a derivation and the reading is not. The exception is the
+    repetition mark: `" Maria` is what the page says and *Martinez Maria* is
+    who the row is about, and a search for the surname has to find her — she is
+    one of seven Martinezes on that page written with a mark.
+    """
+    if row.get("ditto"):
+        joined = " ".join(x for x in (row.get("surname"), row.get("given")) if x)
+        if joined:
+            return joined
     raw = row.get("name_raw")
     if raw:
         return raw

@@ -76,8 +76,30 @@ def read_page(eng, pdf: Path, page: int) -> tuple[list[str], float]:
     return [r.get("name_raw") or "" for r in rows], time.time() - t0
 
 
+def align(names: list[str], truth: list[str]) -> int:
+    """Where the truth block starts among the rows the engine produced.
+
+    Not a stored row number. `data/truth/BS_ENT_014541-p2.json` records
+    `first_row: 4` because the comb that read it in July put six passengers on
+    rows four to nine; measured from the printing they are rows one to six, and
+    a stored offset would score the right reading as a total failure. The offset
+    is chosen as the one that fits best, which is also what a person comparing
+    the two lists would do.
+    """
+    if not names:
+        return 0
+    best, best_cost = 0, None
+    for off in range(0, max(1, len(names) - len(truth) + 1)):
+        cost = sum(cer(w, names[off + i] if off + i < len(names) else "")
+                   for i, w in enumerate(truth))
+        if best_cost is None or cost < best_cost:
+            best, best_cost = off, cost
+    return best
+
+
 def score(names: list[str], truth: list[str], first: int) -> dict:
     """Truth row i against whatever the engine put on that row."""
+    first = align(names, truth) + 1
     hits, cers, found = 0, [], 0
     for i, want in enumerate(truth):
         got = names[first - 1 + i] if 0 <= first - 1 + i < len(names) else ""
@@ -118,8 +140,10 @@ def main(argv: list[str] | None = None) -> int:
         report.append(s)
         print(f"    CER {s['cer']:.3f} | exact {s['exact']}/{s['rows']} | "
               f"findable {s['findable']}/{s['rows']} | {s['seconds']}s")
+        first = align(names, t["names"]) + 1
         for i, want in enumerate(t["names"][:6]):
-            got = names[t.get("first_row", 1) - 1 + i] if names else ""
+            j = first - 1 + i
+            got = names[j] if 0 <= j < len(names) else ""
             print(f"      {want!r} -> {got!r}")
     if report:
         n = sum(r["rows"] for r in report)

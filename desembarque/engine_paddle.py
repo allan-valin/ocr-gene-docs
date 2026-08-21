@@ -23,6 +23,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
+from .ditto import resolve as resolve_dittos
 from .engine import PageResult
 from .search import is_heading
 from .variants import token_alternatives
@@ -773,6 +774,11 @@ class PaddleEngine:
                 rows = attach_alternatives(rows, loose)
                 if rows is not first and first is not None:
                     rows = attach_alternatives(rows, first)
+            # The repetition mark means the surname above it, and thirty-nine
+            # of the forty-eight rows on a family list carry one. Resolved here
+            # rather than at search time so the page shows what the row means
+            # beside what it says.
+            rows = resolve_dittos(rows)
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
                 **self.read_header(image, geo, text),

@@ -537,3 +537,25 @@ def test_a_hit_carries_where_its_year_came_from(tmp_path):
         "rows": [{"n": 1, "page": 2, "name_raw": "JOSE MUESSO"}]}))
     hits = search(load_index(tmp_path), "muesso")
     assert hits[0]["year"] == 1928 and hits[0]["year_source"] == "stamp"
+
+
+def test_a_row_written_as_a_repetition_mark_is_found_by_its_surname():
+    """Seven of the eight Martinezes on BS.ENT.013947 p3 are written `"`. Read
+    verbatim, a search for the surname finds one of them."""
+    import json
+    from pathlib import Path
+
+    def doc(tmp, rows):
+        (tmp / "a.json").write_text(json.dumps({
+            "hash": "h", "file": "d.pdf", "engine": "paddle", "rows": rows}))
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        doc(tmp, [{"n": 1, "page": 2, "name_raw": "Martinez Francisco",
+                   "surname": "Martinez", "given": "Francisco"},
+                  {"n": 2, "page": 2, "name_raw": '" Maria', "surname": "Martinez",
+                   "given": "Maria", "ditto": ["surname"]}])
+        hits = search(load_index(tmp), "martinez")
+        assert len(hits) == 2, [h["text"] for h in hits]
+        assert {h["row"] for h in hits} == {1, 2}
