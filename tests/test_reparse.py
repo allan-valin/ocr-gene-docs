@@ -79,6 +79,10 @@ def test_it_refuses_to_run_while_the_indexer_is_writing(tmp_path, monkeypatch):
     from pathlib import Path
     m = runpy.run_path(str(Path(__file__).resolve().parents[1]
                            / "scripts" / "reparse_voyages.py"))
+    # run_path hands back a copy of the module's globals; the functions in it
+    # still read the original, so the patch has to go there. Patching the copy
+    # passed only because a real index run happened to be going at the time.
+    m["main"].__globals__["indexing_now"] = lambda port=8799: True
     monkeypatch.setitem(m, "indexing_now", lambda port=8799: True)
     rc = m["main"](["--cache", str(tmp_path)])
     assert rc == 2, "it rewrote records while the indexer was running"
