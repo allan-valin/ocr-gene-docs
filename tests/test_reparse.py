@@ -70,3 +70,17 @@ def test_the_rows_a_person_typed_are_not_touched():
     out = reparse(record(rows=rows, source="manual"), schema=9)
     assert out["rows"] == rows
     assert out["source"] == "manual"
+
+
+def test_it_refuses_to_run_while_the_indexer_is_writing(tmp_path, monkeypatch):
+    """Re-parsing rewrites every record and an index run writes them too. A lost
+    write is a dossier that quietly reverts to what it said before."""
+    import runpy
+    from pathlib import Path
+    m = runpy.run_path(str(Path(__file__).resolve().parents[1]
+                           / "scripts" / "reparse_voyages.py"))
+    monkeypatch.setitem(m, "indexing_now", lambda port=8799: True)
+    rc = m["main"](["--cache", str(tmp_path)])
+    assert rc == 2, "it rewrote records while the indexer was running"
+    # and a dry run is always safe
+    assert m["main"](["--cache", str(tmp_path), "--dry-run"]) == 0

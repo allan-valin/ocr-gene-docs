@@ -26,12 +26,41 @@ from desembarque.reparse import reparse       # noqa: E402
 from desembarque.search import SCHEMA         # noqa: E402
 
 
+def indexing_now(port: int = 8799) -> bool:
+    """Whether a folder index is running on the local server.
+
+    Re-parsing rewrites every record, and an index run writes them too. Tonight
+    the two were kept apart by hand; a lost write is a dossier that quietly
+    reverts to what it said before, which is the failure this repository keeps
+    finding in new clothes.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+    try:
+        with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/index", timeout=3) as r:
+            return _json.loads(r.read()).get("status") == "running"
+    except (urllib.error.URLError, OSError, ValueError):
+        return False        # no server is not a reason to refuse
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--cache", type=Path, default=ROOT / "data" / "transcriptions")
     ap.add_argument("--dry-run", action="store_true",
                     help="say what would change and write nothing")
+    ap.add_argument("--force", action="store_true",
+                    help="re-parse even while a folder index is running")
+    ap.add_argument("--port", type=int, default=8799,
+                    help="where to look for a running index")
     args = ap.parse_args(argv)
+
+    if indexing_now(args.port) and not (args.force or args.dry_run):
+        print("A folder index is running on 127.0.0.1:%d and it writes the same\n"
+              "records this would. Wait for it to finish, or pass --force if you\n"
+              "know it is reading a different folder." % args.port)
+        return 2
 
     seen = changed = skipped = 0
     gained, lost = [], []
