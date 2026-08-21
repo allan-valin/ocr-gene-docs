@@ -316,8 +316,15 @@ records, which tonight was managed by hand.
 | typed pages | 42 of 42 |
 | cursive pages | 50 of 100 |
 
-The refresh is running: 83 of 660 dossiers at 21:05, about a dossier a minute,
-resumable, no failures.
+The refresh is running and unattended: a little over a hundred of 660 dossiers
+current at 21:40, about a dossier a minute, resumable, no failures.
+
+One thing the evening measured by accident, because the index grew under the
+bench: **findable names fell from 92 to 90 of 142 as the pool went from 22,485
+rows to 25,246.** That is the erosion this file predicted in July, happening in
+real time — and the archive is eleven times larger than what is indexed now. It
+is the strongest argument for the crossing as a search key, which is why the
+voyage parsing was worth the evening.
 
 #### To pick up tomorrow
 
