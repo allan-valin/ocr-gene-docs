@@ -127,6 +127,28 @@ def similarity(a: str, b: str) -> float:
     return shared / (len(A) + len(B) - shared)
 
 
+# What a bag-of-words match is worth against a match on the whole string. A
+# name matched word by word is a weaker claim — `Maria` scores 1.0 against
+# `Martinez Maria` on one of its two words — so it ranks below a row that
+# resembles the whole query.
+TOKEN_WEIGHT = 0.85
+
+
+def token_similarity(query: str, text: str) -> float:
+    """How well the words of the query are answered by the words of the row.
+
+    A family list writes one surname for eight people and the recogniser
+    mangles it once: `Martinez Dolores` is read as `artinies Dotores`, and
+    compared as one string the good half is dragged under by the bad half.
+    Compared word by word, the given name still answers.
+    """
+    a = fold(query).split()
+    b = fold(text).split()
+    if not a or not b:
+        return 0.0
+    return sum(max(similarity(t, u) for u in b) for t in a) / len(a)
+
+
 def row_text(row: dict) -> str:
     """What this row is searched by.
 
@@ -206,6 +228,25 @@ def load_index(cache: Path, engine_only: bool = True,
     return RowIndex(out, version=_VERSION)
 
 
+def _second_reading(row: dict, text: str) -> list[str]:
+    """The other reading of this row, as whole names rather than loose words.
+
+    Every row is read twice — the band trimmed to the ink, and again with room
+    around it — and the two disagree exactly where the hand is hard: `Waria` and
+    `Maria` are one word on one page. The loser was kept for the person
+    correcting the row and was never searched, so a row the engine had already
+    read correctly on the second attempt stayed unfindable.
+    """
+    alts = row.get("name_alts")
+    if not alts:
+        return []
+    words = text.split()
+    if len(alts) != len(words):
+        return []
+    swapped = " ".join(a[0] if a else w for w, a in zip(words, alts))
+    return [swapped] if swapped and swapped != text else []
+
+
 def _resolved(rows: list[dict]) -> list[dict]:
     """The rows with repetition marks resolved, page by page."""
     from .ditto import resolve
@@ -254,6 +295,7 @@ def _parse(f: Path, engine_only: bool,
             continue
         if len(fold(text)) < 4:
             continue
+        second = _second_reading(r, text)
         out.append({
             "doc": d.get("hash", f.stem),
             "notation": d.get("notation"),
@@ -265,6 +307,7 @@ def _parse(f: Path, engine_only: bool,
             "page": r.get("page"),
             "row": r.get("n"),
             "text": text,
+            **({"alts": second} if second else {}),
             "conf": (r.get("conf") or {}).get("surname"),
         })
     return out
@@ -375,7 +418,10 @@ class RowIndex(list):
             return _POSTINGS[1]
         post: dict[str, array] = {}
         for i, r in enumerate(self):
-            for g in trigrams(r.get("text") or ""):
+            grams = set(trigrams(r.get("text") or ""))
+            for alt in r.get("alts") or ():
+                grams |= trigrams(alt)
+            for g in grams:
                 post.setdefault(g, array("i")).append(i)
         if self.version is not None:
             _POSTINGS = (key, post)
@@ -414,7 +460,11 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # whitespace ranked above the ship somebody actually typed.
     pool = candidates(rows, name_q) if len(fold(name_q)) >= MIN_QUERY else ()
     for r in pool:
-        s = similarity(name_q, r["text"])
+        # the better of what the row was read as and what the second reading
+        # said: the two differ only where the hand was hard, which is exactly
+        # where a search fails
+        readings = [r["text"], *(r.get("alts") or ())]
+        s = max(similarity(name_q, t) for t in readings)
         # the floor is applied to the name alone: the voyage orders what was
         # found, it does not decide what counts as found
         if s >= min_score:

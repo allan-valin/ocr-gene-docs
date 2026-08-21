@@ -559,3 +559,42 @@ def test_a_row_written_as_a_repetition_mark_is_found_by_its_surname():
         hits = search(load_index(tmp), "martinez")
         assert len(hits) == 2, [h["text"] for h in hits]
         assert {h["row"] for h in hits} == {1, 2}
+
+
+def test_the_second_reading_of_a_row_is_searched_too():
+    """Every row is read twice and the readings differ where the hand is hard.
+    `Waria` and `Maria` are one word on one page: the second reading was kept
+    for the person correcting the row and never searched, so a name the engine
+    had already got right stayed unfindable."""
+    import json
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        (tmp / "a.json").write_text(json.dumps({
+            "hash": "h", "file": "d.pdf", "engine": "paddle",
+            "rows": [{"n": 1, "page": 2, "name_raw": "Waria Sonsalves",
+                      "name_alts": [["Maria"], ["Gonsalves"]]}]}))
+        rows = load_index(tmp)
+        hits = search(rows, "maria gonsalves")
+        assert hits, "the row was not found by what the second reading said"
+        assert hits[0]["row"] == 1
+        # and the reading itself is still what the row shows
+        assert hits[0]["text"] == "Waria Sonsalves"
+
+
+def test_one_mangled_word_does_not_sink_the_whole_name():
+    """A family list writes one surname for eight people, and the recogniser
+    mangles it once: `Martinez Dolores` comes back as `artinies Dotores`.
+    Compared as one string the good half is dragged under by the bad half."""
+    rows = idx("artinies Dotores", "MARIA SILVA", "JOSE MUESSO")
+    hits = search(rows, "Martinez Dolores")
+    assert hits and hits[0]["text"] == "artinies Dotores"
+
+
+def test_a_single_word_row_does_not_outrank_a_whole_name():
+    """`Maria` answers one word of `Martinez Maria` perfectly and the other not
+    at all. It is a candidate, not the answer."""
+    rows = idx("Martinez Maria", "Maria")
+    hits = search(rows, "Martinez Maria")
+    assert hits[0]["text"] == "Martinez Maria"

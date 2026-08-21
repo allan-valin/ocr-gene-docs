@@ -129,6 +129,39 @@ def ink_start(im) -> float | None:
     return float(xs[0]) / a.shape[1]
 
 
+DERULE = os.environ.get("DESEMBARQUE_DERULE", "0") == "1"
+
+
+def derule(im):
+    """The band with the printed rules taken out of it.
+
+    Every crop carries the ruled line the row is written on, and often the
+    column rules at its edges. They cross the letters, and the recogniser has
+    never seen a form: `Ponticelli` under a rule is not what its training data
+    calls a word. Whether this helps is a question for the bench, not for an
+    argument — see scripts/bench_rec.py.
+    """
+    import numpy as np
+    from PIL import Image
+    try:
+        a = np.asarray(im.convert("L"), dtype=np.uint8).copy()
+    except AttributeError:
+        return im
+    if a.size == 0:
+        return im
+    thr = max(60, int(a.mean()) - 35)
+    ink = a < thr
+    h, w = a.shape
+    # a rule runs the length of the band; a letter does not
+    rows = np.flatnonzero(ink.sum(axis=1) > 0.75 * w)
+    cols = np.flatnonzero(ink.sum(axis=0) > 0.75 * h)
+    if rows.size == 0 and cols.size == 0:
+        return im
+    a[rows, :] = 255
+    a[:, cols] = 255
+    return Image.fromarray(a)
+
+
 def has_ink(im) -> bool:
     """Whether anybody wrote on this band.
 
@@ -686,7 +719,7 @@ class PaddleEngine:
             start = ink_start(band)
             if start is not None:
                 indents[i] = start
-            return refine(band, margin)
+            return refine(derule(band) if DERULE else band, margin)
         crop.indents = indents
         return crop
 
