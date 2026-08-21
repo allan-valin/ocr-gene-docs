@@ -222,6 +222,72 @@ refuses a record whose pages carry an engine error.
 4. The corpus refresh is running at about a dossier a minute; 660 of them is
    roughly ten hours, unattended, resumable.
 
+### Voyage parsing: the evening's largest gain, and none of it re-reads a page
+
+Naming the crossing is what rescues a common name, so the fields that carry it
+are worth more than they cost. Measured by re-parsing what is already on disk —
+seconds, no page images:
+
+| | |
+|---|---|
+| dossiers that gain a ship | **58** |
+| dossiers that lose one | 1 (a German printed sentence) |
+| ships corrected | 12 |
+| dossiers that gain a year | 5 |
+
+What was wrong, in the order it was found:
+
+* **The ship written on its own line in an open quote.** BS.ENT.013983 is
+  typewritten, legible, and stated no ship: its label reads `passageios no
+  Pague......` and the vessel sits below it as `"Itabera`, the closing quote lost
+  to the scan.
+* **The nationality glued to the vessel.** `na vapor español Valbanera` is one
+  line; taken whole it is refused for carrying a nationality, and the ship went
+  with it. Same for the footnote marker these forms print above the blank —
+  `(2) Duca degli Abruzzi` — and for the brackets when the scan loses their
+  number.
+* **A printed sentence as a vessel.** `Yerzeichnis der Perfonen, kefördert durch
+  den deutschen Dampfer` was a ship. A real one here is under thirty characters.
+* **The date the detector broke.** `Santos,deMaio` is a port, a comma and a
+  month with no space; read whole it contains no month at all. And `de 19.18` is
+  a year with a stop inside it.
+* **A bound that was exactly wrong.** Allowing a separator inside the year first
+  made `de 19.40` into 1940 — on a page whose own stamp reads `ABR 8 1920` —
+  because the upper bound was 1940. Every year this corpus has produced falls
+  between 1913 and 1928, so the bound is 1935.
+
+None of this is in the running refresh: the server was started before these
+changes. **When the run finishes, `scripts/reparse_voyages.py` applies all of it
+in a second.**
+
+### Where it all stands at the end of the evening
+
+| measurement | |
+|---|---|
+| tests | 450 |
+| golden pages measured from the printing | 10 of 10 |
+| reading, 5 hand-read pages, 142 names | CER 0.362 |
+| findable by name | 92 of 142 |
+| findable when the crossing is named too | 99 of 142 |
+| typed pages | 42 of 42 |
+| cursive pages | 50 of 100 |
+
+The refresh is running: 83 of 660 dossiers at 21:05, about a dossier a minute,
+resumable, no failures.
+
+#### To pick up tomorrow
+
+1. **When the refresh finishes**: `scripts/reparse_voyages.py`, then
+   `scripts/build_names.py --min 2` — the name list is only as good as the pages
+   it was counted from, and those are being re-read now.
+2. **A common name in a large pool is the open problem**, not recognition:
+   BS.ENT.015061 p6 reads at CER 0.08 in places and 14 of its 46 names are
+   findable, because they are Marias and Joses. Three scoring changes were tried
+   tonight and all three lost names. The lever that does work is the crossing.
+3. **A dossier's later pages could skip the heading pass** when the columns are
+   already known — a recogniser batch per page.
+4. Handwriting recognition is the ceiling and every cheap lever has been pulled.
+
 ### The refresh
 
 Started once, at 19:41, on schema 18, and left alone: 660 dossiers, four workers,
