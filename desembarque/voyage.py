@@ -366,9 +366,16 @@ def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
         return None
     if is_flag(value):
         return None
-    for printed in fold(letterhead or "").split():
+    head = fold(letterhead or "")
+    for printed in head.split():
         if len(printed) > 3 and difflib.SequenceMatcher(None, word, printed).ratio() >= 0.85:
             return None
+    # And the letterhead entire, which the word-by-word test cannot see: where
+    # the clerk left the vessel blank, the company printed above the label is
+    # what stands nearest to it, and `The Koyal Mail Steam Packet Company` was
+    # filed as a ship in four dossiers and as their line in thirty-two.
+    if head and difflib.SequenceMatcher(None, word, head).ratio() >= 0.85:
+        return None
     return value
 
 
@@ -382,6 +389,11 @@ NOT_COMPANY_WORDS = """policia reparticao repartição delegacia alfandega
     alfândega intendencia intendência inspectoria ministerio ministério
     povoamento immigracao imigracao immigração imigração lista relacao relação
     modelo bordo interprete intérprete""".split()
+# The port is printed where the letterhead sits on the sheets that carry no
+# company name. Matched whole rather than a word at a time: `STINNES` comes
+# within a hair of `santos` on a word-by-word test, and `HUGO STINNES LINIEN`
+# is a real line that sailed this route.
+PORT_NAMES = ["rio de janeiro", "santos", "porto de santos"]
 # `BR.AN.RiO.O2.O.RPV.PRJ.1GGS.8` — the archive's notation, where the zeros come
 # back as letters so the run of digits that used to catch it is not there.
 RE_DOTTED_NOTATION = re.compile(r"(\w{1,5}\.){3,}")
@@ -413,6 +425,10 @@ def plausible_line(value: str | None) -> str | None:
         return None
     words = fold(re.sub(r"[^\w\s]+", " ", stripped)).split()
     if any(_is_not_company_word(w) for w in words):
+        return None
+    whole = " ".join(words).lower()
+    if any(difflib.SequenceMatcher(None, whole, port).ratio() >= 0.85
+           for port in PORT_NAMES):
         return None
     return plausible_value(stripped) and stripped
 
@@ -651,7 +667,7 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
         # `paquete` are the nationality *and* the ship it belongs to. The
         # nationality is written first, before the quotation mark opens.
         v.flag = _clean(v.flag[:v.flag.index(quoted)]) or None
-    v.ship = plausible_ship(quoted or _above(RE_PAQUETE, lines, skip=v.flag), None)
+    v.ship = plausible_ship(quoted or _above(RE_PAQUETE, lines, skip=v.flag), v.line)
 
     v.origin = plausible_value(_beside(RE_ORIGIN, lines))
 

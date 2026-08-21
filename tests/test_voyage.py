@@ -862,7 +862,9 @@ NOT_COMPANIES = ["No. 461B", "No. 256c", "Mod. bordo N. 133", "Mod. 181 S. G",
                  "Repartição da Policia", "POLICIA MARITIMA DO PORTO",
                  "LICIA DO PORTO", "SERVIÇO DE IMMIGRAÇÃO NO BRASIL",
                  "BR.AN.RiO.O2.O.RPV.PRJ.1GGS.8",
-                 "Lísta dei passeggieri pel Brasile"]
+                 "Lísta dei passeggieri pel Brasile",
+                 # the port printed above the date, where the company would be
+                 "Rio de Janeiro", "Santos"]
 
 # Read off real pages in the same run, and every one of them is a company that
 # sailed this route. A filter that takes these with the junk is worse than the
@@ -900,3 +902,22 @@ def test_the_port_police_stamp_is_not_a_shipping_line_however_it_is_misread():
 Santos, 5 de Janeiro de 1924
 Lista de entrada de passageiros no paquete""")
     assert v is not None and v.line is None
+
+
+def test_the_company_printed_at_the_top_is_not_the_vessel():
+    """`The Koyal Mail Steam Packet Company` was filed as a ship in four
+    dossiers and as their shipping line in thirty-two. The value beside
+    `paquete` is missing far more often than not, and where the clerk left it
+    blank the letterhead above is what stands closest to the label.
+
+    A ship's name is refused where it repeats the company on the same sheet.
+    The word-by-word test that already did this compares the whole reading
+    against one printed word at a time, so it caught `Facional` under
+    `Nacional` and missed a company name entire.
+    """
+    from desembarque.voyage import plausible_ship
+    line = "The Koyal Mail Steam Packet Company"
+    assert plausible_ship(line, line) is None
+    assert plausible_ship("The Royal Mail Steam Packet Co", line) is None
+    assert plausible_ship("Valdivia", "COMPAGNIE DE NAVIGATION SUD ATLANTIQUE") \
+        == "Valdivia"
