@@ -40,7 +40,8 @@ from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import (BatchIndexer, collect_pdfs, is_indexed,  # noqa: E402
                                preserve_human_work)
-from desembarque.serve_shapes import ui_meta, ui_transcription  # noqa: E402
+from desembarque.serve_shapes import (ui_geometry, ui_meta,  # noqa: E402
+                                      ui_transcription)
 from desembarque.export import csv_filename, rows_to_csv  # noqa: E402
 from desembarque.voyage import (is_complete, merge_voyages,  # noqa: E402
                                 parse_voyage)
@@ -472,6 +473,17 @@ class Handler(BaseHTTPRequestHandler):
                 if not pdf or not pdf.exists():
                     return self._send(404, {"error": "no such pdf"})
                 return self._send(200, build_grid(pdf, int(q.get("n", 1))))
+
+            if u.path == "/api/geometry":
+                # Per page, and asked for rather than sent with the folder
+                # list: the corpus carries 1,600 measured pages and three and a
+                # half megabytes of bands, while one dossier's are a few
+                # kilobytes and are wanted only once it is opened.
+                stored = JOBS.cached(q.get("hash", "")) or {}
+                geo = {str(p["n"]): ui_geometry(p.get("geometry"))
+                       for p in stored.get("pages") or []
+                       if isinstance(p, dict) and p.get("geometry")}
+                return self._send(200, {"hash": q.get("hash", ""), "pages": geo})
 
             if u.path == "/api/health":
                 return self._send(200, {"ok": True, "root": str(STATE["root"]),

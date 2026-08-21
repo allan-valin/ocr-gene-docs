@@ -80,3 +80,23 @@ def test_the_smoke_test_refuses_a_build_older_than_its_source(tmp_path):
     os.utime(built, (3000, 3000))
     assert smoke.stale_reason(built, [src]) is None
     assert "missing.html" in smoke.stale_reason(tmp_path / "missing.html", [src])
+
+
+def _smoke():
+    import runpy
+    return runpy.run_path(str(ROOT / "scripts" / "smoke_prototype.py"))
+
+
+def test_a_browser_that_ran_and_reported_nothing_is_a_failure():
+    """`[]` meant two different things — the browser is not installed, and the
+    browser ran and produced nothing — and both printed "skipped". The served
+    run went unchecked that way: Firefox loaded 660 dossiers, took longer than
+    the harness waited, and the suite still said ALL PASS."""
+    m = _smoke()
+    passing = ["PASS a"] * 20
+    rc = m["main"](["--url", "http://x"],
+                   runners={"absent": lambda u: None, "silent": lambda u: []})
+    assert rc == 1
+    rc = m["main"](["--url", "http://x"],
+                   runners={"absent": lambda u: None, "ok": lambda u: passing})
+    assert rc == 0, "a browser that is not installed must not fail the run"

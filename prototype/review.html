@@ -483,10 +483,28 @@ function firstPageWithRows(doc){
   const p = (doc.pages||[]).find(pg=>rowsForPage(doc,pg.n).length);
   return p ? p.n : (doc.transcribed_page ?? (doc.pages[0]||{}).n);
 }
+// The bands a row is painted from are measured per page, and a dossier is read
+// page by page — so they are asked for when a document opens rather than sent
+// with the folder list, which would carry three and a half megabytes of them.
+// The file:// build has no API and keeps the document-level measurement it was
+// built with.
+function loadGeometry(){
+  if(!SERVED || !D || D.pageGeometry) return Promise.resolve();
+  return fetch(`/api/geometry?hash=${encodeURIComponent(D.hash||"")}`)
+    .then(r=>r.json()).then(g=>{ D.pageGeometry=g.pages||{}; })
+    .catch(()=>{ D.pageGeometry={}; });
+}
+function applyGeometry(){
+  if(!D) return;
+  if(D.baseGeometry===undefined) D.baseGeometry = D.geometry || null;
+  const n = (D.pages[pageIdx]||{}).n;
+  D.geometry = (D.pageGeometry||{})[n] || D.baseGeometry;
+}
 function openDoc(i,page){
   docIdx=i; D=DB.documents[i];
   pageIdx=Math.max(0, D.pages.findIndex(p=>p.n===(page ?? firstPageWithRows(D))));
   if(pageIdx<0) pageIdx=0;
+  applyGeometry();
   const pageRows = rowsForPage(D, D.pages[pageIdx].n);
   const showRows = pageRows.length>0;
   rows = pageRows.map(r=>({...r,verified:false}));
@@ -498,6 +516,8 @@ function openDoc(i,page){
   if(!showRows) renderEmpty();
   renderDocList(); renderPageStrip(); render(); paintBand(0); refreshExport();
   $("#stat").textContent = showRows ? "" : "sem transcrição";
+  // and again once this dossier's own measurements arrive
+  loadGeometry().then(()=>{ applyGeometry(); paintBand(sel); });
 }
 $("#doclist").addEventListener("click",e=>{
   const d=e.target.closest(".doc"); if(d) openDoc(+d.dataset.d);

@@ -656,3 +656,37 @@ def test_a_year_the_clerk_wrote_says_that_too():
     from desembarque.serve_shapes import ui_meta
     meta = ui_meta({"ship": "Baden", "year": 1925, "year_source": "printed"}, "X")
     assert meta["year_source"] == "printed"
+
+
+def test_a_document_hands_over_the_geometry_of_every_page_it_read(server, monkeypatch):
+    """The corpus payload carries one geometry per document, and a dossier is
+    read page by page — so the band beside a row came from whichever page
+    happened to be measured, or from nothing at all. Three and a half megabytes
+    of bands cannot ride along with the folder list, so they are asked for when
+    a document is opened."""
+    base, folder = server
+    monkeypatch.setattr(engines, "_ACTIVE", GeometryEngine())
+    docs(folder, 1)
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+    from desembarque.identity import identify
+    ident = identify(folder / "doc0.pdf")
+
+    class Job:
+        total = 2
+        page = 0
+    serve.JOBS.store(ident.doc_hash,
+                     serve.transcribe_document(folder / "doc0.pdf", Job()))
+
+    st, body = call(f"{base}/api/geometry?hash={ident.doc_hash}")
+    assert st == 200
+    assert "2" in body["pages"], "the page that was read reports no geometry"
+    # in the shape the review UI paints from, not the shape the engine stored
+    assert body["pages"]["2"]["row_bands"] == [[0.28, 0.30], [0.30, 0.32]]
+    assert "1" not in body["pages"], "the cover card has no grid to report"
+
+
+def test_asking_for_the_geometry_of_a_document_nobody_read(server):
+    base, folder = server
+    st, body = call(f"{base}/api/geometry?hash=" + "0" * 64)
+    assert st == 200 and body["pages"] == {}

@@ -72,10 +72,18 @@ def parse(text: str) -> list[str]:
     return [p.strip() for p in m.group(1).split("|")] if m else []
 
 
-def run_chromium(url: str) -> list[str]:
+def run_chromium(url: str) -> list[str] | None:
+    """The assertions this browser reported, or None if it is not installed.
+
+    The two are not the same answer and were both reported as `[]`: a run that
+    produced nothing printed "not available, skipped" and the suite went on to
+    say ALL PASS. That is how the served run went unchecked — Firefox loaded a
+    corpus of 660 dossiers, took longer than the harness waited, and reported
+    nothing at all.
+    """
     exe = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
     if not exe:
-        return []
+        return None
     out = subprocess.run(
         [exe, "--headless", "--disable-gpu", "--no-sandbox",
          # match the Firefox run: at the default 800x600 the panes are too short
@@ -86,9 +94,9 @@ def run_chromium(url: str) -> list[str]:
     return parse(out.stdout)
 
 
-def run_firefox(url: str, port: int = 4455) -> list[str]:
+def run_firefox(url: str, port: int = 4455) -> list[str] | None:
     if not (shutil.which("firefox") and shutil.which("geckodriver")):
-        return []
+        return None
     base = f"http://127.0.0.1:{port}"
 
     def rq(method, path, body=None):
@@ -119,33 +127,52 @@ def run_firefox(url: str, port: int = 4455) -> list[str]:
         rq("POST", f"/session/{sid}/window/rect",
            {"width": 1400, "height": 900, "x": 0, "y": 0})
         rq("POST", f"/session/{sid}/url", {"url": url})
-        time.sleep(4)
-        res = rq("POST", f"/session/{sid}/execute/sync",
-                 {"script": "return document.getElementById('warn').textContent;", "args": []})
+        # Waited a flat four seconds, which is enough for the file:// build and
+        # not for a served corpus of 660 dossiers. Polling costs nothing when
+        # the page is quick and is the difference between a checked run and a
+        # skipped one.
+        results: list[str] = []
+        deadline = time.time() + 90
+        while time.time() < deadline:
+            res = rq("POST", f"/session/{sid}/execute/sync",
+                     {"script": "return document.getElementById('warn').textContent;",
+                      "args": []})
+            results = parse(res["value"] or "")
+            if results:
+                break
+            time.sleep(1)
         rq("DELETE", f"/session/{sid}")
-        return parse(res["value"] or "")
+        return results
     finally:
         drv.terminate()
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None,
+         runners: dict | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--browser", choices=["chromium", "firefox", "all"], default="all")
     ap.add_argument("--url", help="test a served URL instead of the file:// build")
     args = ap.parse_args(argv)
 
     url = args.url or build_harness()
-    runners = {"chromium": run_chromium, "firefox": run_firefox}
-    if args.browser != "all":
+    runners = runners or {"chromium": run_chromium, "firefox": run_firefox}
+    if args.browser != "all" and args.browser in runners:
         runners = {args.browser: runners[args.browser]}
 
     failed = ran = 0
     for name, fn in runners.items():
         results = fn(url)
-        if not results:
-            print(f"{name}: not available, skipped", file=sys.stderr)
+        if results is None:
+            print(f"{name}: not installed, skipped", file=sys.stderr)
             continue
         ran += 1
+        if not results:
+            # It ran. Reporting nothing is a failure of the page, not an
+            # absent browser, and it used to be printed as a skip.
+            failed += 1
+            print(f"\n{name}: reported no assertions at all — the page did not "
+                  "finish, or the harness never ran")
+            continue
         bad = [r for r in results if r.startswith("FAIL") or r.startswith("THREW")]
         if len(results) < MIN_ASSERTIONS:
             bad.append(f"TRUNCATED only {len(results)} assertions ran, expected at least "
