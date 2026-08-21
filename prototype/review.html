@@ -160,6 +160,9 @@
   tr.doubt td.name{box-shadow:inset 3px 0 0 var(--warn)}
   .altmenu .why.guessy{color:var(--warn);border-top:1px solid var(--line);margin-top:4px;padding-top:5px}
   .altmenu button.guess{color:var(--warn)}
+  #corpushits .hit .narrow{float:right;font-size:9.5px;padding:1px 5px;margin-left:6px;
+    border-radius:5px;background:var(--bg);border:1px solid var(--line);color:var(--muted)}
+  #corpushits .hit .narrow:hover{border-color:var(--accent);color:var(--accent)}
   a.dlhits{float:right;color:var(--accent);text-decoration:none;font-size:11px}
   a.dlhits:hover{text-decoration:underline}
   .altmenu button.guess i{font-style:normal;opacity:.7;margin-left:6px}
@@ -804,7 +807,8 @@ function renderHits(d){
     + d.hits.slice(0,25).map(h=>`
     <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
          data-row="${h.row||0}" title="Abrir o documento nesta linha">
-      <b>${h.text}</b>
+      <b>${h.text}</b>${h.ship?`<button class="narrow" data-ship="${h.ship}"
+        title="Buscar o mesmo nome só neste navio — dizer o navio é o que faz um nome comum aparecer">só ${h.ship}</button>`:""}
       <span>${h.matched?"a bordo · ":""}${[h.ship, h.year?`${h.year}${h.year_source==="stamp"?" (carimbo)":""}`:null].filter(Boolean).join(" · ")}${h.ship||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
         ${h.conf==null?"":`<span class="dot ${h.conf<0.5?"lo":h.conf<0.8?"mid":"hi"}"
           role="img" aria-label="score do motor: ${Math.round(h.conf*100)}%"
@@ -824,6 +828,20 @@ document.addEventListener("input",e=>{
   corpusTimer=setTimeout(()=>corpusSearch(v),250);
 });
 document.addEventListener("click",e=>{
+  // Naming the ship is what rescues a common name — 111 of 142 hand-read names
+  // are findable with the crossing named against 95 without — and nobody knows
+  // that from looking at a search box. The hit says which ship it was on, so it
+  // can offer to ask again with it.
+  const narrow=e.target.closest("#corpushits .hit .narrow");
+  if(narrow){
+    e.stopPropagation();
+    const box=$("#corpusq");
+    const ship=narrow.dataset.ship||"";
+    if(!box.value.toLowerCase().includes(ship.toLowerCase())) box.value=`${box.value} ${ship}`.trim();
+    box.dispatchEvent(new Event("input",{bubbles:true}));
+    box.focus();
+    return;
+  }
   const h=e.target.closest("#corpushits .hit"); if(!h) return;
   const i=DB.documents.findIndex(d=>d.file===h.dataset.file);
   if(i<0) return;

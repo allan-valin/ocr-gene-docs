@@ -181,6 +181,16 @@ window.addEventListener("load",async()=>{
     // the corpus index is loaded on the first search and the machine may be
     // reading pages at the same time
     for(let i=0;i<120 && !document.querySelector("#corpushits .hit");i++) await wait(250);
+    const narrow=document.querySelector("#corpushits .hit .narrow");
+    if(narrow){
+      const ship=narrow.dataset.ship;
+      narrow.click(); await wait(300);
+      ok("a hit can ask again with its ship named",
+         (q("#corpusq").value||"").toLowerCase().includes((ship||"").toLowerCase()));
+      q("#corpusq").value="silva";
+      q("#corpusq").dispatchEvent(new Event("input",{bubbles:true}));
+      for(let i=0;i<40 && !document.querySelector("#corpushits .hit");i++) await wait(150);
+    }
     const dl=document.querySelector("a.dlhits");
     ok("the results can be taken away as a spreadsheet", !!dl);
     ok("and the download asks for the query that produced them",
