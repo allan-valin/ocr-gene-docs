@@ -1,0 +1,98 @@
+"""Can somebody find these people by typing their names?
+
+CER measures how wrong a reading is. This measures the only thing the tool is
+for: type the name as a person would know it, and see whether the row it belongs
+to comes back — and where in the list. A reading can be wrong in every character
+and still be findable, and a reading can be nearly right and still be buried
+under a thousand rows that resemble it.
+
+    .venv/bin/python scripts/bench_search.py
+    .venv/bin/python scripts/bench_search.py --at 5      # rank within the top five
+
+The truth pages are the ones in data/truth. Each name is searched against the
+whole index, exactly as the app searches it.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from desembarque.identity import cached_hash        # noqa: E402
+from desembarque.search import load_index, search   # noqa: E402
+
+
+def truth_rows(cache: Path, scans: Path) -> list[dict]:
+    """Every hand-read name, with the row it should be found on."""
+    out = []
+    for f in sorted((ROOT / "data" / "truth").glob("*.json")):
+        t = json.loads(f.read_text(encoding="utf-8"))
+        if not t.get("names"):
+            continue
+        pdf = scans / t["pdf"]
+        if not pdf.exists():
+            continue
+        doc = cached_hash(pdf)
+        record = json.loads((cache / f"{doc}.json").read_text(encoding="utf-8"))
+        rows = [r for r in record.get("rows", []) if r.get("page") == t["page"]]
+        if not rows:
+            continue
+        # the truth block sits somewhere among the page's rows; find where by
+        # fit, the same way the recogniser bench does
+        from bench_rec import align
+        texts = [r.get("name_raw") or "" for r in rows]
+        off = align(texts, t["names"])
+        for i, name in enumerate(t["names"]):
+            if off + i < len(rows):
+                out.append({"name": name, "doc": doc, "page": t["page"],
+                            "row": rows[off + i].get("n"),
+                            "read": rows[off + i].get("name_raw") or "",
+                            "pdf": t["pdf"]})
+    return out
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--cache", type=Path, default=ROOT / "data" / "transcriptions")
+    ap.add_argument("--scans", type=Path, default=ROOT / "data" / "scans")
+    ap.add_argument("--at", type=int, default=10, help="rank counted as found")
+    ap.add_argument("--limit", type=int, default=50)
+    ap.add_argument("--out", type=Path)
+    args = ap.parse_args(argv)
+    sys.path.insert(0, str(ROOT / "scripts"))
+
+    rows = load_index(args.cache, engine_only=False)
+    wanted = truth_rows(args.cache, args.scans)
+    print(f"{len(wanted)} hand-read names against {len(rows)} indexed rows")
+
+    found, ranks, misses = 0, [], []
+    for w in wanted:
+        hits = search(rows, w["name"], limit=args.limit)
+        rank = next((i + 1 for i, h in enumerate(hits)
+                     if h.get("doc") == w["doc"] and h.get("page") == w["page"]
+                     and h.get("row") == w["row"]), None)
+        if rank and rank <= args.at:
+            found += 1
+            ranks.append(rank)
+        else:
+            misses.append({**w, "rank": rank})
+    n = len(wanted) or 1
+    print(f"found in the top {args.at}: {found}/{len(wanted)} ({found / n:.0%})")
+    if ranks:
+        print(f"median rank when found: {sorted(ranks)[len(ranks) // 2]}")
+    print("\nnot found:")
+    for m in misses[:20]:
+        print(f"  {m['name']!r} read as {m['read']!r} — rank {m['rank']}")
+    if args.out:
+        args.out.write_text(json.dumps(
+            {"at": args.at, "found": found, "total": len(wanted),
+             "misses": misses}, ensure_ascii=False, indent=1), encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

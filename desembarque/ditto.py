@@ -41,6 +41,25 @@ def is_mark(text: str | None) -> bool:
     return all(c in MARKS for c in t)
 
 
+def _strip_mark(text: str) -> str | None:
+    """What is left of a reading after the repetition mark in front of it.
+
+    The mark is a pair of small strokes and the recogniser rarely gives it a
+    space: `"Joze`, `"ose`, `,Friancisca`, `6yElviia`. Read as written, those
+    rows are unfindable — a search for the surname the mark stands for cannot
+    reach them, and they are most of a family list.
+    """
+    t = (text or "").lstrip()
+    i = 0
+    while i < len(t) and t[i] in MARKS:
+        i += 1
+    rest = t[i:].lstrip()
+    if not i or not rest:
+        return None
+    # what remains has to look like a name rather than the tail of the mark
+    return rest if sum(c.isalpha() for c in rest) >= 3 else None
+
+
 def _first_token_is_mark(text: str | None) -> bool:
     parts = (text or "").split()
     return bool(parts) and is_mark(parts[0])
@@ -69,20 +88,37 @@ def resolve(rows: list[dict]) -> list[dict]:
             row["surname"] = last
             row["given"] = raw
             row["ditto"] = ["surname"]
-        elif _first_token_is_mark(raw) and last and since <= MAX_GAP:
-            rest = " ".join(parts[1:]).strip()
+            row["ditto_source"] = "indent"
+        elif (_first_token_is_mark(raw) or _strip_mark(raw)) and last and since <= MAX_GAP:
+            rest = (" ".join(parts[1:]).strip() if _first_token_is_mark(raw)
+                    else _strip_mark(raw))
             row["surname"] = last
             row["given"] = rest or row.get("given") or ""
             row["ditto"] = ["surname"]
+            row["ditto_source"] = "mark"
         elif is_mark(raw):
             # nothing but the mark: the row means the same surname and the
             # clerk wrote no given name to go with it
             if last and since <= MAX_GAP:
                 row["surname"] = last
                 row["ditto"] = ["surname"]
-        else:
-            if row.get("surname") and not is_mark(row.get("surname")):
-                last = row["surname"]
+                row["ditto_source"] = "mark"
+        elif len(parts) >= 2 and row.get("surname") and not is_mark(row["surname"]):
+            # Only a row that names two things sets the family surname. A row
+            # read as one word is far more often a given name under a mark the
+            # recogniser dropped than a new family — taking it made `"ose`
+            # inherit `Maria`.
+            last = row["surname"]
+        elif last and since <= MAX_GAP and len(parts) == 1:
+            # A single name under a family, with no mark that survived and no
+            # indent to prove one: on these forms that is a continuation, and
+            # read as written the row is unfindable by the only thing a
+            # searcher reliably knows. Inherited, and labelled as inferred
+            # rather than read, because the difference is the whole point.
+            row["surname"] = last
+            row["given"] = raw
+            row["ditto"] = ["surname"]
+            row["ditto_source"] = "position"
         since = 0
         out.append(row)
     return out

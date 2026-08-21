@@ -104,11 +104,19 @@ def test_a_row_written_under_the_mark_is_a_continuation_even_unmarked():
     assert out[1]["given"] == "Felipe" and out[1]["ditto"] == ["surname"]
 
 
-def test_a_surname_written_at_the_margin_is_a_surname():
-    """`Turino Cettore` starts where the column starts, and a single name that
-    starts there is somebody whose surname the clerk wrote and nothing else."""
+def test_a_single_name_under_a_family_is_taken_as_one_of_them():
+    """This test said the opposite until the retrieval bench was run against
+    the hand-read pages: a single name under a family, inherited, takes findable
+    names from 39/68 to 51/68. Read as written those rows carry no surname at
+    all, and the surname is the one thing a person searching for an ancestor
+    reliably knows.
+
+    It is a weaker claim than a mark on the page, so it is labelled as one —
+    `ditto_source: position` — and the reading itself is untouched."""
     out = resolve([indented("Santa Nicolas", 0.02), indented("Turino", 0.03)])
-    assert "ditto" not in out[1] and out[1]["surname"] == "Turino"
+    assert out[1]["surname"] == "Santa"
+    assert out[1]["ditto_source"] == "position"
+    assert out[1]["name_raw"] == "Turino"
 
 
 def test_two_names_at_an_indent_are_not_a_continuation():
@@ -116,3 +124,23 @@ def test_two_names_at_an_indent_are_not_a_continuation():
     out = resolve([indented("Santa Nicolas", 0.02),
                    indented("De Pedres Miguel", 0.22)])
     assert "ditto" not in out[1]
+
+
+def test_a_single_name_does_not_become_the_family_name():
+    """`"ose` inherited `Maria` — the row above it was read as one word, which
+    on a family list is a given name under a mark the recogniser dropped."""
+    out = resolve(rows("Santa Nicolas", "Maria", '" ose'))
+    assert out[2]["surname"] == "Santa"
+
+
+def test_every_inherited_surname_says_how_it_was_arrived_at():
+    """A mark on the page and a guess from position are different claims."""
+    out = resolve(rows("Martinez Francisco", '" Maria', "Manuel"))
+    assert out[1]["ditto_source"] == "mark"
+    assert out[2]["ditto_source"] == "position"
+    assert out[2]["surname"] == "Martinez"
+
+
+def test_a_name_the_clerk_wrote_in_full_is_never_inherited_over():
+    out = resolve(rows("Martinez Francisco", "De Pedres Miguel"))
+    assert "ditto" not in out[1] and out[1]["surname"] == "De Pedres"

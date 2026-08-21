@@ -206,6 +206,20 @@ def load_index(cache: Path, engine_only: bool = True,
     return RowIndex(out, version=_VERSION)
 
 
+def _resolved(rows: list[dict]) -> list[dict]:
+    """The rows with repetition marks resolved, page by page."""
+    from .ditto import resolve
+    out, page, block = [], None, []
+    for r in rows:
+        if r.get("page") != page and block:
+            out.extend(resolve(block))
+            block = []
+        page = r.get("page")
+        block.append(r)
+    out.extend(resolve(block))
+    return out
+
+
 def _parse(f: Path, engine_only: bool,
            ships: dict[str, str] | None = None) -> list[dict]:
     """One stored transcription, flattened into searchable rows."""
@@ -228,7 +242,11 @@ def _parse(f: Path, engine_only: bool,
         catalogued = ships.get(d.get("file") or "")
         if catalogued:
             voyage["ship"] = catalogued
-    for r in d.get("rows", []):
+    # A record written before the repetition mark was understood still has
+    # rows saying `"` where a surname belongs, and re-reading the pages to fix
+    # that would cost hours. Resolved here as well as at reading time, per
+    # page, so an improvement to the rule reaches the corpus at once.
+    for r in _resolved(d.get("rows", [])):
         text = row_text(r)
         # the flag covers documents indexed since headings were noticed; the
         # text check covers everything indexed before that
