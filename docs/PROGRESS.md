@@ -256,9 +256,24 @@ What was wrong, in the order it was found:
   because the upper bound was 1940. Every year this corpus has produced falls
   between 1913 and 1928, so the bound is 1935.
 
+What it comes to, across all 660 dossiers, once the re-parse runs:
+
+| field | now | after |
+|---|---|---|
+| names a ship | 163 (24.7%) | **220 (33.3%)** |
+| gives a year | 163 (24.7%) | 168 (25.5%) |
+| gives a port it sailed from | 250 (37.9%) | 249, forty-three of them cleaned |
+| names a shipping line | 411 (62.3%) | 409 |
+
+A dossier is searchable by ship regardless — the archive's own catalogue names
+every one of them, and search joins it — so what this adds is the page's own
+claim beside the catalogue's, which is what a person checks a mangled reading
+against.
+
 None of this is in the running refresh: the server was started before these
 changes. **When the run finishes, `scripts/reparse_voyages.py` applies all of it
-in a second.**
+in a second** — and it now refuses to run while an index job is writing the same
+records, which tonight was managed by hand.
 
 ### Where it all stands at the end of the evening
 
