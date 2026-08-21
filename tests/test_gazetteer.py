@@ -61,3 +61,16 @@ def test_ranking_invents_nothing():
 
 def test_a_missing_dictionary_is_an_empty_one_not_an_error():
     assert len(Names.load(Path("/nonexistent/names.json"))) == 0
+
+
+def test_a_rebuilt_dictionary_is_picked_up_without_a_restart(tmp_path):
+    """The list is rebuilt whenever the corpus is re-read, and a server that
+    reads it once at startup keeps offering yesterday's names all day."""
+    import json
+    f = tmp_path / "names.json"
+    f.write_text(json.dumps({"names": {"SILVA": 3}}), encoding="utf-8")
+    names = Names.load(f)
+    assert len(names) == 1
+    f.write_text(json.dumps({"names": {"SILVA": 3, "PEREIRA": 2}}), encoding="utf-8")
+    assert len(names.fresh()) == 2
+    assert len(names.fresh().fresh()) == 2

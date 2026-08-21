@@ -44,6 +44,8 @@ class Names:
 
     def __init__(self, counts: dict[str, int] | None = None):
         self.counts = {fold(k): int(v) for k, v in (counts or {}).items()}
+        self.path: Path | None = None
+        self.stamp = 0
 
     @classmethod
     def load(cls, path: Path) -> "Names":
@@ -51,7 +53,30 @@ class Names:
             d = json.loads(Path(path).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return cls({})
-        return cls(d.get("names") or {})
+        out = cls(d.get("names") or {})
+        out.path = Path(path)
+        try:
+            out.stamp = out.path.stat().st_mtime_ns
+        except OSError:
+            out.stamp = 0
+        return out
+
+    def fresh(self) -> "Names":
+        """This dictionary, or a newly built one if the file has changed.
+
+        The list is rebuilt whenever the corpus is re-read — the pages read
+        before the table was measured from its printing put professions in the
+        name column — and a server that only reads it at startup keeps offering
+        the old ones for as long as it is up.
+        """
+        path = getattr(self, "path", None)
+        if path is None:
+            return self
+        try:
+            stamp = path.stat().st_mtime_ns
+        except OSError:
+            return self
+        return self if stamp == getattr(self, "stamp", 0) else Names.load(path)
 
     def __len__(self) -> int:
         return len(self.counts)

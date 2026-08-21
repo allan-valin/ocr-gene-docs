@@ -20,6 +20,7 @@ the clean pages say.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import sys
@@ -38,6 +39,16 @@ from desembarque.voyage import _is_form_word                  # noqa: E402
 # it is either sure or empty.
 CLEAN_SCORE = 0.95
 WORD = re.compile(r"^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'\-]{2,}$")
+# What people were, not who they were. These reach the name column on pages read
+# before the column was measured from the printing, and a profession offered as
+# a probable *name* is exactly the kind of confident wrong answer this tool is
+# built to avoid.
+TRADES = """lavrador trabalhador agricultor jornaleiro jornalier negociante
+    comerciante commerciante domestica doméstica dona casa marinheiro alfaiate
+    sapateiro carpinteiro pedreiro costureira cozinheira lavradora empregada
+    estudante menor comercio commercio nenhuma nenhum professor medico
+    engenheiro operario operário motorista padeiro ferreiro barbeiro
+    servente vendedor caixeiro industrial fazendeiro criada""".split()
 
 
 def fold(text: str) -> str:
@@ -77,7 +88,10 @@ def main(argv: list[str] | None = None) -> int:
             for w in words_of(r):
                 # the form's own printing gets read as cleanly as a name and is
                 # exactly what a dictionary must not suggest
-                if _is_printed_word(w.lower()) or _is_form_word(w.lower()):
+                low = w.lower()
+                if (_is_printed_word(low) or _is_form_word(low)
+                        or any(difflib.SequenceMatcher(None, fold(low), fold(t)).ratio() >= 0.85
+                               for t in TRADES)):
                     continue
                 counts[fold(w)] += 1
 
@@ -92,6 +106,9 @@ def main(argv: list[str] | None = None) -> int:
         ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{len(kept)} names from {people} clean rows "
           f"({handwritten} handwritten rows left out) -> {args.out}")
+    print("Rebuild this after a corpus refresh: the pages read before the table "
+          "was measured from its printing put professions and form words in the "
+          "name column, and those become probable names here.")
     return 0
 
 

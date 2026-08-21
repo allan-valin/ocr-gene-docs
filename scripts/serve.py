@@ -482,6 +482,8 @@ class Handler(BaseHTTPRequestHandler):
                 # Names this archive is known to carry, offered for one word.
                 # They are guesses and the response says so; the caller shows
                 # them as guesses and stores nothing unless a person picks one.
+                global NAMES
+                NAMES = NAMES.fresh()
                 word = q.get("q", "")
                 return self._send(200, {
                     "word": word,
