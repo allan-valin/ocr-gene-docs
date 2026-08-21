@@ -1,8 +1,10 @@
 # Progress
 
-Running checkpoint. Newest first. The design record is
-[the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
-next actions.
+Running checkpoint. **Newest section first, and it is where to start**: it says
+what is on disk, how to resume a run, what to do next in order, and what has
+already been measured and rejected so it is not tried twice. The design record is
+[the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
+and next actions.
 
 ## 2026-08-22 — checkpoint, machine idle
 
