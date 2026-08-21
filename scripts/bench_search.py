@@ -70,18 +70,28 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{len(wanted)} hand-read names against {len(rows)} indexed rows")
 
     found, ranks, misses = 0, [], []
+    per_page: dict[str, list[int]] = {}
     for w in wanted:
         hits = search(rows, w["name"], limit=args.limit)
         rank = next((i + 1 for i, h in enumerate(hits)
                      if h.get("doc") == w["doc"] and h.get("page") == w["page"]
                      and h.get("row") == w["row"]), None)
-        if rank and rank <= args.at:
+        hit = bool(rank and rank <= args.at)
+        key = f"{w['pdf']}#{w['page']}"
+        per_page.setdefault(key, [0, 0])
+        per_page[key][1] += 1
+        if hit:
             found += 1
             ranks.append(rank)
+            per_page[key][0] += 1
         else:
             misses.append({**w, "rank": rank})
     n = len(wanted) or 1
     print(f"found in the top {args.at}: {found}/{len(wanted)} ({found / n:.0%})")
+    # Per page, because a typed page is nearly free and a cursive one is the
+    # whole difficulty: one average over both hides which way a change moved.
+    for key, (ok, total) in sorted(per_page.items()):
+        print(f"  {ok:3d}/{total:<3d} {key}")
     if ranks:
         print(f"median rank when found: {sorted(ranks)[len(ranks) // 2]}")
     print("\nnot found:")

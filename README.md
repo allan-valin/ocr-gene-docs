@@ -58,23 +58,29 @@ Working:
 
 Honest about the limits:
 
-* **Handwriting is read badly**, and is most of the archive. `GUIDO CONTADORE` comes back
-  as `Guudo Camtadore` — wrong as a transcription, and findable by search only while the
-  pool is small. Measured at three pool sizes, typed pages hold (26/26 in the top five at
-  3,430 rows) and handwritten ones erode: 5 of 6 names ranked first at a thousand rows,
-  4 of 6 at three thousand, with one lost to an unrelated word printed on another page.
-  A recogniser that reads handwriting is the next thing this needs — and a searcher can
-  now say the ship or the year, which reorders the thin margins that erosion lives in.
-  Pretrained handwriting models were measured against this archive and lost to the
-  printed-text recogniser (CER 0.61 against 0.21, at 8 s a row), so this needs training
-  data of its own rather than somebody else's model.
-* **Some documents still yield nothing.** Of eighty-nine benchmarked pages, ten come back
-  without a row; on inspection most are not passenger lists at all but the interpreter's
-  *PARTE* form, where no rows is the right answer — and that form names the ship, the port
-  it sailed from and the arrival date, none of which is indexed yet. The five that *were*
-  lists have been recovered: their rules print too faintly for the table's extent to be
-  measured from them, so a page of thirty-seven passengers came back empty. Coverage across
-  the benchmark went from 0.457 to 0.497 with no page regressing.
+* **Typescript is solved; cursive is two thirds findable.** Measured by searching each
+  hand-read name exactly as a person would type it, against the whole index: **42 of 42
+  names on the two typewritten pages** come back in the top ten, and **37 of 54 on the two
+  cursive ones**. `Ponticelli Giovanni` is read as `Pouticelli Sooai` — wrong as a
+  transcription, findable as a search. The recogniser is the ceiling: a wider input, a
+  bigger model, removing the printed rules and folding confusable letters were each
+  measured and each was worse or no better, and pretrained handwriting models lost to the
+  printed-text recogniser by a wide margin (CER 0.61 against 0.21, at 8 s a row). This
+  needs training data of its own rather than somebody else's model.
+* **A family list is mostly repetition marks, and they are resolved.** These lists write
+  the surname once and a ditto under it for every relative: forty-eight people under nine
+  surnames on one page. The surname is filled in from the row the mark points at and the
+  reading is left exactly as it was, with the record saying how each was arrived at — a
+  mark on the page, or the row's position under a family. Read as written, one of seven
+  Martinezes was findable.
+* **The table is measured from the page's own printing.** The column headings and the
+  ordinal printed on every ruled row, rather than rules the scans have often lost — which
+  is what used to put the name column over the *Procedencia* column, or over two thirds of
+  the sheet. Ten pages chosen for how they differ are checked on every change
+  (`data/golden.json`); all ten measure from the printing.
+* **Some documents still yield nothing.** Most are not passenger lists at all but the
+  interpreter's *PARTE* form, where no rows is the right answer — and that form names the
+  ship, the port it sailed from and the arrival date, which are indexed from it.
 * **No engine installed is a supported state.** The application says so and writes nothing,
   rather than showing empty rows that could be mistaken for an empty page.
 

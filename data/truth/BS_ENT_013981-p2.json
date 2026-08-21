@@ -1,0 +1,17 @@
+{
+  "source": "read from the scan by eye at 150 dpi, page 2 name column",
+  "caution": "Typewritten and legible, so these are close to certain. Two rows carry a handwritten annotation beside the typed name — row 8 `(G.S. de Clercq) (Gédéon)` and row 20 `Zanders, Rupert` — and only the typed part is recorded here, because that is what the row's reading is of.",
+  "pdf": "BR_RJANRIO_BS_0_RPV_ENT_013981_d0001de0001.pdf",
+  "page": 2,
+  "first_row": 1,
+  "names": [
+    "Enzo Santoni", "Antonio Oliveira", "Jose Oliveira", "Francisco Baptista",
+    "Da Esther Gomes", "Jose dos Santos", "Rondano de Rossendal", "G. Clercq",
+    "Smidt Van Gelder", "Francisco Canales Sorio", "Joaquim Vivas Mattos",
+    "Alberto Borne Junior", "Manoel Leao", "Moyses Castie",
+    "Da Roza de Azeredo", "Alberto Esforme", "Madame Fanny Green",
+    "Joseph Pruyk", "Antonio Guimaraes", "R. Zandes", "Adolpho Englazza",
+    "Jose Antunu", "Luiz Sataquara", "Paulino Massot Roque",
+    "Da Maria de Souza", "Amavel de Souza", "Ayres de Souza", "Jose de Souza"
+  ]
+}
