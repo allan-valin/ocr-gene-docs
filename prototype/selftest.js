@@ -30,6 +30,9 @@ window.addEventListener("load",async()=>{
     if(i>=0 && typeof openDoc==="function"){ openDoc(i); await wait(600); }
   }
   ok("page and rows ready", await ready());
+  // the sample's rows arrive with the corpus, which on a loaded machine can be
+  // a second behind the page being ready
+  for(let i=0;i<40 && document.querySelectorAll("#rows tr").length!==26;i++) await wait(150);
   ok("rows rendered=26", document.querySelectorAll("#rows tr").length===26);
   ok("scan image loaded", q("#scan").naturalWidth>0);
   ok("band painted", !q("#bandBox").hidden && parseFloat(q("#bandBox").style.height)>0);
