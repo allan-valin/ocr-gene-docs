@@ -732,7 +732,7 @@ def test_a_page_says_which_rows_a_person_should_look_at(server, monkeypatch):
     assert body["of"] == 2, "a blank row is not something to check"
     assert body["doubtful"] == 1
     assert [r["n"] for r in body["rows"] if r["doubtful"]] == [2]
-    assert "não quer dizer que esteja errada" in body["means"]
+    assert "não quer dizer que estejam erradas" in body["means"]
 
 
 def test_a_hand_transcribed_document_reports_its_rows_too(server, monkeypatch):
@@ -769,3 +769,29 @@ def test_the_page_says_how_its_table_was_measured(server, monkeypatch):
     assert st == 200
     assert body["measured_by"] == {"2": "printing",
                                    "3": "printed columns, ruled rows"}
+
+
+def test_a_row_is_flagged_for_the_reason_it_deserves(server, monkeypatch):
+    """Measured against 139 hand-read rows, 67 of them badly read: a decode
+    score under 0.85 catches 81% of the bad ones, a surname inherited from
+    position is wrong 94% of the time it fires, and a reading that resembles no
+    name in the archive is right to flag and almost never fires. All three, each
+    saying which it was."""
+    base, folder = server
+    from desembarque.gazetteer import Names
+    monkeypatch.setattr(serve, "NAMES", Names({"SILVA": 40, "MARIA": 161}))
+    serve.JOBS.store("w" * 8, {"hash": "w" * 8, "rows": [
+        {"n": 1, "page": 2, "name_raw": "Maria Silva", "conf": {"surname": 0.99}},
+        {"n": 2, "page": 2, "name_raw": "Maria Silva", "conf": {"surname": 0.6}},
+        {"n": 3, "page": 2, "name_raw": "Silva", "surname": "Maria",
+         "given": "Silva", "conf": {"surname": 0.99}, "ditto": ["surname"],
+         "ditto_source": "position"},
+        {"n": 4, "page": 2, "name_raw": "Xqzw Vbnm", "conf": {"surname": 0.99}},
+    ]})
+    st, body = call(f"{base}/api/check?hash={'w' * 8}&page=2")
+    why = {r["n"]: r["why"] for r in body["rows"]}
+    assert why[1] == [], "a confident reading of a known name is not flagged"
+    assert why[2] == ["score"]
+    assert why[3] == ["inferido"]
+    assert why[4] == ["desconhecido"]
+    assert body["doubtful"] == 3

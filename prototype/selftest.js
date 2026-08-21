@@ -159,8 +159,8 @@ window.addEventListener("load",async()=>{
     ok("asking marks them, or says none were found",
        q("#doubtbtn").getAttribute("aria-pressed")==="true");
     const marked=[...document.querySelectorAll("#rows tr.doubt")];
-    ok("a marked row says what the mark means",
-       marked.every(tr=>/acervo/.test(tr.getAttribute("title")||"")));
+    ok("a marked row says why it is marked",
+       marked.every(tr=>/motor|inferido|acervo/.test(tr.getAttribute("title")||"")));
     ok("a way to walk them appears with them", !q("#nextdoubt").hidden);
     const before=sel_of();
     q("#nextdoubt").click(); await wait(120);

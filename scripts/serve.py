@@ -62,6 +62,29 @@ STATE = {"root": ROOT / "data" / "scans"}
 NAMES = Names.load(ROOT / "data" / "names.json")
 
 
+# Which rows to look at first, and why. Measured against 139 hand-read rows, of
+# which 67 were badly read: the recogniser's own score below 0.85 catches 81% of
+# them (71% of what it flags is wrong), and a surname inherited from a row's
+# position is wrong 94% of the time it is flagged. A reading that resembles no
+# name in the archive is nearly always wrong and nearly never fires — 3 rows of
+# 139 — so it is kept as a third reason rather than the only one.
+CHECK_SCORE = 0.85
+
+
+def _why_check(row: dict, names: Names) -> list[str]:
+    """The reasons this row is worth a second look, in the order they matter."""
+    out = []
+    score = (row.get("conf") or {}).get("surname")
+    if score is not None and score < CHECK_SCORE:
+        out.append("score")
+    if row.get("ditto_source") == "position":
+        out.append("inferido")
+    from desembarque import search as _s
+    if names.doubtful(_s.row_text(row)):
+        out.append("desconhecido")
+    return out
+
+
 def current_names() -> Names:
     """The dictionary, rebuilt from disk if it has changed since it was read."""
     global NAMES
@@ -521,15 +544,16 @@ class Handler(BaseHTTPRequestHandler):
                 # a row a person typed carries a surname and a given name and
                 # no verbatim reading at all, and testing the reading dropped
                 # every one of them.
-                out = [{"n": r.get("n"),
-                        "doubtful": current_names().doubtful(searchlib.row_text(r))}
+                names = current_names()
+                out = [{"n": r.get("n"), "why": _why_check(r, names),
+                        "doubtful": bool(_why_check(r, names))}
                        for r in rows if searchlib.row_text(r).strip()]
                 return self._send(200, {
                     "page": page, "rows": out,
                     "doubtful": sum(1 for r in out if r["doubtful"]),
                     "of": len(out),
-                    "means": "nenhuma palavra da leitura se parece com um nome "
-                             "deste acervo — não quer dizer que esteja errada",
+                    "means": "linhas que valem uma segunda olhada primeiro — "
+                             "não quer dizer que estejam erradas",
                 })
 
             if u.path == "/api/geometry":

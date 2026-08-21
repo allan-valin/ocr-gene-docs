@@ -220,7 +220,7 @@
     <button id="nextdoubt" type="button" hidden
       title="Ir para a próxima linha sem semelhança com nomes do acervo (tecla D)">D ↓</button>
     <button id="doubtbtn" type="button" aria-pressed="false"
-      title="Marcar as linhas cuja leitura não se parece com nenhum nome deste acervo. Não quer dizer que estejam erradas.">? Duvidosas</button>
+      title="Marcar as linhas que valem uma segunda olhada primeiro: score baixo do motor, sobrenome inferido, ou leitura sem semelhança com nomes do acervo. Não quer dizer que estejam erradas.">? Conferir</button>
     <button id="prev" title="Anterior (Shift+Enter)">↑</button>
     <button id="next" title="Próximo (Enter)">↓</button>
   </div>
@@ -464,16 +464,21 @@ function markDoubtful(){
   const n=(D.pages[pageIdx]||{}).n;
   fetch(`/api/check?hash=${encodeURIComponent(D.hash||"")}&page=${n}`)
     .then(r=>r.json()).then(j=>{
-      const bad=new Set((j.rows||[]).filter(r=>r.doubtful).map(r=>r.n));
+      const why=new Map((j.rows||[]).filter(r=>r.doubtful).map(r=>[r.n, r.why||[]]));
+      const WHY={
+        score: "o motor decodificou esta linha com pouca firmeza",
+        inferido: "o sobrenome foi inferido pela posição, não lido",
+        desconhecido: "nenhuma palavra se parece com um nome deste acervo",
+      };
       rows.forEach((r,i)=>{
-        if(bad.has(r.n)){
+        if(why.has(r.n)){
           const tr=document.querySelector(`#rows tr[data-i="${i}"]`);
           if(tr){ tr.classList.add("doubt");
-                  tr.title="nenhuma palavra desta leitura se parece com um nome "
-                         + "deste acervo — confira no original"; }
+                  tr.title=why.get(r.n).map(k=>WHY[k]||k).join(" · ")
+                         + " — confira no original"; }
         }
       });
-      $("#stat").textContent=`${j.doubtful} de ${j.of} linhas sem semelhança com nomes do acervo`;
+      $("#stat").textContent=`${j.doubtful} de ${j.of} linhas para conferir primeiro`;
     }).catch(()=>{});
 }
 $("#doubtbtn").addEventListener("click",()=>{

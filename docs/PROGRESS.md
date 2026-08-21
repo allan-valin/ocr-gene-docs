@@ -173,17 +173,24 @@ it is already built — the ship and the year. `Maria Rosa Carrana` is hopeless;
 `Maria Rosa Carrana 1922` should not be, and whether it is now is the first thing
 to measure next.
 
-#### And what `? Duvidosas` is worth
+#### Which rows are worth a person's time, measured
 
-Measured on the five hand-read pages: it flags 0%, 3%, 0%, 17% and 4% of the
-rows. It is not noisy — but on BS.ENT.013947 p3, where sixteen of forty-eight
-names cannot be found, it flags **nothing**. With 793 names in the list and a
-fuzzy match, almost every mangled reading resembles something.
+The first version of this flagged a reading that resembles no name in the
+archive. Measured against the five hand-read pages — 139 rows with a reading, 67
+of them badly read — that catches **4%** of the bad ones. Three signals were
+compared instead:
 
-So it catches a genuinely alien reading and no more than that. The signal that
-does track difficulty is the recogniser's own score, which the row already shows,
-and the honest summary is that neither tells a person which sixteen rows are the
-problem. Written down here so nobody leans on it.
+| signal | rows flagged | of those, badly read | of all badly read, caught |
+|---|---|---|---|
+| resembles no name here | 3 | 100% | 4% |
+| surname inferred from position | 33 | **94%** | 46% |
+| recogniser's score below 0.85 | 76 | 71% | **81%** |
+| score below 0.7 | 18 | 89% | 24% |
+
+So `? Conferir` marks a row for any of the three and says on hover which it was:
+the motor decoded it weakly, the surname was inferred rather than read, or
+nothing in it resembles a name this archive carries. About half the rows on a
+cursive page are marked, which is honest — about half of them are badly read.
 
 #### What the guesses are actually worth
 
