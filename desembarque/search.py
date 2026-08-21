@@ -52,7 +52,13 @@ VOYAGE_PENALTY = 0.15
 # the last letter of `Valdivia` to `Valdivin` — exactly what the recogniser does
 # to it — costs a third of the trigram score. Edit distance is the right measure
 # for one word, and it is the same one the month names use.
-SHIP_FLOOR = 0.75
+#
+# How close is close enough was set by taste at 0.75 and by measurement at 0.85:
+# with the crossing named, findable names are 88 of 142 at a floor of 0.6, 109 at
+# 0.75 and 112 at 0.85. A forgiving floor does not find more ships, it finds the
+# wrong ones and lifts everybody aboard them. Above 0.9 a genuinely mangled name
+# stops matching, and a test says so.
+SHIP_FLOOR = 0.85
 # Above this a name match is an answer; below it, it is a suggestion.
 STRONG_NAME = 0.5
 RE_YEAR = re.compile(r"\b(1[6-9]\d{2}|20[0-2]\d)\b")
