@@ -248,7 +248,10 @@ def _letterhead(lines: list[str]) -> str | None:
             continue
         if _is_label(line) or len(folded) < 8 or RE_NOTATION.search(line):
             continue
-        return _clean(line)
+        kept = plausible_line(_clean(line))
+        if not kept:
+            continue
+        return kept
     return None
 
 
@@ -367,6 +370,51 @@ def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
         if len(printed) > 3 and difflib.SequenceMatcher(None, word, printed).ratio() >= 0.85:
             return None
     return value
+
+
+# What sits where a letterhead sits and is not a company. The port police
+# stamp their own sheets, the printer numbers the form, and the archive writes
+# its notation across the top — and the recogniser breaks each of them
+# differently on every sheet, so the whole-string refusals that caught
+# `POLICIA DO PORTO` missed `LICIA DO PORTO` and `Repartição da Policia`.
+# Matched a word at a time, fuzzily, like the form words a ship is refused for.
+NOT_COMPANY_WORDS = """policia reparticao repartição delegacia alfandega
+    alfândega intendencia intendência inspectoria ministerio ministério
+    povoamento immigracao imigracao immigração imigração lista relacao relação
+    modelo bordo interprete intérprete""".split()
+# `BR.AN.RiO.O2.O.RPV.PRJ.1GGS.8` — the archive's notation, where the zeros come
+# back as letters so the run of digits that used to catch it is not there.
+RE_DOTTED_NOTATION = re.compile(r"(\w{1,5}\.){3,}")
+# `No. 461B`, `Mod. bordo N. 133`: the printer's number on the form.
+RE_FORM_NUMBER = re.compile(r"^(n|no|num|mod|modelo)\b", re.I)
+
+
+def _is_not_company_word(word: str) -> bool:
+    if len(word) < 4:
+        return False
+    return max(difflib.SequenceMatcher(None, word, w).ratio()
+               for w in NOT_COMPANY_WORDS) >= FORM_WORD_FLOOR
+
+
+def plausible_line(value: str | None) -> str | None:
+    """The value, if it can be a shipping company at all.
+
+    The line is the field that survives a scan the handwriting does not, so a
+    filter that refuses a real company costs more than the junk it removes:
+    `COMPANHIA NACIONAL DE NAVEGAÇÃO COSTEIRA` has to survive a rule that
+    refuses `Repartição da Policia`.
+    """
+    if not value:
+        return None
+    stripped = value.strip()
+    if RE_DOTTED_NOTATION.search(stripped):
+        return None
+    if RE_FORM_NUMBER.match(fold(stripped)) and any(c.isdigit() for c in stripped):
+        return None
+    words = fold(re.sub(r"[^\w\s]+", " ", stripped)).split()
+    if any(_is_not_company_word(w) for w in words):
+        return None
+    return plausible_value(stripped) and stripped
 
 
 def _read_port(lines: list[str]) -> str | None:

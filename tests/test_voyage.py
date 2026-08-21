@@ -853,3 +853,50 @@ Santos, de de 19
 Lista de entrada de passageiros no paquete""")
     assert a.year_source == b.year_source == "stamp"
     assert merge_voyages(a, b).year == 1928
+
+
+# What the corpus filed as shipping lines. About one in eight is the form
+# talking about itself: a printed form number, the port police's own stamp, or
+# the archive's notation, counted across all 660 dossiers.
+NOT_COMPANIES = ["No. 461B", "No. 256c", "Mod. bordo N. 133", "Mod. 181 S. G",
+                 "Repartição da Policia", "POLICIA MARITIMA DO PORTO",
+                 "LICIA DO PORTO", "SERVIÇO DE IMMIGRAÇÃO NO BRASIL",
+                 "BR.AN.RiO.O2.O.RPV.PRJ.1GGS.8",
+                 "Lísta dei passeggieri pel Brasile"]
+
+# Read off real pages in the same run, and every one of them is a company that
+# sailed this route. A filter that takes these with the junk is worse than the
+# junk: the line is the field that survives a scan the handwriting does not.
+COMPANIES = ["KONINKLIJKE HOLLANDSCHE LLOYD", "NAVIGAZIONE GENERALE ITALIANA",
+             "COMPAGNIE DE NAVIGATION SUD ATLANTIQUE",
+             "COMPANHIA NACIONAL DE NAVEGAÇÃO COSTEIRA",
+             "Hamburg-Südamerikanische Dampfschifffahrts-Gesellschaft",
+             "CHARGEURS RÉUNIS", "Lloyd Brasileiro", "NORDDEUTSCHER LLOYD BREMEN",
+             "Liverpool, Brazil and River Plate Steamers", "HUGO STINNES LINIEN",
+             "The Royal Mail Steam Packet Company", "Munson Steamship Line",
+             "Société Générale de Transports Maritimes à Vapeur",
+             "MALA REAL INGLEZA", "LAMPORT & HOLT LINE", "Hamburg-Amerika Linie"]
+
+
+def test_the_form_s_own_number_is_not_a_shipping_company():
+    """`No. 461B` was filed as a company twelve times — it is the printer's
+    number on the form, in the place a letterhead sits."""
+    from desembarque.voyage import plausible_line
+    for junk in NOT_COMPANIES:
+        assert plausible_line(junk) is None, f"{junk!r} was taken for a company"
+
+
+def test_the_companies_that_sailed_are_kept():
+    from desembarque.voyage import plausible_line
+    for company in COMPANIES:
+        assert plausible_line(company) == company, f"{company!r} was refused"
+
+
+def test_the_port_police_stamp_is_not_a_shipping_line_however_it_is_misread():
+    """`POLICIA DO PORTO` was already refused as a whole string. The recogniser
+    breaks it differently on each sheet — `LICIA DO PORTO`, `Repartição da
+    Policia` — and every one of those was a company until now."""
+    v = parse_voyage("""Repartição da Policia
+Santos, 5 de Janeiro de 1924
+Lista de entrada de passageiros no paquete""")
+    assert v is not None and v.line is None
