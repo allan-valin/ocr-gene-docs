@@ -4,6 +4,170 @@ Running checkpoint. Newest first. The design record is
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
 next actions.
 
+## 2026-08-21 — night session (Allan away)
+
+Nine commits, all pushed. The two things last night's checkpoint named as next
+are done, and the corpus on disk carries both. **380 Python tests, 67/67 browser
+assertions from disk and 77/77 served, in Chromium and Firefox** — including
+`the scan band follows the hit`, which is the assertion the missing geometry had
+been failing.
+
+### The bands are back on every page, and nothing had to be read again
+
+`transcribe_document()` now keeps `res.geometry` on the page it was measured
+from, and `scripts/backfill_geometry.py` put it back on everything already
+indexed, out of the page images still in `data/pagecache`.
+
+| | |
+|---|---|
+| records that wanted geometry | 634 |
+| pages measured | 2,446 |
+| refused as disagreeing with the rows | **0** |
+| time, three workers | ~1 h 50 m |
+| records now carrying page geometry | 634 of 660 |
+
+The remaining 26 are the two hand-measured records, which keep a
+document-level measurement, and 24 dossiers the engine found no rows in.
+
+The measurement is deterministic: on every page sampled before the run, the
+recomputed band count equalled the number of rows stored against it exactly —
+16 rows, 16 bands; 46 and 46. That is what makes the repair safe, and it is
+checked per page rather than assumed: row `n` **is** its band's index, so a
+band list shorter than the rows on disk would draw every row after the first
+difference against somebody else's line. Such a page is refused and reported.
+None occurred.
+
+The bands were then unusable for a second reason. The corpus payload carries
+one geometry per *document* and a dossier is read page by page, so a hit on
+page 7 was painted from whatever single measurement the record happened to
+hold. All the bands together are 3.5 MB and cannot ride along with the folder
+list, so `/api/geometry?hash=` hands over one dossier's when it is opened and
+the page strip picks the page's own. The file:// build has no API and keeps
+what it was built with.
+
+### A year now says where it was read, and the writing outranks the stamp
+
+`year_source` is `printed` or `stamp`, and where a dossier's two forms disagree
+the year the clerk wrote wins, whichever page was read first. Two stamps
+disagreeing is the same claim twice and the first still stands.
+
+Across the corpus: **96 years printed, 67 stamped.** All four 1928s — the
+misreadings of 1923 that started this — are stamped, and now say so in the
+record, in the document header (`1928 (carimbo)`) and in the hit list.
+
+### One in eight shipping lines was the sheet talking about itself
+
+`No. 461B` twelve times, `Repartição da Policia` five,
+`BR.AN.RiO.O2.O.RPV.PRJ.1GGS.8` ten. The whole-string refusal that caught
+`POLICIA DO PORTO` missed every way the recogniser breaks it, and the run of
+digits that caught the archive's notation is not there once its zeros come back
+as letters. Refused now a word at a time and fuzzily, the way a ship is; a
+refused line no longer ends the search, because the company is often printed on
+the line below it.
+
+| of 660 records | before | after |
+|---|---|---|
+| naming a shipping line | 418 | 408 |
+| lines that changed | — | **111** |
+| junk among the commonest | `No. 461B` (12), `Repartição da Policia` (5) | none in the top twenty |
+
+Coverage falls slightly and that is the right direction: the ten sheets that
+lost a line had nothing on them but the form's own printing, and a hundred and
+eleven now name the company that actually sailed.
+
+`No. 461B` → `The Koyal Mail Steam Packet Company`; `Mod. bordo N. 133` →
+`LLOYD SABAUDO`; `POLICIA MARITIMA DO PORTO` → `Nippon Yusen Kaisha`.
+
+The same run showed the mirror of it: **the company was being filed as the
+ship.** `The Koyal Mail Steam Packet Company` was a vessel in four dossiers and
+their line in thirty-two — where the clerk left the vessel blank, the
+letterhead above stands nearest to the label, and a ship read off a passenger
+list was never compared against the line printed on the same sheet. Seven
+dossiers lose a ship they never had.
+
+The regression list is what keeps these filters honest: sixteen companies read
+off real pages in the same run, `COMPANHIA NACIONAL DE NAVEGAÇÃO COSTEIRA`
+among them, which must keep their names while `Repartição da Policia` loses
+one. `HUGO STINNES LINIEN` is why the port names are matched whole rather than
+by word — `STINNES` is within a hair of `santos`.
+
+### Search: what actually runs out first is not memory
+
+The progress log had assumed `data/transcriptions` wants SQLite before the full
+archive. Measured, that is not the wall:
+
+| | 660 dossiers | extrapolated to 7,679 |
+|---|---|---|
+| rows indexed | 19,308 | ~225,000 |
+| index in memory | 22 MB | ~260 MB |
+| cold load | 3.8 s | ~45 s |
+| **per keystroke** | **~100 ms** | **~1.2 s** |
+
+It is the per-keystroke scan that does not survive, and it does not need a
+database. A row can only score above zero if it shares a trigram with the
+query, and the floor is 0.10, so scoring only those rows returns *exactly* the
+same hits with the same scores. A trigram posting list of row numbers now does
+that: **~100 ms → ~20 ms**, the pool scored down from 19,373 rows to about
+2,000, built in 0.13 s for 4 MB and kept across requests — `/api/search` loads
+the index on every request, which is what makes a correction searchable the
+moment it is typed.
+
+Also out of the index: sixty-five rows that are not passengers. The tally at
+the foot of the list (`Total 10412190`, `EM Tranzito em 1a 28 em 3a 9 total
+37`) and the interpreter's prose where the row comb reached it. Three things
+were letting them through — the tally's own words were not on the list of the
+form's printing, the detector runs a word into its punctuation and into the
+next (`registro,`, `com/8pessoas`), and digits are not evidence about a name.
+
+### The green dot said the engine was right
+
+`Brges. iuig` scored 0.86 and showed a green dot labelled *alta confiança*. The
+number is Paddle's decode score: how firmly it committed to the characters it
+emitted, which stays high on confident nonsense. It now says what it is —
+`score do motor`, the name the CSV export already used instead of `precisão` —
+and a high score is painted neutral. Green is kept for the one thing that earns
+it: a value a person read off the scan and typed. The low end is unchanged,
+because the asymmetry is real — a low score does mean the recogniser struggled.
+
+Calibrating it properly still needs hand-read truth, and `data/truth` holds one
+page.
+
+### The browser suite had a way of reporting nothing as a pass
+
+Two bugs of exactly the shape the stale-build refusal was written for. Firefox
+waited a flat four seconds before reading the result, which is enough for the
+file:// build and not for a served corpus of 660 dossiers; it polls now. And a
+browser that ran and reported *nothing* printed `not available, skipped` —
+identical to one that is not installed — so a served run said ALL PASS with
+Firefox silently dropped. Absent is a skip; silence is a failure.
+
+### Next, in order
+
+1. **The corpus is a sample.** 660 dossiers of the 7,679 the catalogue lists.
+   Nothing here is tuned to 660, and the search index was measured against the
+   full number rather than the current one.
+2. **Confidence is still uncalibrated**, and now honestly labelled instead. One
+   hand-read page is not enough to calibrate against; a few dozen would be.
+3. **The ship is still the weak field** — 26% of dossiers name one, and about
+   one in eight of those is a stamp or letterhead (`RII IEVEL`, `vaporRANIA`).
+   The archive's catalogue covers the ship for search regardless.
+4. The candidate pool could be narrower still: it is padded trigrams that keep
+   ~2,000 rows in it, and dropping the padding would change results on rows
+   read as a single letter — a behaviour change, not an optimisation, so it was
+   left alone.
+5. `reparse_voyages.py` after any change to the way the forms are read; the
+   schema is at **15** and every record on disk is current.
+
+### Open, and Allan's to answer
+
+* The full download is ~7,679 dossiers, and the measured cost is 65 s each —
+  about five and a half days unattended on this laptop. That number decides
+  whether the fast forms-only first pass gets built before the download, and it
+  is unchanged by tonight's work: the geometry backfill is cheap only because
+  the pages had already been read once.
+* Whether a stamped year should be *searchable* at all, or only shown. It is
+  searchable today and marked everywhere it appears.
+
 ## 2026-08-20 — day session (Allan working)
 
 ### The browser test had been green against a two-day-old page  (30e1726)
