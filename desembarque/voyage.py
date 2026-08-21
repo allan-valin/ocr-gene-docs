@@ -385,10 +385,15 @@ def plausible_ship(value: str | None, letterhead: str | None) -> str | None:
 # differently on every sheet, so the whole-string refusals that caught
 # `POLICIA DO PORTO` missed `LICIA DO PORTO` and `Repartição da Policia`.
 # Matched a word at a time, fuzzily, like the form words a ship is refused for.
+# The last four are the sentence the form uses to introduce the list — `e entrada
+# de passageiras no` was filed as a shipping company. Anything written inside the
+# string below becomes a refused word, comments included, which is how `company`
+# briefly refused `The Royal Mail Steam Packet Company`.
 NOT_COMPANY_WORDS = """policia reparticao repartição delegacia alfandega
     alfândega intendencia intendência inspectoria ministerio ministério
     povoamento immigracao imigracao immigração imigração lista relacao relação
-    modelo bordo interprete intérprete""".split()
+    modelo bordo interprete intérprete
+    entrada entradas passageiros passageiras""".split()
 # The port is printed where the letterhead sits on the sheets that carry no
 # company name. Matched whole rather than a word at a time: `STINNES` comes
 # within a hair of `santos` on a word-by-word test, and `HUGO STINNES LINIEN`

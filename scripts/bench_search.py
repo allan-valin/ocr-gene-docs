@@ -48,10 +48,15 @@ def truth_rows(cache: Path, scans: Path) -> list[dict]:
         off = align(texts, t["names"])
         for i, name in enumerate(t["names"]):
             if off + i < len(rows):
+                # what somebody who knows the crossing would add: the ship if
+                # the dossier states one, otherwise the year
+                voyage = record.get("voyage") or {}
+                extra = voyage.get("ship") or (str(voyage["year"])
+                                               if voyage.get("year") else "")
                 out.append({"name": name, "doc": doc, "page": t["page"],
                             "row": rows[off + i].get("n"),
                             "read": rows[off + i].get("name_raw") or "",
-                            "pdf": t["pdf"]})
+                            "voyage": extra, "pdf": t["pdf"]})
     return out
 
 
@@ -61,6 +66,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scans", type=Path, default=ROOT / "data" / "scans")
     ap.add_argument("--at", type=int, default=10, help="rank counted as found")
     ap.add_argument("--limit", type=int, default=50)
+    ap.add_argument("--voyage", action="store_true",
+                    help="add the dossier's ship or year to each query, the way "
+                         "somebody who knows the crossing would")
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
     sys.path.insert(0, str(ROOT / "scripts"))
@@ -72,7 +80,10 @@ def main(argv: list[str] | None = None) -> int:
     found, ranks, misses = 0, [], []
     per_page: dict[str, list[int]] = {}
     for w in wanted:
-        hits = search(rows, w["name"], limit=args.limit)
+        query = w["name"]
+        if args.voyage and w.get("voyage"):
+            query = f"{query} {w['voyage']}"
+        hits = search(rows, query, limit=args.limit)
         rank = next((i + 1 for i, h in enumerate(hits)
                      if h.get("doc") == w["doc"] and h.get("page") == w["page"]
                      and h.get("row") == w["row"]), None)

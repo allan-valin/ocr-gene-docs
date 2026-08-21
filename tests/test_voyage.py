@@ -864,7 +864,9 @@ NOT_COMPANIES = ["No. 461B", "No. 256c", "Mod. bordo N. 133", "Mod. 181 S. G",
                  "BR.AN.RiO.O2.O.RPV.PRJ.1GGS.8",
                  "Lísta dei passeggieri pel Brasile",
                  # the port printed above the date, where the company would be
-                 "Rio de Janeiro", "Santos"]
+                 "Rio de Janeiro", "Santos",
+                 # and the sentence the form uses to introduce the list
+                 "e entrada de passageiras no", "Lista de entrada de passageiros"]
 
 # Read off real pages in the same run, and every one of them is a company that
 # sailed this route. A filter that takes these with the junk is worse than the
