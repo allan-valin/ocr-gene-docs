@@ -59,7 +59,10 @@ VOYAGE_PENALTY = 0.15
 # wrong ones and lifts everybody aboard them. Above 0.9 a genuinely mangled name
 # stops matching, and a test says so.
 SHIP_FLOOR = 0.85
-# Above this a name match is an answer; below it, it is a suggestion.
+# Above this a name match is an answer; below it, it is a suggestion. Swept
+# against the hand-read pages and flat: 0.35 and 0.5 both find 112 of 142, 0.65
+# finds 111. The same is true of MIN_SCORE at 0.05, 0.10 and 0.15 — all 95. Both
+# are recorded as measured rather than left to be re-tuned by taste.
 STRONG_NAME = 0.5
 RE_YEAR = re.compile(r"\b(1[6-9]\d{2}|20[0-2]\d)\b")
 
