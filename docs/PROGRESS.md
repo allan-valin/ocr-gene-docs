@@ -141,6 +141,38 @@ against the same index both ways, and was reverted: the mangled first half
 becomes a family head and the rows below it inherit something worse than what
 they had.
 
+#### A second cursive page, and what it says
+
+`data/truth/` now holds five hand-read pages, 142 names. Measured by searching
+each name as a person would type it:
+
+| page | | |
+|---|---|---|
+| BS.ENT.013981 p2 | typed | **28/28** |
+| BS.ENT.013983 p2 | typed | **14/14** |
+| BS.ENT.013947 p3 | cursive, Italian-Spanish | 32/48 |
+| BS.ENT.014541 p2 | cursive | 4/6 |
+| BS.ENT.015061 p6 | cursive, Portuguese | **14/46** |
+
+The last page is the one to look at. Its readings are *good* — `Antonio Augusto
+Fonseca` comes back as `Antonio Ougus-to Fonseca`, CER 0.08 — and two thirds of
+them still cannot be found. The names are `Maria`, `Jose`, `Joaquim`, `Manoel`:
+a search for `Maria Rosa Carrana` competes with every Maria in twenty-two
+thousand rows, all equally close. The other cursive page carries `Santabarbara`,
+`Arquentiri`, `Calzagari` — rare, and therefore easy.
+
+Weighting each word of the query by how rare it is in the index — so `Carrana`
+carries the match and `Maria` does not — was the obvious answer and it is worse:
+**81 of 142 against 92**, and both cursive pages fell. It is the third scoring
+change tonight to lose names, after word-by-word matching and folding confusable
+letters, and the reason is the same each time: any scheme that lets one word
+carry a match floods the top ten with rows that share that word and nothing else.
+
+Common names in a large pool are the open problem, and the tool's own answer to
+it is already built — the ship and the year. `Maria Rosa Carrana` is hopeless;
+`Maria Rosa Carrana 1922` should not be, and whether it is now is the first thing
+to measure next.
+
 #### What the guesses are actually worth
 
 Measured against the ninety-six hand-read names, with the list as it stands
