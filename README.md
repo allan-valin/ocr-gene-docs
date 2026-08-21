@@ -120,12 +120,26 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 It binds `127.0.0.1` only and reads nothing outside the folder you point it at.
 
-Tests:
+## Checking a change
+
+Nothing here is trained. The recogniser's weights are fixed, so re-reading the archive
+proves nothing about a change — it only refreshes what the app serves. A change is
+checked against small fixed sets, in this order, and each one runs in seconds or
+minutes:
 
 ```sh
-.venv/bin/python -m pytest tests/ -q      # 122 library and pipeline tests
-python3 scripts/smoke_prototype.py        # drives the real UI in Chromium and Firefox
+.venv/bin/python -m pytest tests/ -q             # 422 library and pipeline tests, ~30 s
+.venv/bin/python scripts/bench_search.py         # can these people be found?      ~10 s
+.venv-ocr/bin/python scripts/bench_pages.py      # ten pages, is the table measured right?  ~1 min
+.venv-ocr/bin/python scripts/bench_rec.py        # three pages, how well are they read?     ~1 min
+python3 scripts/smoke_prototype.py               # drives the real UI in Chromium and Firefox
 ```
+
+`data/golden.json` names the ten pages and why each is there — a typed list, a dense
+cursive family list, a continuation page that prints no headings, faint pencil, a busy
+letterhead. `data/truth/` holds the pages read by hand that the other two benches score
+against. Re-reading the whole corpus is a data refresh; run it once, when a change has
+settled, and leave it unattended.
 
 ## Documents
 
