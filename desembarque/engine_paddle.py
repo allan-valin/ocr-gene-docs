@@ -129,6 +129,32 @@ def ink_start(im) -> float | None:
     return float(xs[0]) / a.shape[1]
 
 
+def has_ink(im) -> bool:
+    """Whether anybody wrote on this band.
+
+    Most rows on these sheets are ruled and empty — a passenger list is printed
+    with thirty rows and often carries three — and every one of them was being
+    cropped, resized and handed to the recogniser to be told it says nothing.
+    The test is deliberately generous: a stroke thinner than this is not
+    something the recogniser was going to read either, and a name lost to save
+    a second is the wrong trade.
+    """
+    import numpy as np
+    try:
+        a = np.asarray(im.convert("L"), dtype=np.uint8)
+    except AttributeError:
+        # a crop function injected by a test hands back whatever it likes; a
+        # thing that is not an image is not something to skip
+        return True
+    if a.size == 0:
+        return False
+    thr = max(60, int(a.mean()) - 35)
+    ink = a < thr
+    # a ruled line is one or two pixels tall in every column; writing is not
+    return bool((ink.sum(axis=0) > max(2, int(0.08 * a.shape[0]))).sum()
+                >= max(3, int(0.01 * a.shape[1])))
+
+
 def refine(im, margin: int = INK_MARGIN):
     """Trim a row band down to the writing inside it.
 
@@ -269,9 +295,12 @@ def rows_from_bands(geo, size: tuple[int, int],
 
     crops = [crop(i, box) for i, box in zip(keep, boxes)]
     indents = getattr(crop, "indents", {})
-    said = list(recognize(crops)) if boxes else []
-    said += [("", 0.0)] * (len(boxes) - len(said))
-    by_band = dict(zip(keep, said))
+    # An empty ruled row is the commonest thing on these pages. Reading it costs
+    # as much as reading a name and can only ever say nothing.
+    written = [(i, c) for i, c in zip(keep, crops) if has_ink(c)]
+    said = list(recognize([c for _i, c in written])) if written else []
+    said += [("", 0.0)] * (len(written) - len(said))
+    by_band = dict(zip([i for i, _c in written], said))
 
     rows = []
     for i in range(len(bands)):

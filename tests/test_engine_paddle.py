@@ -553,3 +553,39 @@ def test_the_readings_are_paired_by_row_number_not_by_position():
     rows = attach_alternatives(mask, render)
     assert "name_alts" not in rows[0]
     assert rows[1]["name_alts"] == [["EMMO"]]
+
+
+def test_an_empty_ruled_row_is_not_sent_to_the_recogniser():
+    """A passenger list is printed with thirty rows and often carries three.
+    Every blank one was being cropped, resized and handed to the recogniser to
+    be told it says nothing — which is most of the corpus's reading time."""
+    from PIL import Image, ImageDraw
+    from desembarque.engine_paddle import rows_from_bands
+
+    W, H = 400, 300
+    page = Image.new("L", (W, H), 255)
+    d = ImageDraw.Draw(page)
+    for y in (0, 100, 200, 300):          # the ruled lines
+        d.line([0, y, W, y], fill=0, width=1)
+    d.text((20, 40), "MARTINEZ FRANCISCO", fill=0)   # only the first row is written on
+
+    class Geo:
+        skew = 0.0
+
+        def normalized_rows(self):
+            return [(0.0, 0.33), (0.34, 0.66), (0.67, 1.0)]
+
+        def name_column(self, i=0):
+            return (0.0, 1.0)
+
+    seen = []
+
+    def recognize(crops):
+        seen.append(len(crops))
+        return [("MARTINEZ FRANCISCO", 0.9)] * len(crops)
+
+    rows = rows_from_bands(Geo(), (W, H), recognize,
+                           lambda i, box: page.crop(box))
+    assert len(rows) == 3, "an empty row is still a row"
+    assert seen == [1], f"the recogniser was handed {seen} crops, not one"
+    assert rows[0]["name_raw"] and rows[1]["name_raw"] == ""
