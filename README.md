@@ -120,6 +120,22 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 It binds `127.0.0.1` only and reads nothing outside the folder you point it at.
 
+## Reading a mangled row
+
+Handwriting recognition is at its ceiling for what runs on a CPU — five separate
+measurements in `docs/PROGRESS.md` say so — so the review page offers two aids, both
+off until asked for and both labelled as what they are:
+
+* **`≈ Prováveis`** adds names this archive is known to carry to the menu of readings for
+  a word, under `palpites do acervo — não lidos da página`. They are guesses: they are
+  stored only if a person picks one, and then as that person's typing. `↑ primeiro` puts
+  them above the engine's own readings. The list comes from this archive's typewritten
+  pages and from rows people typed — `.venv/bin/python scripts/build_names.py` rebuilds
+  it, and it should be rebuilt after a corpus refresh.
+* **`? Duvidosas`** marks the rows where nothing in the reading resembles a name this
+  archive carries, so a person checking four hundred rows knows where to start. It is a
+  claim about the archive, not about the row: a rare name is unknown here and correct.
+
 ## Checking a change
 
 Nothing here is trained. The recogniser's weights are fixed, so re-reading the archive

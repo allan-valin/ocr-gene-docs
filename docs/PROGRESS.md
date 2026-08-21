@@ -86,6 +86,67 @@ An empty ruled row is no longer sent to the recogniser. A list is printed with
 thirty rows and often carries three, and now that the bands cover the whole list
 rather than a third of it, reading the blanks was most of the corpus's time.
 
+### Names the archive knows, offered as guesses (Allan's suggestion)
+
+Since recognition is at its ceiling, the remaining help for somebody reading
+`Dantalarlraia Saliador` is a list of names these ships are known to have
+carried. Built from the archive itself — `scripts/build_names.py` counts the
+pages the clerks *typed*, which the recogniser reads at CER 0.01, and every row a
+person has typed by hand: **760 names from 5,323 clean rows**, with the form's
+printed vocabulary and the trades filtered out by the machinery that already
+knows them. A general name dictionary would be somebody else's idea of which
+names exist; these ships carried Italians, Spaniards, Portuguese and Syrians to
+Santos between 1917 and 1925.
+
+The line this must not cross is the one the whole tool rests on, so:
+
+* a guess is never a value — it ranks what the engine read and may be offered
+  beside it, and it is stored only when a person picks it, as that person's
+  typing;
+* the word menu keeps `outras leituras do motor` first; guesses appear under
+  `palpites do acervo — não lidos da página`, in the warning colour, each with
+  how close it is and how often the archive saw it;
+* they are off until asked for (`≈ Prováveis`), and only then does `↑ primeiro`
+  appear to put them above the readings;
+* `/api/names` says in its own response that these are not readings.
+
+The first thing it offered for `Saliador` was `TRABALHADOR`, which is a
+profession that reached the name column on pages read before the column was
+measured from its printing. Trades are filtered now, and **the list wants
+rebuilding after the corpus refresh** — the builder says so in its own output.
+
+`? Duvidosas` is the other half: the rows where nothing in the reading resembles
+a name this archive carries, marked so a person checking four hundred rows knows
+where to start. It says on hover — and in the endpoint's own answer — that a rare
+name is unknown here and perfectly correct.
+
+### A dossier that silently emptied itself
+
+BS.ENT.013942 came back from the run with **no rows at all**, an hour after it
+had read `Ponticelli Giovanni`. Its page carries the oneDNN failure this machine
+has thrown since July — `ConvertPirAttribute2RuntimeAttribute not support`. The
+page pipeline has retried without oneDNN since then; the recogniser never did,
+and the recogniser is what the new heading pass calls first.
+
+The worse half: the record was stored at the current schema with no rows, so
+every future run would have skipped it. That is the second time this shape of bug
+has appeared here — the first was an empty manual note marking a document as done
+forever — and it is the failure this tool exists to prevent. `is_indexed` now
+refuses a record whose pages carry an engine error.
+
+### Next, in order
+
+1. **Rebuild `data/names.json` after the refresh.** The list is only as good as
+   the pages it was counted from, and those are being re-read now.
+2. **A dossier's later pages could skip the heading pass entirely** when the
+   columns are already known from an earlier page — a recogniser batch per page,
+   which is most of what the geometry now costs.
+3. Handwriting recognition is the ceiling, and every cheap lever has been pulled.
+   What is left is a model that can read cursive Portuguese and Spanish on a CPU,
+   or a GPU.
+4. The corpus refresh is running at about a dossier a minute; 660 of them is
+   roughly ten hours, unattended, resumable.
+
 ### The refresh
 
 Started once, at 19:41, on schema 18, and left alone: 660 dossiers, four workers,
