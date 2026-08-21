@@ -251,6 +251,24 @@ refuses a record whose pages carry an engine error.
 4. The corpus refresh is running at about a dossier a minute; 660 of them is
    roughly ten hours, unattended, resumable.
 
+#### The four dossiers Allan opened, at the end of the evening
+
+Searched live, against the index as it stands:
+
+| typed | result |
+|---|---|
+| `Oswaldo de Mello Mattos` | **rank 1**, score 1.0 — BS.ENT.013983 p2 line 1 |
+| `Enzo Santoni` | **rank 1** — BS.ENT.013981 p2 line 1, read `Enzo SantoniBra` |
+| `Ponticelli Giovanni` | not in the top three |
+| `Ponticelli Giovanni Indiana` | **rank 1** — BS.ENT.013942 p2 line 1, read `Pouticelli Sooai` |
+| `Santabarbara Salvador` | not in the top three |
+| `Santabarbara Salvador Jaronna` | **rank 1** — BS.ENT.013947 p3 line 1, read `Dantalarlraia Saliador` |
+
+Which is the whole of where this stands in six lines. A typed page is solved. A
+cursive name on its own is still lost among twenty-five thousand rows. A cursive
+name with the ship beside it comes back first, mangled beyond recognition and
+pointing at the right line of the right page — which is what the tool is for.
+
 ### Voyage parsing: the evening's largest gain, and none of it re-reads a page
 
 Naming the crossing is what rescues a common name, so the fields that carry it
