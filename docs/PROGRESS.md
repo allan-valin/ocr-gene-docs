@@ -92,7 +92,8 @@ Since recognition is at its ceiling, the remaining help for somebody reading
 `Dantalarlraia Saliador` is a list of names these ships are known to have
 carried. Built from the archive itself — `scripts/build_names.py` counts the
 pages the clerks *typed*, which the recogniser reads at CER 0.01, and every row a
-person has typed by hand: **760 names from 5,323 clean rows**, with the form's
+person has typed by hand: **793 names from 5,514 clean rows** as of the last
+rebuild, with the form's
 printed vocabulary and the trades filtered out by the machinery that already
 knows them. A general name dictionary would be somebody else's idea of which
 names exist; these ships carried Italians, Spaniards, Portuguese and Syrians to
@@ -205,7 +206,8 @@ cursive page are marked, which is honest — about half of them are badly read.
 #### What the guesses are actually worth
 
 Measured against the ninety-six hand-read names, with the list as it stands
-tonight (760 names, built from a corpus that is still being re-read):
+tonight (760 names at the time of the measurement, built from a corpus that is
+still being re-read):
 
 | | |
 |---|---|
@@ -326,7 +328,7 @@ records, which tonight was managed by hand.
 
 | measurement | |
 |---|---|
-| tests | 450 |
+| tests | 458 |
 | golden pages measured from the printing | 10 of 10 |
 | reading, 5 hand-read pages, 142 names | CER 0.362 |
 | findable by name | 92 of 142 |
