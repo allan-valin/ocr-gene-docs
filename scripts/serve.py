@@ -46,6 +46,7 @@ from desembarque.export import csv_filename, rows_to_csv  # noqa: E402
 from desembarque.voyage import (is_complete, merge_voyages,  # noqa: E402
                                 parse_voyage)
 from desembarque import search as searchlib          # noqa: E402
+from desembarque.gazetteer import Names               # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
 
@@ -55,6 +56,9 @@ SAMPLE_ROWS = ROOT / "prototype" / "sample_rows.json"
 SAMPLE_INDEX = "017397"
 
 STATE = {"root": ROOT / "data" / "scans"}
+# Built by scripts/build_names.py out of the pages this archive typed. Absent is
+# a legitimate state: the menu then offers only what the engine read.
+NAMES = Names.load(ROOT / "data" / "names.json")
 JOBS = JobRunner(ROOT / "data" / "transcriptions")
 BATCH = BatchIndexer()
 # Documents are indexed in parallel: one page is ~4 s, and a real folder is
@@ -473,6 +477,19 @@ class Handler(BaseHTTPRequestHandler):
                 if not pdf or not pdf.exists():
                     return self._send(404, {"error": "no such pdf"})
                 return self._send(200, build_grid(pdf, int(q.get("n", 1))))
+
+            if u.path == "/api/names":
+                # Names this archive is known to carry, offered for one word.
+                # They are guesses and the response says so; the caller shows
+                # them as guesses and stores nothing unless a person picks one.
+                word = q.get("q", "")
+                return self._send(200, {
+                    "word": word,
+                    "guesses": NAMES.suggest(word),
+                    "of": len(NAMES),
+                    "source": "páginas datilografadas deste acervo e linhas "
+                              "digitadas por pessoas — não é leitura do motor",
+                })
 
             if u.path == "/api/geometry":
                 # Per page, and asked for rather than sent with the folder

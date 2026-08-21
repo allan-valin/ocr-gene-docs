@@ -4,6 +4,95 @@ Running checkpoint. Newest first. The design record is
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
 next actions.
 
+## 2026-08-21 — evening (Allan present, working to 23:00)
+
+### The corpus is not a test set
+
+Allan asked why a change had to be checked by re-reading seven thousand pages,
+and the answer is that it did not. **Nothing here is trained.** The recogniser's
+weights are fixed; no amount of scanned paper moves them. A full re-index
+refreshes what the app serves and proves nothing about a change — and I started
+one three times today, each time to pick up a change, each restart throwing away
+the work before it.
+
+What a change is checked against now, in the order it runs:
+
+| | what it answers | cost |
+|---|---|---|
+| `pytest` | 422 unit and pipeline tests | 30 s |
+| `scripts/bench_search.py` | can these people be found by name? | 10 s |
+| `scripts/bench_pages.py` | is the table measured right, across the printings? | 1 min |
+| `scripts/bench_rec.py` | how well are the names read? | 1 min |
+| `scripts/smoke_prototype.py` | does the page still work in two browsers? | 2 min |
+
+`data/golden.json` names ten pages and why each is in the set: a typed list, a
+dense cursive family list with dittos, a continuation page that prints no
+headings, one passenger on a full ruled sheet, a page whose ordinals the scan
+lost, faint pencil, a busy letterhead, a letterhead in two columns. A ten-second
+bench caught a scoring change that cost seven findable names — the hours would
+have said the same thing at ten thousand times the price.
+
+### What the benches settled tonight
+
+**Findable names went from 39 of 68 to 51 of 68**, measured by searching each
+hand-read name exactly as a person would type it.
+
+Every one of those came from the repetition mark. These lists are written by
+family — the surname once, a ditto under it for each relative — and BS.ENT.013947
+p3 lists forty-eight people under nine surnames. The mark rarely survives the
+recogniser as its own token: it comes back glued to the name (`"Joze`,
+`,Friancisca`), or not at all. So the mark is now matched wherever it is, a row
+read as a single word no longer sets the family surname, and a lone given name
+under a family inherits it. Each inheritance records **how** it was arrived at —
+`mark`, `indent`, `position` — because a mark on the page and an inference from
+position are different claims: the review UI dots an inferred surname in the
+warning colour and says so on hover, and the CSV carries a `sobrenome_origem`
+column. The reading itself is never touched.
+
+Resolution runs at index time as well as at reading time, so improving the rule
+reaches the whole corpus in a second rather than in hours.
+
+### Four things that did not work, measured and dropped
+
+Worth writing down, because each looked obviously right:
+
+| | result | verdict |
+|---|---|---|
+| recogniser input 960 px and 1280 px wide | CER 0.515, 0.581 against **0.458** | 640 px stays |
+| `PP-OCRv5_server_rec`, a bigger model | CER 0.516, 41/68 findable against 52 | current model stays |
+| removing the printed rules from each crop | CER 0.461 against 0.458 | kept behind `DESEMBARQUE_DERULE=1` |
+| matching word by word instead of whole-string | findable 44/68 against 51 | reverted |
+| folding OCR-confusable letters together | 51/68, unchanged, and it broke the pool's guarantees | reverted |
+
+Handwriting recognition is at its ceiling for what runs on this machine. That is
+now a measured statement rather than an impression.
+
+### The two pages the golden set carried as unsolved
+
+Both are solved, and they failed differently. On BS.ENT.016574 three letterhead
+lines sat above the table and took every candidate slot, so the heading was never
+read — a heading is a row of short cells and a letterhead line is a sentence, so
+candidate lines are now required to be made of short cells. On OL.PRJ.17851 the
+writing is too faint for the detector to see at all — thirty boxes on a page of
+twenty-three names — while the recogniser reads those names perfectly once a band
+is cut for it; there the rules still supply the rows and the printing keeps the
+column, recorded as `measured_by: printed columns, ruled rows`.
+
+**Ten of ten golden pages now measure from the printing.**
+
+### Also
+
+An empty ruled row is no longer sent to the recogniser. A list is printed with
+thirty rows and often carries three, and now that the bands cover the whole list
+rather than a third of it, reading the blanks was most of the corpus's time.
+
+### The refresh
+
+Started once, at 19:41, on schema 18, and left alone: 660 dossiers, four workers,
+resumable from the content-hash cache. Everything above is in it. Where it stops,
+`curl 'http://127.0.0.1:8799/api/index'` says, and starting it again picks up
+where it left off.
+
 ## 2026-08-21 — afternoon (branch `rows-from-writing`, merged)
 
 Allan opened four dossiers and most of what came back was gibberish. He was

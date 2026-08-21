@@ -120,6 +120,30 @@ window.addEventListener("load",async()=>{
      [...dots].every(d=>(d.getAttribute("aria-label")||"").length>3));
   ok("all three semaphore states present on this page",
      ["hi","mid","lo"].every(k=>document.querySelector(".dot."+k)));
+  // Names the archive knows, offered for a mangled word: guesses, and shown as
+  // guesses. Off unless asked for, in their own labelled section, never mixed
+  // in among the readings unless that was asked for too.
+  ok("probable names are off until they are asked for",
+     q("#guessbtn").getAttribute("aria-pressed")==="false");
+  ok("the ordering toggle is hidden until then", q("#guessfirst").hidden);
+  q("#guessbtn").click(); await wait(60);
+  ok("asking for them shows the ordering toggle", !q("#guessfirst").hidden);
+  if(SERVED_RUN){
+    const pill=document.querySelector("#rows .altword");
+    if(pill){
+      pill.click(); await wait(600);
+      const menu=document.querySelector(".altmenu");
+      ok("the menu still offers what the engine read",
+         !!menu && /leituras do motor/.test(menu.textContent));
+      ok("a guess is labelled as not read from the page",
+         !menu || !menu.querySelector("button.guess")
+         || /não lidos da página/.test(menu.textContent));
+      closeAltMenu ? closeAltMenu() : document.body.click();
+    }
+  }
+  q("#guessbtn").click(); await wait(40);
+  ok("they can be turned off again", q("#guessbtn").getAttribute("aria-pressed")==="false");
+
   // manual transcription must survive a refresh, or an hour of typing is lost
   if(typeof SERVED!=="undefined" && SERVED){
     const cell0=document.querySelector('#rows tr[data-i="0"] [data-f="occupation"]');

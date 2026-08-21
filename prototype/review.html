@@ -155,6 +155,9 @@
      dot means the one thing that does warrant it — a person read the scan. */
   .dot.hi{background:var(--muted);border-color:var(--muted)}
   .dot.person{background:var(--ok);border-color:var(--ok)}
+  .altmenu .why.guessy{color:var(--warn);border-top:1px solid var(--line);margin-top:4px;padding-top:5px}
+  .altmenu button.guess{color:var(--warn)}
+  .altmenu button.guess i{font-style:normal;opacity:.7;margin-left:6px}
   .dot.mid{background:var(--warn);border-color:var(--warn);
            background:repeating-linear-gradient(45deg,var(--warn) 0 2px,transparent 2px 4px)}
   .dot.lo{background:transparent;border-color:var(--bad);border-style:double;border-width:3px}
@@ -205,6 +208,10 @@
       <option value="all">Todas as colunas</option>
     </select>
     <span id="findcount"></span>
+    <button id="guessbtn" type="button" aria-pressed="false"
+      title="Mostrar nomes prováveis deste acervo junto às leituras do motor. São palpites, não leituras.">≈ Prováveis</button>
+    <button id="guessfirst" type="button" aria-pressed="false" hidden
+      title="Listar os palpites antes das leituras do motor">↑ primeiro</button>
     <button id="prev" title="Anterior (Shift+Enter)">↑</button>
     <button id="next" title="Próximo (Enter)">↓</button>
   </div>
@@ -1073,10 +1080,15 @@ document.addEventListener("click",e=>{
   const words = nameText(r).split(/\s+/);
   const menu = document.createElement("div");
   menu.className = "altmenu";
-  menu.innerHTML = `<div class="why">outras leituras do motor</div>`
+  const readings = `<div class="why">outras leituras do motor</div>`
     + [words[w], ...alts].map(o =>
         `<button data-o="${o}" class="${o===words[w]?"on":""}">${o}</button>`).join("");
+  menu.innerHTML = readings + (GUESSES ? `<div class="why guessy">carregando…</div>` : "");
   document.body.appendChild(menu);
+  // The guesses are fetched rather than baked in: they come from the archive's
+  // own typed pages, they are not what the page says, and the menu has to be
+  // usable before they arrive.
+  if(GUESSES) fetchGuesses(menu, words[w], readings);
   const box = pill.getBoundingClientRect();
   menu.style.left = `${Math.round(box.left + scrollX)}px`;
   menu.style.top = `${Math.round(box.bottom + scrollY + 2)}px`;
@@ -1086,6 +1098,37 @@ document.addEventListener("click",e=>{
     closeAltMenu();
   });
 });
+// Names this archive is known to carry, offered for a word the engine mangled.
+// They are guesses and everything about how they are shown says so: their own
+// section, their own colour, the word "palpite", and never mixed in among the
+// readings unless the person asked for that too. Nothing is stored unless one is
+// chosen, and then it is stored as that person's typing, like any correction.
+let GUESSES=false, GUESSES_FIRST=false;
+function fetchGuesses(menu, word, readings){
+  fetch(`/api/names?q=${encodeURIComponent(word)}`).then(r=>r.json()).then(j=>{
+    if(!document.body.contains(menu)) return;
+    const gs=(j.guesses||[]);
+    const block = gs.length
+      ? `<div class="why guessy">palpites do acervo — <b>não lidos da página</b></div>`
+        + gs.map(g=>`<button data-o="${g.name}" class="guess"
+             title="parecido com a leitura (${Math.round(g.score*100)}%) · ${g.seen}× neste acervo · palpite, confira no original"
+             >${g.name}<i>≈</i></button>`).join("")
+      : `<div class="why guessy">nenhum nome parecido no acervo</div>`;
+    menu.innerHTML = GUESSES_FIRST ? block + readings : readings + block;
+  }).catch(()=>{ const w=menu.querySelector(".guessy"); if(w) w.textContent="palpites indisponíveis"; });
+}
+$("#guessbtn").addEventListener("click",()=>{
+  GUESSES=!GUESSES;
+  $("#guessbtn").setAttribute("aria-pressed", GUESSES?"true":"false");
+  $("#guessfirst").hidden=!GUESSES;
+  closeAltMenu();
+});
+$("#guessfirst").addEventListener("click",()=>{
+  GUESSES_FIRST=!GUESSES_FIRST;
+  $("#guessfirst").setAttribute("aria-pressed", GUESSES_FIRST?"true":"false");
+  closeAltMenu();
+});
+
 // Choosing between readings the engine produced is a correction like any other:
 // it is recorded, the row counts as checked by a person, and it is saved.
 function chooseReading(i, w, word){

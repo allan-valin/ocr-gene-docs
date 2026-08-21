@@ -690,3 +690,25 @@ def test_asking_for_the_geometry_of_a_document_nobody_read(server):
     base, folder = server
     st, body = call(f"{base}/api/geometry?hash=" + "0" * 64)
     assert st == 200 and body["pages"] == {}
+
+
+def test_the_archive_offers_names_it_knows_for_a_mangled_word(server, monkeypatch):
+    """Recognition is at its ceiling on cursive. What is left to help somebody
+    reading `Saliador` is the list of names these ships carried — offered as
+    guesses, with the response saying in as many words that they are not
+    readings."""
+    base, folder = server
+    from desembarque.gazetteer import Names
+    monkeypatch.setattr(serve, "NAMES", Names({"SALVADOR": 30, "MARIA": 161}))
+    st, body = call(f"{base}/api/names?q=Saliador")
+    assert st == 200
+    assert [g["name"] for g in body["guesses"]] == ["SALVADOR"]
+    assert "não é leitura do motor" in body["source"]
+
+
+def test_a_word_with_no_likely_name_gets_an_empty_list(server, monkeypatch):
+    base, folder = server
+    from desembarque.gazetteer import Names
+    monkeypatch.setattr(serve, "NAMES", Names({"SALVADOR": 30}))
+    st, body = call(f"{base}/api/names?q=Kowalczyk")
+    assert st == 200 and body["guesses"] == []
