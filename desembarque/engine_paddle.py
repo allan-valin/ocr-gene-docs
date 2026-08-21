@@ -615,6 +615,81 @@ class PaddleEngine:
             return refine(im.crop(box), margin)
         return crop
 
+    # ---- the table, measured from what is printed on it ---------------------
+
+    def _make_detector(self):
+        from paddleocr import TextDetection
+        # oneDNN refuses this model the same way it refuses the pipeline, and
+        # here there is nothing to fall back to, so it is off from the start.
+        kw = {"model_name": self.det_model, "enable_mkldnn": False}
+        if self.threads:
+            kw["cpu_threads"] = self.threads
+        return TextDetection(**kw)
+
+    def _detector(self):
+        det = getattr(self._local, "det", None)
+        if det is None:
+            det = self._local.det = self._make_detector()
+        return det
+
+    def _detect(self, image: Path) -> list[dict]:
+        """Every text box on the page, with no opinion about what it says.
+
+        Three seconds against the eighty a dense page costs to read, and the
+        table's geometry is a question about where the printing is.
+        """
+        out = []
+        for r in self._detector().predict(str(image)):
+            d = r.json.get("res", r.json) if hasattr(r, "json") else {}
+            for poly in (d.get("dt_polys") or []):
+                try:
+                    xs = [float(pt[0]) for pt in poly]
+                    ys = [float(pt[1]) for pt in poly]
+                except (TypeError, ValueError, IndexError):
+                    continue
+                out.append({"x0": min(xs), "y0": min(ys),
+                            "x1": max(xs), "y1": max(ys)})
+        return out
+
+    def _read_boxes(self, image: Path, boxes: list[dict]) -> list[dict]:
+        """What a handful of boxes say. Used only to find the column headings."""
+        if not boxes:
+            return []
+        from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None
+        with Image.open(image) as im:
+            crops = [im.crop((int(b["x0"]) - 2, int(b["y0"]) - 2,
+                              int(b["x1"]) + 2, int(b["y1"]) + 2)).convert("RGB")
+                     for b in boxes]
+        said = self._recognize(crops)
+        return [{**b, "text": t} for b, (t, _s) in zip(boxes, said)]
+
+    def _printed_table(self, image: Path):
+        """The table measured from the page's own printing, or None.
+
+        The boxes come from the readable copy — 2000 px on the long side — and
+        the geometry is normalised, so it applies to the full-resolution page
+        the rows are actually cut from.
+        """
+        from PIL import Image
+        from .tablegrid import heading_lines, table
+        Image.MAX_IMAGE_PIXELS = None
+        small = self._readable_copy(image)
+        try:
+            with Image.open(small) as im:
+                w, h = im.size
+        except (OSError, ValueError):
+            return None
+        try:
+            boxes = self._detect(small)
+        except Exception:
+            return None       # a page detection cannot cross is not a table
+        if not boxes:
+            return None
+        labelled = self._read_boxes(small, heading_lines(boxes, h))
+        return table(boxes, w, h, labelled=labelled)
+
+
     def transcribe_page(self, image: Path, kind: str = "unknown",
                         source: Path | None = None,
                         page: int | None = None,
@@ -636,7 +711,16 @@ class PaddleEngine:
             from page_geometry import analyze
             Image.MAX_IMAGE_PIXELS = None
 
-            geo = analyze(image)
+            # What is printed on the table beats what is ruled on it. The page
+            # is read once, whole: that pass carries the letterhead and the
+            # voyage, which were being read from a separate strip, and it also
+            # carries the column headings and the printed ordinals — from which
+            # the name column and the rows can be measured without trusting a
+            # rule the scan may have lost. See desembarque.tablegrid.
+            geo = self._printed_table(image)
+            printed = geo is not None
+            if geo is None:
+                geo = analyze(image)
             if not geo.rows or not geo.name_column(0):
                 # no grid is a legitimate answer: many pages are not tables
                 return PageResult(kind="unknown", engine=self.name,
@@ -672,6 +756,10 @@ class PaddleEngine:
                 geometry={"rows": geo.normalized_rows(),
                           "columns": geo.normalized_cols(),
                           "skew": geo.skew,
+                          # which measurement the rows were cut from, because
+                          # the two fail in different ways and a band that
+                          # disagrees with the scan has to be traceable
+                          "measured_by": "printing" if printed else "rules",
                           "read_from": "render" if from_render else "mask"},
             )
         except Exception as e:

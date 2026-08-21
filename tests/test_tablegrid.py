@@ -1,0 +1,217 @@
+"""Finding the table from what is printed on it, not from its rules.
+
+The rules on these sheets are the least reliable thing about them. The vertical
+ones are missing or faint on most pages, so the name column — chosen as the
+widest gap between the rules that were found — came out as the *Procedencia*
+column on BS.ENT.013947 p3, and as two thirds of the sheet on BS.ENT.013983 p2.
+The horizontal ones are dotted, and the comb fitted to them locked onto the
+empty ruled area below the list on 013983 and sat half a row out of phase on
+013942, so every crop straddled two rows.
+
+Two things on the page are printed and read cleanly: the column headings, and
+the ordinal in the first column, which is printed on every ruled row whether
+anybody wrote on it or not. The fixtures here are the detector's verbatim
+output over the whole page at 2000 px.
+"""
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from desembarque.tablegrid import columns, row_anchors
+
+FIX = Path(__file__).parent / "fixtures"
+
+
+def page(name):
+    d = json.loads((FIX / f"frags-{name}.json").read_text(encoding="utf-8"))
+    return d["fragments"], d["width"], d["height"]
+
+
+def test_the_name_column_is_the_one_under_its_own_heading():
+    """`Nome e Cognomes` is printed above it on every list in the corpus."""
+    frs, W, H = page("013947-3")
+    col = columns(frs, W, H)
+    assert col is not None
+    x0, x1 = col["name"]
+    # the names on this page are written between 0.11 and 0.36 of the width
+    assert 0.05 <= x0 / W <= 0.12, x0 / W
+    assert 0.33 <= x1 / W <= 0.40, x1 / W
+
+
+def test_the_column_is_bounded_by_the_headings_beside_it():
+    """`Nacionalidade` prints to its right and `Ordem numerica` to its left, so
+    neither the number nor the nationality is handed to the recogniser as part
+    of somebody's name."""
+    frs, W, H = page("013983-2")
+    col = columns(frs, W, H)
+    x0, x1 = col["name"]
+    assert 0.04 <= x0 / W <= 0.11
+    assert 0.26 <= x1 / W <= 0.32
+
+
+def test_the_heading_row_is_where_the_table_starts():
+    frs, W, H = page("013942-2")
+    col = columns(frs, W, H)
+    # the printed heading band sits at 0.28 of the height on this sheet
+    assert 0.27 <= col["top"] / H <= 0.30
+
+
+def test_the_ordinal_column_is_found_beside_the_names():
+    frs, W, H = page("013942-2")
+    col = columns(frs, W, H)
+    assert col["ordinal"] is not None
+    a, b = col["ordinal"]
+    assert b <= col["name"][0] + 2 and a / W < 0.10
+
+
+def test_a_page_with_no_heading_reports_none():
+    assert columns([{"text": "nothing", "x0": 0, "y0": 0, "x1": 5, "y1": 5}],
+                   100, 100) is None
+
+
+def test_the_rows_are_where_the_ordinals_are_printed():
+    """013942 p2 lists one passenger and the rest of the sheet is blank, but
+    the ordinals are printed down all thirty ruled rows. The comb fitted to the
+    ink put band 1 over printed row 3 and half a row low; the ordinals put every
+    band on its own row."""
+    frs, W, H = page("013942-2")
+    col = columns(frs, W, H)
+    rows = row_anchors(frs, col, H)
+    assert 28 <= len(rows) <= 32, len(rows)
+    top, bottom = rows[0]
+    # the first written row — `Ponticelli Giovanni` — sits at 0.309-0.344
+    assert top / H <= 0.315 and bottom / H >= 0.335, (top / H, bottom / H)
+
+
+def test_a_row_holds_the_line_that_was_written_on_it():
+    frs, W, H = page("013983-2")
+    col = columns(frs, W, H)
+    rows = row_anchors(frs, col, H)
+    # fourteen typed passengers, then the tally block below them
+    assert len(rows) >= 14
+    first = rows[0]
+    name = next(f for f in frs if f["text"].startswith("Oswaldo"))
+    mid = (name["y0"] + name["y1"]) / 2
+    assert first[0] <= mid <= first[1], "the first row does not cover the first name"
+
+
+def test_every_written_line_falls_inside_exactly_one_row():
+    """A band that straddles two rows is what produced the gibberish: the crop
+    carried the descenders of one name and the ascenders of the next."""
+    frs, W, H = page("013947-3")
+    col = columns(frs, W, H)
+    rows = row_anchors(frs, col, H)
+    x0, x1 = col["name"]
+    written = [f for f in frs
+               if min(f["x1"], x1) - max(f["x0"], x0) > 0.4 * (f["x1"] - f["x0"])
+               and f["y0"] > col["top"]]
+    assert len(written) >= 30
+    homeless = [f["text"] for f in written
+                if not any(r[0] <= (f["y0"] + f["y1"]) / 2 <= r[1] for r in rows)]
+    assert len(homeless) <= 2, homeless
+
+
+def test_the_table_is_offered_in_the_shape_the_engine_already_reads():
+    """`rows_from_bands`, the row cutter and the review UI all take a geometry
+    and ask it for normalised bands and a name column."""
+    from desembarque.tablegrid import table
+    frs, W, H = page("013983-2")
+    t = table(frs, W, H)
+    assert t is not None
+    assert len(t.normalized_rows()) == len(t.rows) >= 14
+    a, b = t.name_column(0)
+    assert 0.04 <= a <= 0.11 and 0.26 <= b <= 0.32
+    assert all(0 <= x <= 1 for band in t.normalized_rows() for x in band)
+    # the strip above the table, which is where the voyage is printed
+    assert min(t.row_edges) == t.top
+
+
+def test_a_page_with_no_table_offers_nothing():
+    from desembarque.tablegrid import table
+    assert table([{"text": "x", "x0": 0, "y0": 0, "x1": 1, "y1": 1}], 10, 10) is None
+
+
+def strip_text(frs):
+    return [{k: v for k, v in f.items() if k != "text"} for f in frs]
+
+
+def test_the_table_is_measured_from_boxes_the_recogniser_never_read():
+    """Detection alone costs three seconds on a page that costs eighty to read,
+    and the measurement needs where the printing is, not what it says. Only the
+    heading has to be read, to know which column is which."""
+    from desembarque.tablegrid import table
+    frs, W, H = page("013947-3")
+    heading = [f for f in frs if "cognome" in f["text"].lower()
+               or "nacionalidade" in f["text"].lower()]
+    t = table(strip_text(frs), W, H, labelled=heading)
+    assert t is not None
+    assert 44 <= len(t.rows) <= 50, len(t.rows)
+    a, b = t.name_column(0)
+    assert 0.05 <= a <= 0.12 and 0.33 <= b <= 0.40
+
+
+def test_without_the_heading_there_is_no_table_to_measure():
+    from desembarque.tablegrid import table
+    frs, W, H = page("013947-3")
+    assert table(strip_text(frs), W, H, labelled=[]) is None
+
+
+def test_only_the_heading_row_is_worth_reading():
+    """The whole page costs eighty seconds to read and three to detect. What
+    has to be read is the line that says which column is which."""
+    from desembarque.tablegrid import heading_lines
+    frs, W, H = page("013947-3")
+    boxes = strip_text(frs)
+    picked = heading_lines(boxes, H)
+    assert len(picked) <= 40, len(picked)
+    heads = [f for f in frs if f["text"].strip().lower() == "nome e cognomes"]
+    assert heads, "fixture lost its heading"
+    h = heads[0]
+    assert any(abs(b["x0"] - h["x0"]) < 2 and abs(b["y0"] - h["y0"]) < 2
+               for b in picked), "the name heading was not among the boxes read"
+
+
+def test_the_boxes_come_in_the_detector_s_order_not_the_page_s():
+    """The pitch is the median gap between the printed ordinals, and the
+    detector reports its boxes in whatever order it found them. Measured over
+    that order, the gaps are half of them negative and the page reports no rows
+    at all — which is how BS.ENT.013942 fell back to its rules."""
+    import random
+    from desembarque.tablegrid import table
+    frs, W, H = page("013942-2")
+    shuffled = list(frs)
+    random.Random(7).shuffle(shuffled)
+    a = table(frs, W, H)
+    b = table(shuffled, W, H)
+    assert a is not None and b is not None
+    assert len(a.rows) == len(b.rows)
+
+
+def test_the_heading_is_the_first_such_line_not_the_busiest():
+    """A data row has a cell in every column, and often one more than the
+    heading: on 013983 the rows outvoted it."""
+    from desembarque.tablegrid import heading_lines
+    frs, W, H = page("013983-2")
+    picked = heading_lines(strip_text(frs), H)
+    head = next(f for f in frs if f["text"].strip().lower() == "nome e cognomes")
+    assert any(abs(b["y0"] - head["y0"]) < 2 and abs(b["x0"] - head["x0"]) < 2
+               for b in picked)
+
+
+def test_a_row_the_detector_returned_whole_is_still_a_row():
+    """On 013942 the detector hands back the entire row as one box — the name,
+    the nationality, the age and the marital state — and only a quarter of it
+    is the name. Judged by the box alone that row is thrown away, and the page
+    reports thirty-one empty rows with its one passenger missing."""
+    from desembarque.tablegrid import columns, written_lines
+    frs, W, H = page("013942-2")
+    col = columns(frs, W, H)
+    x0, x1 = col["name"]
+    whole_row = {"x0": 0.086 * W, "x1": 0.778 * W,
+                 "y0": 0.306 * H, "y1": 0.343 * H}
+    assert written_lines([whole_row], col) == [whole_row]
+    # and a box that merely touches the column's edge is not a name
+    edge = {"x0": x1 - 3, "x1": x1 + 400, "y0": 0.5 * H, "y1": 0.52 * H}
+    assert written_lines([edge], col) == []
