@@ -74,3 +74,18 @@ def test_a_rebuilt_dictionary_is_picked_up_without_a_restart(tmp_path):
     f.write_text(json.dumps({"names": {"SILVA": 3, "PEREIRA": 2}}), encoding="utf-8")
     assert len(names.fresh()) == 2
     assert len(names.fresh().fresh()) == 2
+
+
+def test_a_reading_that_resembles_no_name_here_is_flagged_for_a_person():
+    """For deciding which rows to look at first, and nothing else."""
+    assert ARCHIVE.doubtful("Xqzw Vbnm")
+    assert not ARCHIVE.doubtful("Maria Silva")
+    # a mangled reading that still resembles a name is not flagged: the person
+    # has better uses for their afternoon
+    assert not ARCHIVE.doubtful("Mavia Silwa")
+
+
+def test_an_empty_reading_is_not_doubtful():
+    """A blank row is a fact about the page, not a suspect one."""
+    assert not ARCHIVE.doubtful("")
+    assert not ARCHIVE.doubtful("  ")

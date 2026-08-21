@@ -155,6 +155,9 @@
      dot means the one thing that does warrant it — a person read the scan. */
   .dot.hi{background:var(--muted);border-color:var(--muted)}
   .dot.person{background:var(--ok);border-color:var(--ok)}
+  /* Rows whose reading resembles no name this archive carries. A claim about
+     the archive, not about the row: rare names live here too. */
+  tr.doubt td.name{box-shadow:inset 3px 0 0 var(--warn)}
   .altmenu .why.guessy{color:var(--warn);border-top:1px solid var(--line);margin-top:4px;padding-top:5px}
   .altmenu button.guess{color:var(--warn)}
   .altmenu button.guess i{font-style:normal;opacity:.7;margin-left:6px}
@@ -212,6 +215,8 @@
       title="Mostrar nomes prováveis deste acervo junto às leituras do motor. São palpites, não leituras.">≈ Prováveis</button>
     <button id="guessfirst" type="button" aria-pressed="false" hidden
       title="Listar os palpites antes das leituras do motor">↑ primeiro</button>
+    <button id="doubtbtn" type="button" aria-pressed="false"
+      title="Marcar as linhas cuja leitura não se parece com nenhum nome deste acervo. Não quer dizer que estejam erradas.">? Duvidosas</button>
     <button id="prev" title="Anterior (Shift+Enter)">↑</button>
     <button id="next" title="Próximo (Enter)">↓</button>
   </div>
@@ -445,6 +450,34 @@ function nameCell(r){
       >${w}<i>&#9662;</i></span>`;
   }).join(" ");
 }
+// Which rows resemble no name this archive carries, so a person checking four
+// hundred rows knows where to start. Asked for once per page and never stored:
+// it is an opinion about the reading, and the reading is the record.
+let DOUBTS=false;
+function markDoubtful(){
+  document.querySelectorAll("#rows tr.doubt").forEach(tr=>tr.classList.remove("doubt"));
+  if(!DOUBTS || !SERVED || !D) return;
+  const n=(D.pages[pageIdx]||{}).n;
+  fetch(`/api/check?hash=${encodeURIComponent(D.hash||"")}&page=${n}`)
+    .then(r=>r.json()).then(j=>{
+      const bad=new Set((j.rows||[]).filter(r=>r.doubtful).map(r=>r.n));
+      rows.forEach((r,i)=>{
+        if(bad.has(r.n)){
+          const tr=document.querySelector(`#rows tr[data-i="${i}"]`);
+          if(tr){ tr.classList.add("doubt");
+                  tr.title="nenhuma palavra desta leitura se parece com um nome "
+                         + "deste acervo — confira no original"; }
+        }
+      });
+      $("#stat").textContent=`${j.doubtful} de ${j.of} linhas sem semelhança com nomes do acervo`;
+    }).catch(()=>{});
+}
+$("#doubtbtn").addEventListener("click",()=>{
+  DOUBTS=!DOUBTS;
+  $("#doubtbtn").setAttribute("aria-pressed", DOUBTS?"true":"false");
+  markDoubtful();
+});
+
 function render(){
   $("#rows").innerHTML = rows.map((r,i)=>`
     <tr data-i="${i}" class="${r.verified?"verified":""}">
@@ -556,6 +589,7 @@ function openDoc(i,page){
   $("#stat").textContent = showRows ? "" : "sem transcrição";
   // and again once this dossier's own measurements arrive
   loadGeometry().then(()=>{ applyGeometry(); paintBand(sel); });
+  markDoubtful();
 }
 $("#doclist").addEventListener("click",e=>{
   const d=e.target.closest(".doc"); if(d) openDoc(+d.dataset.d);

@@ -712,3 +712,24 @@ def test_a_word_with_no_likely_name_gets_an_empty_list(server, monkeypatch):
     monkeypatch.setattr(serve, "NAMES", Names({"SALVADOR": 30}))
     st, body = call(f"{base}/api/names?q=Kowalczyk")
     assert st == 200 and body["guesses"] == []
+
+
+def test_a_page_says_which_rows_a_person_should_look_at(server, monkeypatch):
+    """Four hundred rows a dossier is more than anyone reads twice. The ones
+    worth a second look are those where nothing in the reading resembles a name
+    this archive carries — which is a claim about the archive, not about the
+    row, and the answer says so."""
+    base, folder = server
+    from desembarque.gazetteer import Names
+    monkeypatch.setattr(serve, "NAMES", Names({"SILVA": 40, "MARIA": 161}))
+    serve.JOBS.store("h" * 8, {"hash": "h" * 8, "rows": [
+        {"n": 1, "page": 2, "name_raw": "Maria Silva"},
+        {"n": 2, "page": 2, "name_raw": "Xqzw Vbnm"},
+        {"n": 3, "page": 2, "name_raw": ""},
+    ]})
+    st, body = call(f"{base}/api/check?hash={'h' * 8}&page=2")
+    assert st == 200
+    assert body["of"] == 2, "a blank row is not something to check"
+    assert body["doubtful"] == 1
+    assert [r["n"] for r in body["rows"] if r["doubtful"]] == [2]
+    assert "não quer dizer que esteja errada" in body["means"]

@@ -144,6 +144,21 @@ window.addEventListener("load",async()=>{
   q("#guessbtn").click(); await wait(40);
   ok("they can be turned off again", q("#guessbtn").getAttribute("aria-pressed")==="false");
 
+  // Which rows to look at first, when a dossier has four hundred of them.
+  ok("doubtful rows are off until asked for",
+     q("#doubtbtn").getAttribute("aria-pressed")==="false"
+     && !document.querySelector("#rows tr.doubt"));
+  if(SERVED_RUN){
+    q("#doubtbtn").click(); await wait(700);
+    ok("asking marks them, or says none were found",
+       q("#doubtbtn").getAttribute("aria-pressed")==="true");
+    const marked=[...document.querySelectorAll("#rows tr.doubt")];
+    ok("a marked row says what the mark means",
+       marked.every(tr=>/acervo/.test(tr.getAttribute("title")||"")));
+    q("#doubtbtn").click(); await wait(200);
+    ok("and they can be cleared", !document.querySelector("#rows tr.doubt"));
+  }
+
   // manual transcription must survive a refresh, or an hour of typing is lost
   if(typeof SERVED!=="undefined" && SERVED){
     const cell0=document.querySelector('#rows tr[data-i="0"] [data-f="occupation"]');

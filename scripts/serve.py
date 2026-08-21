@@ -59,6 +59,13 @@ STATE = {"root": ROOT / "data" / "scans"}
 # Built by scripts/build_names.py out of the pages this archive typed. Absent is
 # a legitimate state: the menu then offers only what the engine read.
 NAMES = Names.load(ROOT / "data" / "names.json")
+
+
+def current_names() -> Names:
+    """The dictionary, rebuilt from disk if it has changed since it was read."""
+    global NAMES
+    NAMES = NAMES.fresh()
+    return NAMES
 JOBS = JobRunner(ROOT / "data" / "transcriptions")
 BATCH = BatchIndexer()
 # Documents are indexed in parallel: one page is ~4 s, and a real folder is
@@ -482,15 +489,33 @@ class Handler(BaseHTTPRequestHandler):
                 # Names this archive is known to carry, offered for one word.
                 # They are guesses and the response says so; the caller shows
                 # them as guesses and stores nothing unless a person picks one.
-                global NAMES
-                NAMES = NAMES.fresh()
                 word = q.get("q", "")
                 return self._send(200, {
                     "word": word,
-                    "guesses": NAMES.suggest(word),
-                    "of": len(NAMES),
+                    "guesses": current_names().suggest(word),
+                    "of": len(current_names()),
                     "source": "páginas datilografadas deste acervo e linhas "
                               "digitadas por pessoas — não é leitura do motor",
+                })
+
+            if u.path == "/api/check":
+                # Which rows on a page a person should look at first: the ones
+                # where nothing in the reading resembles a name this archive
+                # carries. It says nothing about whether the row is wrong — a
+                # rare name is unknown here and perfectly correct.
+                stored = JOBS.cached(q.get("hash", "")) or {}
+                page = int(q.get("page", 0) or 0)
+                rows = [r for r in stored.get("rows") or []
+                        if not page or r.get("page") == page]
+                out = [{"n": r.get("n"),
+                        "doubtful": current_names().doubtful(searchlib.row_text(r))}
+                       for r in rows if (r.get("name_raw") or "").strip()]
+                return self._send(200, {
+                    "page": page, "rows": out,
+                    "doubtful": sum(1 for r in out if r["doubtful"]),
+                    "of": len(out),
+                    "means": "nenhuma palavra da leitura se parece com um nome "
+                             "deste acervo — não quer dizer que esteja errada",
                 })
 
             if u.path == "/api/geometry":

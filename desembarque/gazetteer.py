@@ -112,6 +112,20 @@ class Names:
         out.sort(key=lambda c: (-c["score"], -c["seen"], c["name"]))
         return [c for c in out if c["name"] != w][:limit]
 
+    def doubtful(self, text: str) -> bool:
+        """Whether nothing in this reading resembles a name the archive carries.
+
+        For deciding which rows a person should look at first, not for deciding
+        anything about the rows themselves. A rare name that sailed once is
+        flagged by this and is perfectly correct — which is why the flag says
+        *unknown to this archive* rather than *wrong*.
+        """
+        words = [w for w in fold(text).split() if len(w) >= 3]
+        if not words:
+            return False
+        return all(self.score(w) < 1.0 and not self.suggest(w, limit=1)
+                   for w in words)
+
     def rank(self, readings: list[str]) -> list[dict]:
         """The engine's own readings of one word, ordered by how name-like they are.
 
