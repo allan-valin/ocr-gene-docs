@@ -300,6 +300,29 @@ RE_YEAR_TAIL = re.compile(r"de\s*(\d{2}[\s.,]*\d{0,2})\b", re.I)
 RE_PORT = re.compile(r"^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.' ]{2,23}?)\s*,")
 
 
+def strip_leading_marks(value: str | None) -> str | None:
+    """The value without the form's own marks in front of it.
+
+    These sheets print a footnote number above each blank — `(2)`, `(4)` — and
+    the detector reads it as the first word of whatever was written there:
+    `()JENOS AYRES` for a port, `(2) Duca degli Abruzzi` for a ship. The marks
+    belong to the form, not to the answer.
+    """
+    if not value:
+        return value
+    words = list(value.split())
+    while words and (RE_FOOTNOTE.fullmatch(words[0])
+                     or not any(c.isalnum() for c in words[0])):
+        words = words[1:]
+    if not words:
+        return value
+    # and the same marks glued to the front of the first word, with no space:
+    # `()JENOS AYRES`, `(2)Duca`
+    words[0] = re.sub(r"^[(\[]\s*\d{0,2}\s*[)\]]", "", words[0]).lstrip("()[]{}·.,-— ")
+    words = [w for w in words if w]
+    return _clean(" ".join(words)) if words else value
+
+
 def plausible_value(value: str | None) -> str | None:
     """The value, if it reads as a name rather than as noise.
 
@@ -719,9 +742,9 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
             # reads `passageios no Pague......` and `"Itabera` sits on the line
             # below it.
             v.ship = plausible_ship(_quoted_alone(lines), v.line)
-        v.origin = plausible_value(
+        v.origin = plausible_value(strip_leading_marks(
             (_positional(RE_ORIGIN, fragments) if fragments else None)
-            or _beside(RE_ORIGIN, lines))
+            or _beside(RE_ORIGIN, lines)))
         v.port = port
         _read_date(v, lines)
         if v.year is None:
@@ -753,7 +776,7 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
         v.flag = _clean(v.flag[:v.flag.index(quoted)]) or None
     v.ship = plausible_ship(quoted or _above(RE_PAQUETE, lines, skip=v.flag), v.line)
 
-    v.origin = plausible_value(_beside(RE_ORIGIN, lines))
+    v.origin = plausible_value(strip_leading_marks(_beside(RE_ORIGIN, lines)))
 
     _read_date(v, lines)
     if v.year is None:

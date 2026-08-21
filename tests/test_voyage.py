@@ -1005,3 +1005,12 @@ def test_a_printed_sentence_is_not_a_vessel():
 def test_the_footnote_s_empty_brackets_come_off():
     from desembarque.voyage import plausible_ship
     assert plausible_ship("()Duca degli Abruzzi", None) == "Duca degli Abruzzi"
+
+
+def test_the_form_s_footnote_is_not_part_of_the_port_it_sailed_from():
+    """`procedente de()JENOS AYRES` on BS.ENT.013942: the printed `(5)` above
+    the blank, its number lost, glued to Buenos Ayres."""
+    from desembarque.voyage import strip_leading_marks
+    assert strip_leading_marks("()JENOS AYRES") == "JENOS AYRES"
+    assert strip_leading_marks("(5) B. Aires e escalas") == "B. Aires e escalas"
+    assert strip_leading_marks("Montevideo") == "Montevideo"
