@@ -173,6 +173,18 @@ it is already built — the ship and the year. `Maria Rosa Carrana` is hopeless;
 `Maria Rosa Carrana 1922` should not be, and whether it is now is the first thing
 to measure next.
 
+#### And what `? Duvidosas` is worth
+
+Measured on the five hand-read pages: it flags 0%, 3%, 0%, 17% and 4% of the
+rows. It is not noisy — but on BS.ENT.013947 p3, where sixteen of forty-eight
+names cannot be found, it flags **nothing**. With 793 names in the list and a
+fuzzy match, almost every mangled reading resembles something.
+
+So it catches a genuinely alien reading and no more than that. The signal that
+does track difficulty is the recogniser's own score, which the row already shows,
+and the honest summary is that neither tells a person which sixteen rows are the
+problem. Written down here so nobody leans on it.
+
 #### What the guesses are actually worth
 
 Measured against the ninety-six hand-read names, with the list as it stands
