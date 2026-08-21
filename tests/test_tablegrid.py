@@ -215,3 +215,19 @@ def test_a_row_the_detector_returned_whole_is_still_a_row():
     # and a box that merely touches the column's edge is not a name
     edge = {"x0": x1 - 3, "x1": x1 + 400, "y0": 0.5 * H, "y1": 0.52 * H}
     assert written_lines([edge], col) == []
+
+
+def test_a_few_stray_ordinals_do_not_outvote_the_writing():
+    """On BS.ENT.015061 p6 five of the seventy printed numbers came through the
+    scan, three rows apart, and set the pitch for the page: sixteen bands, each
+    three rows tall, over a list of forty-six names."""
+    from desembarque.tablegrid import row_anchors
+    col = {"name": (100.0, 400.0), "ordinal": (60.0, 100.0), "top": 100.0}
+    sparse = [{"x0": 70, "x1": 90, "y0": 100 + 105 * i, "y1": 120 + 105 * i}
+              for i in range(5)]
+    dense = [{"x0": 110, "x1": 380, "y0": 110 + 35 * i, "y1": 140 + 35 * i}
+             for i in range(46)]
+    bands = row_anchors(sparse + dense, col, 2000)
+    assert len(bands) >= 40, len(bands)
+    heights = [b - a for a, b in bands]
+    assert max(heights) < 70, "a band is covering more than one row"

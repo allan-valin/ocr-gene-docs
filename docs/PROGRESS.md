@@ -4,6 +4,65 @@ Running checkpoint. Newest first. The design record is
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state and
 next actions.
 
+## 2026-08-21 — afternoon (branch `rows-from-writing`, merged)
+
+Allan opened four dossiers and most of what came back was gibberish. He was
+right, and the cause was not the recogniser.
+
+**Every measurement on these pages came from rules the scan has often lost.**
+The name column was the widest gap between the vertical rules that happened to
+be detected: on BS.ENT.013947 p3 that is the *Procedencia* column, so the engine
+read a column of ditto marks and filed it as names; on BS.ENT.013983 p2 it is two
+thirds of the sheet. The horizontal rules are dotted, and the comb fitted to them
+locked onto the empty ruled area *below* the typed list on 013983 — fourteen
+perfectly legible names, none of them read — while on 013942 it sat half a row
+out of phase and two rows late, so band 1 covered printed row 3 and every crop
+carried the descenders of one row and the ascenders of the next.
+
+`desembarque/tablegrid.py` measures the table from what is **printed** on it: the
+column headings, and the ordinal printed on every ruled row whether anybody wrote
+on it or not. Detection alone answers it — 3 s a page against the 55–80 s the
+page costs to read — and only the heading line is recognised, to know which
+column is which. The rules stay as the fallback for a page that prints no
+heading.
+
+| page | before | after |
+|---|---|---|
+| 013983 p2, typed | 26 rows, none of the 14 names | **14/14 verbatim** |
+| 013947 p3, cursive | 33 rows of the Procedencia column | 49 rows, names, 15 s |
+| 013942 p2, cursive | bands 2 rows late, the one name missed | the name, on row 1 |
+| 015061 p6, cursive | 50 rows | 46 rows, names |
+
+Surveyed over 40 random indexed pages: **32 measured from the printing**, mean
+9.2 s a page; the other 8 fall back to the rules exactly as before. Three bugs
+found in that survey and fixed with tests: the detector reports its boxes in its
+own order and the pitch was measured over it; the heading row was picked as the
+busiest line rather than the topmost full-width one, so a busy letterhead crowded
+it out; and five stray ordinals outvoted forty-six written lines, giving sixteen
+bands three rows tall.
+
+**The corpus on disk does not have any of this yet.** Schema is at **16** and
+every stored record is stale by design: this needs the page images again, so it
+is a re-index, not a re-parse — the run described at the top of this file, about
+four hours unattended.
+
+### What is left, and it is one thing
+
+The crop for 013942 row 1 now holds `Ponticelli Giovanni` whole and clean, and
+the recogniser says `Pouticelli Sooai`. Geometry is no longer the limit;
+**handwriting recognition is**, as this file has said since the first week, and
+now nothing else is in the way of measuring it. `scripts/bench_rec.py` scores a
+recogniser against the hand-read pages in `data/truth` — CER and, more to the
+point, whether the reading is still *findable* by search — and two truth pages
+were added for it: 013983 p2 (typed, the control) and 013947 p3 (48 cursive
+names, read by eye and uncertain, for ranking variants against each other).
+Nothing has been swept yet: the next session runs the input-width and model
+sweep against that bench.
+
+Also: the search scope control on the header is now a menu the page owns —
+visible against the panel, an arrow at text size, and it closes on the same
+click, on a click away, and on Escape.
+
 ## 2026-08-21 — night session (Allan away)
 
 Nine commits, all pushed. The two things last night's checkpoint named as next

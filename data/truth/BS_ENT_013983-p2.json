@@ -1,0 +1,14 @@
+{
+  "source": "read from the scan, page 2 name column",
+  "caution": "This page is typewritten and legible, so these are as close to certain as this corpus gets. It is the control: a recogniser that cannot read this page cannot read anything here.",
+  "pdf": "BR_RJANRIO_BS_0_RPV_ENT_013983_d0001de0001.pdf",
+  "page": 2,
+  "first_row": 1,
+  "names": [
+    "Oswaldo de Mello Mattos", "Maria de Mello Mattoz", "Antonio de Mattos",
+    "Eliza da Costa Guimaraes", "Gustavo Molta", "Amikal Molta",
+    "Heitor Nunes", "Luis Pedro Pereira", "Olimpio Ferreira Jorge",
+    "Fayne Crosmantelle", "Pedro Lammenn", "Sanaldo Costa", "Ramon Vamende",
+    "Maria de Almeida Serra"
+  ]
+}

@@ -41,6 +41,10 @@ DEFAULT_REC = os.environ.get("DESEMBARQUE_REC_MODEL", "PP-OCRv6_medium_rec")
 DEFAULT_DET = os.environ.get("DESEMBARQUE_DET_MODEL", "PP-OCRv6_medium_det")
 DEFAULT_THREADS = int(os.environ.get("DESEMBARQUE_CPU_THREADS", "0")) or None
 REC_INPUT_SHAPE = (3, 48, 640)
+# What detection runs at when the cheap pass found no table worth the name, and
+# how few rows count as "no table". Four times the cost of the default pass.
+FINE_DETECT_SIDE = 2000
+MIN_PRINTED_ROWS = 5
 PAD_PX = 6
 MIN_ROW_PX = 12
 INK_MARGIN = 4
@@ -617,29 +621,42 @@ class PaddleEngine:
 
     # ---- the table, measured from what is printed on it ---------------------
 
-    def _make_detector(self):
+    def _make_detector(self, side: int | None = None):
         from paddleocr import TextDetection
         # oneDNN refuses this model the same way it refuses the pipeline, and
         # here there is nothing to fall back to, so it is off from the start.
         kw = {"model_name": self.det_model, "enable_mkldnn": False}
+        if side:
+            kw["limit_side_len"] = side
+            kw["limit_type"] = "max"
         if self.threads:
             kw["cpu_threads"] = self.threads
         return TextDetection(**kw)
 
-    def _detector(self):
-        det = getattr(self._local, "det", None)
+    def _detector(self, side: int | None = None):
+        key = f"det{side or 0}"
+        det = getattr(self._local, key, None)
         if det is None:
-            det = self._local.det = self._make_detector()
+            det = self._make_detector(side)
+            setattr(self._local, key, det)
         return det
 
-    def _detect(self, image: Path) -> list[dict]:
+    def _detect(self, image: Path, side: int | None = None) -> list[dict]:
         """Every text box on the page, with no opinion about what it says.
 
         Three seconds against the eighty a dense page costs to read, and the
         table's geometry is a question about where the printing is.
+
+        `side` raises the resolution detection works at. At its default the
+        detector shrinks the page until the long side is under 960 px, and a
+        pencil line that survives the scan does not always survive that: on
+        OL.PRJ.17851 p2 a page of twenty-three names came back as thirty-two
+        boxes. Four times the cost, so it is asked for only when the cheap pass
+        found no table.
         """
+        det = self._detector(side)
         out = []
-        for r in self._detector().predict(str(image)):
+        for r in det.predict(str(image)):
             d = r.json.get("res", r.json) if hasattr(r, "json") else {}
             for poly in (d.get("dt_polys") or []):
                 try:
@@ -680,14 +697,20 @@ class PaddleEngine:
                 w, h = im.size
         except (OSError, ValueError):
             return None
-        try:
-            boxes = self._detect(small)
-        except Exception:
-            return None       # a page detection cannot cross is not a table
-        if not boxes:
-            return None
-        labelled = self._read_boxes(small, heading_lines(boxes, h))
-        return table(boxes, w, h, labelled=labelled)
+        for side in (None, FINE_DETECT_SIDE):
+            try:
+                boxes = self._detect(small, side)
+            except Exception:
+                return None   # a page detection cannot cross is not a table
+            if not boxes:
+                return None
+            labelled = self._read_boxes(small, heading_lines(boxes, h))
+            found = table(boxes, w, h, labelled=labelled)
+            if found is not None and len(found.rows) >= MIN_PRINTED_ROWS:
+                return found
+        # a page that has no table at this resolution either: the caller falls
+        # back to the rules, which is where it was before any of this
+        return found
 
 
     def transcribe_page(self, image: Path, kind: str = "unknown",

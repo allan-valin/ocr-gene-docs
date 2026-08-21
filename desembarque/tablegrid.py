@@ -36,6 +36,9 @@ ROW_OVERLAP = 0.3
 # `Potrcelli Soveni Nalia 3% eado` is a name, a nationality, an age and a marital
 # state — so the test is overlap, not the box's centre.
 COLUMN_OVERLAP = 0.35
+# How many printed ordinals have to be legible before they are trusted to set
+# the pitch rather than the writing.
+MIN_ORDINALS = 8
 
 
 def fold(text: str) -> str:
@@ -175,11 +178,17 @@ def row_anchors(fragments: list[dict], col: dict | None,
     written = written_lines(fragments, col)
     ord_c = [(f["y0"] + f["y1"]) / 2 for f in ords_]
     wri_c = [(f["y0"] + f["y1"]) / 2 for f in written]
-    pitch = _pitch(ord_c) or _pitch(wri_c)
+    # The ordinals are the better anchor because they are printed on the empty
+    # rows too — but only while they are actually being read. On BS.ENT.015061
+    # p6 five of the seventy-odd numbers came through, three rows apart, and
+    # they outvoted forty-six written lines: the page came back with sixteen
+    # bands, each three rows tall. Whichever source has more anchors wins.
+    use = ord_c if len(ord_c) >= max(MIN_ORDINALS, 0.5 * len(wri_c)) else wri_c
+    pitch = _pitch(use) or _pitch(ord_c) or _pitch(wri_c)
     if not pitch:
         return []
 
-    anchors = sorted(ord_c or wri_c)
+    anchors = sorted(use or ord_c or wri_c)
     base = anchors[0]
     # Index every anchor against the pitch, then take the phase that most of
     # them agree on rather than whichever happened to come first.
@@ -269,7 +278,12 @@ def table(fragments: list[dict], width: float, height: float,
 # A table's heading row is a line of several short boxes across the sheet, and
 # it is the only line that has to be read to know which column is which.
 HEADING_MIN_CELLS = 4
-HEADING_MAX_LINES = 3
+HEADING_MAX_LINES = 4
+# A table's heading row runs the width of the sheet. The letterhead above it
+# does not: it is centred, or set in two columns, and on the busier printings
+# there are three or four such lines above the table — enough to crowd the
+# heading out of the candidates entirely on BS.ENT.015937 and BS.ENT.016574.
+HEADING_MIN_SPAN = 0.55
 
 
 def lines_of(boxes: list[dict], tolerance: float = 0.5) -> list[list[dict]]:
@@ -293,9 +307,12 @@ def heading_lines(boxes: list[dict], height: float) -> list[dict]:
     A heading row is several short boxes on one line, above the writing. The
     candidates are read; everything else on the page stays a box.
     """
+    width = max((b["x1"] for b in boxes), default=0.0)
     lines = [ln for ln in lines_of(boxes)
              if len(ln) >= HEADING_MIN_CELLS
-             and min(b["y0"] for b in ln) < 0.7 * height]
+             and min(b["y0"] for b in ln) < 0.7 * height
+             and (max(b["x1"] for b in ln) - min(b["x0"] for b in ln))
+             >= HEADING_MIN_SPAN * width]
     # The topmost such lines, not the most populous: a data row has a cell in
     # every column and often one more than the heading — on BS.ENT.013983 the
     # rows outvoted the heading and the page fell back to its rules.
