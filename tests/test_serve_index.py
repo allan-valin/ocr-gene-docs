@@ -795,3 +795,20 @@ def test_a_row_is_flagged_for_the_reason_it_deserves(server, monkeypatch):
     assert why[3] == ["inferido"]
     assert why[4] == ["desconhecido"]
     assert body["doubtful"] == 3
+
+
+def test_an_older_record_is_judged_by_what_its_rows_mean(server, monkeypatch):
+    """A record written before the repetition mark was understood still says `"`
+    where a surname belongs. Search resolves that when it loads the index; the
+    check has to see the same thing, or the two disagree about the same row."""
+    base, folder = server
+    from desembarque.gazetteer import Names
+    monkeypatch.setattr(serve, "NAMES", Names({"MARTINEZ": 22}))
+    serve.JOBS.store("o" * 8, {"hash": "o" * 8, "rows": [
+        {"n": 1, "page": 2, "name_raw": "Martinez Francisco",
+         "surname": "Martinez", "given": "Francisco", "conf": {"surname": 0.99}},
+        {"n": 2, "page": 2, "name_raw": "Maria", "conf": {"surname": 0.99}},
+    ]})
+    st, body = call(f"{base}/api/check?hash={'o' * 8}&page=2")
+    why = {r["n"]: r["why"] for r in body["rows"]}
+    assert why[2] == ["inferido"], why

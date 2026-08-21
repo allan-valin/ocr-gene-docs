@@ -534,7 +534,10 @@ class Handler(BaseHTTPRequestHandler):
                 # `transcribed_page` instead — the same distinction the review
                 # page makes, and without it the hand-made sample reported no
                 # rows at all.
-                all_rows = stored.get("rows") or []
+                # Resolved the way the index resolves them, so a record
+                # written before the repetition mark was understood is judged
+                # by what its rows mean rather than by what is stored.
+                all_rows = searchlib._resolved(stored.get("rows") or [])
                 numbered = any(r.get("page") is not None for r in all_rows)
                 rows = [r for r in all_rows
                         if not page
