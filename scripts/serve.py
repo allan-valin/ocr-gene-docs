@@ -42,7 +42,8 @@ from desembarque.batch import (BatchIndexer, collect_pdfs, is_indexed,  # noqa: 
                                preserve_human_work)
 from desembarque.serve_shapes import (ui_geometry, ui_meta,  # noqa: E402
                                       ui_transcription)
-from desembarque.export import csv_filename, rows_to_csv  # noqa: E402
+from desembarque.export import (csv_filename, hits_to_csv,  # noqa: E402
+                                rows_to_csv, search_filename)
 from desembarque.voyage import (is_complete, merge_voyages,  # noqa: E402
                                 parse_voyage)
 from desembarque import search as searchlib          # noqa: E402
@@ -572,6 +573,24 @@ class Handler(BaseHTTPRequestHandler):
                     ctype="text/csv; charset=utf-8",
                     extra={"Content-Disposition":
                            f'attachment; filename="{csv_filename(data)}"'})
+
+            if u.path == "/api/export/search":
+                # The list somebody takes to the archive: every candidate the
+                # search returned, with where to look and why it came back.
+                query = q.get("q", "")
+                rows = searchlib.load_index(
+                    JOBS.cache, engine_only=False,
+                    ships=catalogue_ships(STATE["root"]))
+                hits = searchlib.search(rows, query,
+                                        limit=int(q.get("limit", 500)))
+                names = hash_index(STATE["root"])
+                for h in hits:
+                    h["file"] = h.get("file") or names.get(h.get("doc") or "")
+                return self._send(
+                    200, hits_to_csv(query, hits),
+                    ctype="text/csv; charset=utf-8",
+                    extra={"Content-Disposition":
+                           f'attachment; filename="{search_filename(query)}"'})
 
             if u.path == "/api/transcription":
                 data = JOBS.cached(q.get("hash", ""))

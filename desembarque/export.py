@@ -101,6 +101,54 @@ def rows_to_csv(doc: dict, catalogued: str | None = None) -> str:
     return buf.getvalue()
 
 
+HIT_FIELDS = [
+    "consulta", "leitura", "notacao", "arquivo", "pagina", "linha",
+    "navio", "ano", "origem_do_ano", "pontuacao", "achado_por", "score_motor",
+]
+
+# Why a row came back. A name that resembles what was typed is a different kind
+# of answer from every passenger on a ship that was typed, and somebody ordering
+# copies from the archive is entitled to know which they are looking at.
+FOUND_BY = {"ship": "todos os passageiros deste navio",
+            "year": "todas as chegadas deste ano",
+            None: "semelhança com o nome procurado"}
+
+
+def hits_to_csv(query: str, hits: list[dict]) -> str:
+    """Search results as CSV: candidates to check against the scans, not matches.
+
+    The list a person takes to the archive. Every row says where to look — the
+    dossier's notation, the page, the line — and what it is: `pontuacao` is how
+    much the reading resembles what was typed, and `score_motor` is the
+    recogniser's own decode score, which stays high on confident nonsense.
+    """
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=HIT_FIELDS, extrasaction="ignore")
+    w.writeheader()
+    for h in hits:
+        w.writerow({
+            "consulta": query,
+            "leitura": h.get("text") or "",
+            "notacao": h.get("notation") or "",
+            "arquivo": h.get("file") or "",
+            "pagina": h.get("page") or "",
+            "linha": h.get("row") or "",
+            "navio": h.get("ship") or "",
+            "ano": h.get("year") or "",
+            "origem_do_ano": h.get("year_source") or "",
+            "pontuacao": h.get("score") if h.get("score") is not None else "",
+            "achado_por": FOUND_BY.get(h.get("matched"), FOUND_BY[None]),
+            "score_motor": h.get("conf") if h.get("conf") is not None else "",
+        })
+    return buf.getvalue()
+
+
+def search_filename(query: str) -> str:
+    """A filename that says what was searched for."""
+    stem = "".join(c if c.isalnum() or c in "-_" else "-" for c in (query or "busca"))
+    return f"busca-{stem.strip('-') or 'vazia'}.csv"
+
+
 def csv_filename(doc: dict) -> str:
     """A filename that says which dossier this came from."""
     stem = (doc.get("notation") or doc.get("file") or "desembarque").replace("/", "-")

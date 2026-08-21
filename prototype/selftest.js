@@ -96,8 +96,10 @@ window.addEventListener("load",async()=>{
   // A surname read off a repetition mark is what the page says; one taken from
   // the row above because this row had none is an inference, and a registrar
   // reading the table has to be able to tell them apart.
+  // The sample page carries one of each; a real dossier need not, so the
+  // existence check belongs to the built page and the labelling check to both.
   ok("an inferred surname is marked as inferred, not as read",
-     document.querySelectorAll("#rows .ditto.guessed").length>0);
+     SERVED_RUN || document.querySelectorAll("#rows .ditto.guessed").length>0);
   ok("a surname off the mark is not marked as inferred",
      [...document.querySelectorAll("#rows .ditto")].some(e=>!e.classList.contains("guessed")));
   ok("the inference says so when you hover it",
@@ -157,6 +159,24 @@ window.addEventListener("load",async()=>{
        marked.every(tr=>/acervo/.test(tr.getAttribute("title")||"")));
     q("#doubtbtn").click(); await wait(200);
     ok("and they can be cleared", !document.querySelector("#rows tr.doubt"));
+  }
+
+  // The hit list shows twenty-five; somebody tracing an ancestor needs all of
+  // them, with the notation and the line to ask the archive for.
+  if(SERVED_RUN){
+    // the corpus box, not the in-document one: this searches everything indexed
+    // the corpus box is handled at document level, so the event has to bubble
+    q("#corpusq").value="silva";
+    q("#corpusq").dispatchEvent(new Event("input",{bubbles:true}));
+    // the corpus index is loaded on the first search and the machine may be
+    // reading pages at the same time
+    for(let i=0;i<120 && !document.querySelector("#corpushits .hit");i++) await wait(250);
+    const dl=document.querySelector("a.dlhits");
+    ok("the results can be taken away as a spreadsheet", !!dl);
+    ok("and the download asks for the query that produced them",
+       !dl || /\/api\/export\/search\?q=silva/.test(dl.getAttribute("href")||""));
+    q("#corpusq").value="";
+    q("#corpusq").dispatchEvent(new Event("input",{bubbles:true})); await wait(80);
   }
 
   // manual transcription must survive a refresh, or an hour of typing is lost
@@ -257,7 +277,9 @@ window.addEventListener("load",async()=>{
     if(bar){
       for(let i=0;i<20 && !bar.textContent.trim();i++) await wait(150);
       ok("index bar says something", bar.textContent.trim().length>0);
-      const btn=document.getElementById("doindex");
+      // While a run is going the bar offers "Parar" instead: the control that
+      // has to exist is the one for the state the folder is actually in.
+      const btn=document.getElementById("doindex")||document.getElementById("stopindex");
       ok("index button offered", !!btn);
       if(btn && btn.disabled){
         ok("disabled index button explains why",

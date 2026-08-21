@@ -160,6 +160,8 @@
   tr.doubt td.name{box-shadow:inset 3px 0 0 var(--warn)}
   .altmenu .why.guessy{color:var(--warn);border-top:1px solid var(--line);margin-top:4px;padding-top:5px}
   .altmenu button.guess{color:var(--warn)}
+  a.dlhits{float:right;color:var(--accent);text-decoration:none;font-size:11px}
+  a.dlhits:hover{text-decoration:underline}
   .altmenu button.guess i{font-style:normal;opacity:.7;margin-left:6px}
   .dot.mid{background:var(--warn);border-color:var(--warn);
            background:repeating-linear-gradient(45deg,var(--warn) 0 2px,transparent 2px 4px)}
@@ -730,9 +732,16 @@ function renderHits(d){
     return;
   }
   const shown=Math.min(25,d.hits.length);
+  // The list is the point of the tool for somebody tracing an ancestor: the
+  // page shows twenty-five, and what they need is all of them, on paper, with
+  // the notation and the line to ask the archive for.
+  const dl = SERVED
+    ? `<a class="dlhits" href="/api/export/search?q=${encodeURIComponent(d.query||"")}"
+         title="Baixar todos os resultados como planilha — candidatos a conferir, não confirmações">↓ CSV</a>`
+    : "";
   el.innerHTML=`<div class="none">${d.hits.length>shown
       ? `${shown} de ${d.hits.length} resultados` : `${d.hits.length} resultado${d.hits.length===1?"":"s"}`}
-      · ${d.indexed} linhas indexadas</div>`
+      · ${d.indexed} linhas indexadas ${dl}</div>`
     + d.hits.slice(0,25).map(h=>`
     <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
          data-row="${h.row||0}" title="Abrir o documento nesta linha">

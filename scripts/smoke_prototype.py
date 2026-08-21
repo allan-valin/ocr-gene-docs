@@ -89,8 +89,12 @@ def run_chromium(url: str) -> list[str] | None:
          # match the Firefox run: at the default 800x600 the panes are too short
          # for the scroll assertions, so the two browsers would not be comparable
          "--window-size=1400,900",
-         "--virtual-time-budget=15000", "--dump-dom", url],
-        capture_output=True, text=True, timeout=180)
+         # Virtual time, so this is not fifty seconds of waiting — but it has
+         # to cover the whole run: a served page loads six hundred documents
+         # and the corpus index on the first search, and a budget that expires
+         # dumps the DOM mid-run and reports two passing assertions.
+         "--virtual-time-budget=60000", "--dump-dom", url],
+        capture_output=True, text=True, timeout=420)
     return parse(out.stdout)
 
 

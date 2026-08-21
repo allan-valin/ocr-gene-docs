@@ -179,3 +179,29 @@ def test_an_inherited_surname_says_it_was_inherited_and_how():
     assert "inferido" in rows[3]
     # and the reading itself is untouched by any of it
     assert '" Maria' in rows[2] and "Manuel" in rows[3]
+
+
+def test_search_results_leave_as_a_list_of_places_to_look():
+    """What somebody takes to the archive: where to look, and what it is. A
+    name that resembles what was typed and every passenger on a ship that was
+    typed are different answers, and the file says which is which."""
+    from desembarque.export import hits_to_csv, search_filename
+    hits = [
+        {"text": "Guudo Camtadore", "notation": "BS.ENT.014541", "file": "a.pdf",
+         "page": 2, "row": 4, "ship": "Sirio", "year": 1919,
+         "year_source": "stamp", "score": 0.63, "conf": 0.71},
+        {"text": "MARIA SILVA", "notation": "BS.ENT.013983", "file": "b.pdf",
+         "page": 2, "row": 9, "ship": "Itabera", "score": 1.0, "matched": "ship"},
+    ]
+    text = hits_to_csv("Guido Contadore", hits)
+    head, *rows = [l for l in text.splitlines() if l.strip()]
+    assert "pontuacao" in head and "achado_por" in head and "score_motor" in head
+    assert "semelhança com o nome procurado" in rows[0]
+    assert "todos os passageiros deste navio" in rows[1]
+    assert "BS.ENT.014541" in rows[0] and "stamp" in rows[0]
+    assert search_filename("Guido Contadore") == "busca-Guido-Contadore.csv"
+
+
+def test_an_empty_search_still_exports_its_header():
+    from desembarque.export import hits_to_csv
+    assert "consulta" in hits_to_csv("x", "").splitlines()[0]
