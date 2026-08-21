@@ -231,3 +231,25 @@ def test_a_few_stray_ordinals_do_not_outvote_the_writing():
     assert len(bands) >= 40, len(bands)
     heights = [b - a for a, b in bands]
     assert max(heights) < 70, "a band is covering more than one row"
+
+
+def test_a_continuation_page_uses_the_columns_of_the_page_before_it():
+    """A dossier is twenty pages of one printed sheet and only the first page
+    prints its headings. Measured alone, the rest fall back to the rules that
+    lost the column in the first place."""
+    from desembarque.tablegrid import table
+    frs, W, H = page("013947-3")
+    first = table(frs, W, H)
+    # a page with the same boxes but nothing recognised on it at all
+    blind = table(strip_text(frs), W, H, labelled=[],
+                  hint={"name": first.name, "ordinal": first.ordinal})
+    assert blind is not None
+    assert blind.name == first.name
+    assert not blind.heading_found
+    assert len(blind.rows) >= len(first.rows) - 2
+
+
+def test_without_a_hint_a_headingless_page_is_still_refused():
+    from desembarque.tablegrid import table
+    frs, W, H = page("013947-3")
+    assert table(strip_text(frs), W, H, labelled=[]) is None

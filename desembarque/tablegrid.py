@@ -233,6 +233,7 @@ class TableGeometry:
         self.name = name
         self.ordinal = ordinal
         self.top = top
+        self.heading_found = True
 
     @property
     def rows(self) -> list[tuple[float, float]]:
@@ -259,20 +260,31 @@ class TableGeometry:
 
 
 def table(fragments: list[dict], width: float, height: float,
-          labelled: list[dict] | None = None) -> TableGeometry | None:
+          labelled: list[dict] | None = None,
+          hint: dict | None = None) -> TableGeometry | None:
     """The table on this page, or None when the page prints no name heading.
 
     `fragments` are the detector's boxes, which may carry no text; `labelled`
     are the few that were recognised in order to find the heading.
+
+    `hint` is the columns found on an earlier page of the same dossier. A list
+    runs to twenty pages of the same printed sheet and only the first prints its
+    headings — the rest carry straight on, and measured alone they fall back to
+    the rules that lost the column in the first place. The rows are still fitted
+    to this page's own printing; only where the columns are is carried over.
     """
     col = columns(fragments, width, height, labelled)
+    if col is None and hint:
+        col = {**hint, "top": 0.0, "heading": None}
     if not col:
         return None
     bands = row_anchors(fragments, col, height)
     if not bands:
         return None
-    return TableGeometry(width, height, bands, col["name"], col["ordinal"],
-                         col["top"])
+    geo = TableGeometry(width, height, bands, col["name"], col["ordinal"],
+                        col["top"])
+    geo.heading_found = col.get("heading") is not None
+    return geo
 
 
 # A table's heading row is a line of several short boxes across the sheet, and

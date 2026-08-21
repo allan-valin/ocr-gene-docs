@@ -402,6 +402,11 @@ class PaddleEngine:
         self._local = threading.local()
         self._page = None
         self._page_plain = False
+        # Where the columns were on the last page of each dossier that printed
+        # its headings. A list runs to twenty pages of the same sheet and only
+        # the first prints them; the rest are measured with the columns carried
+        # over and their own rows.
+        self._last_columns: dict[str, dict] = {}
 
     # ---- model loading ------------------------------------------------------
     def _import(self):
@@ -718,7 +723,7 @@ class PaddleEngine:
         said = self._recognize(crops)
         return [{**b, "text": t} for b, (t, _s) in zip(boxes, said)]
 
-    def _printed_table(self, image: Path):
+    def _printed_table(self, image: Path, hint: dict | None = None):
         """The table measured from the page's own printing, or None.
 
         The boxes come from the readable copy — 2000 px on the long side — and
@@ -742,7 +747,7 @@ class PaddleEngine:
             if not boxes:
                 return None
             labelled = self._read_boxes(small, heading_lines(boxes, h))
-            found = table(boxes, w, h, labelled=labelled)
+            found = table(boxes, w, h, labelled=labelled, hint=hint)
             if found is not None and len(found.rows) >= MIN_PRINTED_ROWS:
                 return found
         # a page that has no table at this resolution either: the caller falls
@@ -777,8 +782,13 @@ class PaddleEngine:
             # carries the column headings and the printed ordinals — from which
             # the name column and the rows can be measured without trusting a
             # rule the scan may have lost. See desembarque.tablegrid.
-            geo = self._printed_table(image)
+            geo = self._printed_table(image, hint=self._last_columns.get(str(source)))
             printed = geo is not None
+            if printed and geo.heading_found:
+                # the same printed sheet runs the length of a dossier, and only
+                # its first page carries the headings
+                self._last_columns[str(source)] = {"name": geo.name,
+                                                   "ordinal": geo.ordinal}
             if geo is None:
                 geo = analyze(image)
             if not geo.rows or not geo.name_column(0):
