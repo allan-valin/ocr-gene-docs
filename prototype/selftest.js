@@ -10,6 +10,7 @@ async function ready(ms=8000){
   }
   return false;
 }
+function sel_of(){ const on=document.querySelector("#rows tr.sel"); return on?on.dataset.i:null; }
 function rows_len(){ try{ return document.querySelectorAll("#rows tr").length; }catch(e){ return -1; } }
 window.addEventListener("load",async()=>{
   // the page knows whether it was served; assertions that need the API ask this
@@ -157,8 +158,14 @@ window.addEventListener("load",async()=>{
     const marked=[...document.querySelectorAll("#rows tr.doubt")];
     ok("a marked row says what the mark means",
        marked.every(tr=>/acervo/.test(tr.getAttribute("title")||"")));
+    ok("a way to walk them appears with them", !q("#nextdoubt").hidden);
+    const before=sel_of();
+    q("#nextdoubt").click(); await wait(120);
+    ok("walking them lands somewhere and says where",
+       /duvidosa|nenhuma linha duvidosa/.test(q("#nextdoubt").dataset.at||""));
     q("#doubtbtn").click(); await wait(200);
     ok("and they can be cleared", !document.querySelector("#rows tr.doubt"));
+    ok("the walk control goes with them", q("#nextdoubt").hidden);
   }
 
   // The hit list shows twenty-five; somebody tracing an ancestor needs all of

@@ -506,11 +506,24 @@ class Handler(BaseHTTPRequestHandler):
                 # rare name is unknown here and perfectly correct.
                 stored = JOBS.cached(q.get("hash", "")) or {}
                 page = int(q.get("page", 0) or 0)
-                rows = [r for r in stored.get("rows") or []
-                        if not page or r.get("page") == page]
+                # A document indexed by the engine has a page on every row. One
+                # transcribed by hand predates that and carries a single
+                # `transcribed_page` instead — the same distinction the review
+                # page makes, and without it the hand-made sample reported no
+                # rows at all.
+                all_rows = stored.get("rows") or []
+                numbered = any(r.get("page") is not None for r in all_rows)
+                rows = [r for r in all_rows
+                        if not page
+                        or (r.get("page") == page if numbered
+                            else stored.get("transcribed_page") == page)]
+                # `row_text` for the emptiness test as well as for the check:
+                # a row a person typed carries a surname and a given name and
+                # no verbatim reading at all, and testing the reading dropped
+                # every one of them.
                 out = [{"n": r.get("n"),
                         "doubtful": current_names().doubtful(searchlib.row_text(r))}
-                       for r in rows if (r.get("name_raw") or "").strip()]
+                       for r in rows if searchlib.row_text(r).strip()]
                 return self._send(200, {
                     "page": page, "rows": out,
                     "doubtful": sum(1 for r in out if r["doubtful"]),

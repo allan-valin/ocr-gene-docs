@@ -733,3 +733,19 @@ def test_a_page_says_which_rows_a_person_should_look_at(server, monkeypatch):
     assert body["doubtful"] == 1
     assert [r["n"] for r in body["rows"] if r["doubtful"]] == [2]
     assert "não quer dizer que esteja errada" in body["means"]
+
+
+def test_a_hand_transcribed_document_reports_its_rows_too(server, monkeypatch):
+    """A document a person typed predates per-row page numbers and carries a
+    single `transcribed_page`. Filtered by page number it reported no rows at
+    all, so the sample document could never be checked."""
+    base, folder = server
+    from desembarque.gazetteer import Names
+    monkeypatch.setattr(serve, "NAMES", Names({"SILVA": 40}))
+    # and it carries a surname and a given name rather than a verbatim reading
+    serve.JOBS.store("m" * 8, {"hash": "m" * 8, "transcribed_page": 2, "rows": [
+        {"n": 1, "surname": "SILVA", "given": "MARIA"},
+        {"n": 2, "surname": "XQZW", "given": "VBNM"},
+    ]})
+    st, body = call(f"{base}/api/check?hash={'m' * 8}&page=2")
+    assert st == 200 and body["of"] == 2 and body["doubtful"] == 1

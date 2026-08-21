@@ -217,6 +217,8 @@
       title="Mostrar nomes prováveis deste acervo junto às leituras do motor. São palpites, não leituras.">≈ Prováveis</button>
     <button id="guessfirst" type="button" aria-pressed="false" hidden
       title="Listar os palpites antes das leituras do motor">↑ primeiro</button>
+    <button id="nextdoubt" type="button" hidden
+      title="Ir para a próxima linha sem semelhança com nomes do acervo (tecla D)">D ↓</button>
     <button id="doubtbtn" type="button" aria-pressed="false"
       title="Marcar as linhas cuja leitura não se parece com nenhum nome deste acervo. Não quer dizer que estejam erradas.">? Duvidosas</button>
     <button id="prev" title="Anterior (Shift+Enter)">↑</button>
@@ -477,7 +479,46 @@ function markDoubtful(){
 $("#doubtbtn").addEventListener("click",()=>{
   DOUBTS=!DOUBTS;
   $("#doubtbtn").setAttribute("aria-pressed", DOUBTS?"true":"false");
+  $("#nextdoubt").hidden=!DOUBTS;
   markDoubtful();
+});
+// Four hundred rows, a few dozen worth a second look, and no way to walk them:
+// scrolling past thirty good rows to find the next doubtful one is how a person
+// stops checking.
+function nextDoubtful(){
+  const marked=[...document.querySelectorAll("#rows tr.doubt")]
+    .map(tr=>+tr.dataset.i).sort((a,b)=>a-b);
+  if(!marked.length){
+    const none="nenhuma linha duvidosa nesta página";
+    $("#nextdoubt").dataset.at=none; $("#nextdoubt").title=none;
+    $("#stat").textContent=none;
+    return;
+  }
+  const next = marked.find(i=>i>sel);
+  const wrapped = next===undefined;
+  select(wrapped ? marked[0] : next);
+  const tr=document.querySelector(`#rows tr[data-i="${sel}"]`);
+  if(tr) tr.scrollIntoView({block:"center"});
+  // Always say where this landed. When the only doubtful row is the one already
+  // selected, pressing the key looked like nothing happening at all.
+  const at=marked.indexOf(sel)+1;
+  const said=`duvidosa ${at} de ${marked.length}`
+    + (rows[sel]?` · linha ${rows[sel].n}`:"")
+    + (wrapped && marked.length>1?" · recomeçou do topo":"");
+  // On the control itself rather than in the status line, which the autosave
+  // and the verification count also write to: where this landed has to survive
+  // the next thing that happens.
+  $("#nextdoubt").dataset.at=said;
+  $("#nextdoubt").title=said;
+  $("#stat").textContent=said;
+}
+$("#nextdoubt").addEventListener("click",nextDoubtful);
+document.addEventListener("keydown",e=>{
+  if(e.key!=="d" && e.key!=="D") return;
+  if(/^(INPUT|TEXTAREA)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  if(!DOUBTS) return;
+  e.preventDefault();
+  nextDoubtful();
 });
 
 function render(){
