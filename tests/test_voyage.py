@@ -962,3 +962,31 @@ Lista de entrada de passageiros no vapor
 "Maio
 Santos, 3 de Maio de 1919""")
     assert v is None or v.ship != "Maio"
+
+
+def test_a_ship_printed_after_its_nationality_is_still_a_ship():
+    """`LISTA DE ENTRADA de passageiros na vapor español Valbanera` is one line
+    on BS.ENT.014443: the printed word, the nationality and the vessel. Taken
+    whole it is refused for carrying a nationality, and the ship went with it."""
+    v = parse_voyage("""Compañia Trasatlántica
+LISTA DE ENTRADA de passageiros na vapor español Valbanera
+Santos, 5 de Janeiro de 1919""")
+    assert v is not None
+    assert v.ship == "Valbanera"
+    assert v.flag and "espa" in v.flag.lower()
+
+
+def test_a_line_with_only_a_nationality_still_names_no_ship():
+    v = parse_voyage("""Lloyd Brazileiro
+Lista de entrada de passageiros no vapor inglez
+Santos, 5 de Janeiro de 1919""")
+    assert v is None or not v.ship
+
+
+def test_the_form_s_footnote_marker_is_not_part_of_the_ship():
+    """These forms print `(2)` above the vessel's blank, and the detector reads
+    it as the first word of the name: `(2) Duca degli Abruzzi`."""
+    v = parse_voyage("""NAVIGAZIONE GENERALE ITALIANA
+Lista de entrada de passageiros no vapor (2) Duca degli Abruzzi
+Santos, 5 de Janeiro de 1922""")
+    assert v is not None and v.ship == "Duca degli Abruzzi"

@@ -81,6 +81,7 @@ RE_LISTA_SHIP = re.compile(r"passage\w*(?:\s+entrados?)?\s+no\b(.*)", re.I)
 # quote is the first thing a scan loses: BS.ENT.013983 reads `"Itabera` under
 # `Lista de entrada de passageios no Pague......`, and the closed-quote pattern
 # found nothing on a page that names its ship plainly.
+RE_FOOTNOTE = re.compile(r"[(\[]?\d{1,2}[)\]]?")
 RE_QUOTED_OPEN = re.compile(r"^\s*[\"“”]\s*([A-Za-zÀ-ÿ][\w'’\- ]{2,30})\s*$")
 RE_QUOTED = re.compile(r"[\"“”]\s*([^\"“”]{2,40}?)\s*[\"“”]")
 RE_ORIGIN = re.compile(r"procedente\s+d[eo]\b(.*)", re.I)
@@ -446,6 +447,30 @@ def plausible_line(value: str | None) -> str | None:
     return plausible_value(stripped) and stripped
 
 
+def _split_flag(value: str | None) -> tuple[str | None, str | None]:
+    """The vessel and its nationality, where the form prints them together.
+
+    `na vapor español Valbanera` is one line: the printed `vapor`, the
+    nationality, and the ship. Taken whole it is refused — a candidate carrying
+    a nationality is usually the form talking about itself — and the ship inside
+    it was lost with it.
+    """
+    if not value:
+        return value, None
+    words = value.split()
+    flag = None
+    # `no vapor allemão (1) Cap Norte`: the nationality, the form's own footnote
+    # marker, and then the ship. Both of the first two have to come off.
+    while words and (is_flag(words[0]) or RE_FOOTNOTE.fullmatch(words[0])):
+        if is_flag(words[0]):
+            flag = words[0] if flag is None else f"{flag} {words[0]}"
+        words = words[1:]
+    if not words:
+        return value, None      # nothing but a nationality is not a ship
+    rest = _clean(" ".join(words))
+    return (rest, flag) if (flag or rest != value) else (value, None)
+
+
 def _quoted_alone(lines: list[str]) -> str | None:
     """A line that is nothing but a quoted name, closing quote or not."""
     for line in lines:
@@ -665,6 +690,9 @@ def parse_voyage(text: str, fragments: list[dict] | None = None) -> Voyage | Non
             beside = (_positional(RE_PAQUETE, fragments)
                       or _positional(RE_LISTA_SHIP, fragments))
         beside = beside or _beside(RE_PAQUETE, lines)
+        beside, flag_word = _split_flag(beside)
+        if flag_word:
+            v.flag = flag_word
         if beside and is_flag(beside):
             v.flag = beside
             v.ship = _above(RE_PAQUETE, lines, skip=beside)
