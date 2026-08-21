@@ -138,9 +138,12 @@ off until asked for and both labelled as what they are:
   them above the engine's own readings. The list comes from this archive's typewritten
   pages and from rows people typed — `.venv/bin/python scripts/build_names.py` rebuilds
   it, and it should be rebuilt after a corpus refresh.
-* **`? Duvidosas`** marks the rows where nothing in the reading resembles a name this
-  archive carries, so a person checking four hundred rows knows where to start. It is a
-  claim about the archive, not about the row: a rare name is unknown here and correct.
+* **`? Conferir`** marks the rows worth a second look first, and says on hover which of
+  three reasons applies: the recogniser decoded the line weakly, the surname was inferred
+  from the row's position rather than read, or nothing in the reading resembles a name
+  this archive carries. Measured against 139 hand-read rows of which 67 were badly read,
+  those catch 81%, 46% and 4% of them respectively. `D` steps through the marked rows.
+  About half the rows on a cursive page are marked, which is roughly how many are wrong.
 
 ## Checking a change
 
