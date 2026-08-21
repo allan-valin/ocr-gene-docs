@@ -296,6 +296,10 @@ HEADING_MAX_LINES = 4
 # there are three or four such lines above the table — enough to crowd the
 # heading out of the candidates entirely on BS.ENT.015937 and BS.ENT.016574.
 HEADING_MIN_SPAN = 0.55
+# A heading is a row of short cells. A letterhead line is a sentence, and on
+# BS.ENT.016574 three of them sit above the table and took every candidate slot:
+# `ta dos Passageiros entrados no vapor.` is one box a fifth of the sheet wide.
+HEADING_MAX_CELL = 0.22
 
 
 def lines_of(boxes: list[dict], tolerance: float = 0.5) -> list[list[dict]]:
@@ -324,7 +328,8 @@ def heading_lines(boxes: list[dict], height: float) -> list[dict]:
              if len(ln) >= HEADING_MIN_CELLS
              and min(b["y0"] for b in ln) < 0.7 * height
              and (max(b["x1"] for b in ln) - min(b["x0"] for b in ln))
-             >= HEADING_MIN_SPAN * width]
+             >= HEADING_MIN_SPAN * width
+             and max(b["x1"] - b["x0"] for b in ln) <= HEADING_MAX_CELL * width]
     # The topmost such lines, not the most populous: a data row has a cell in
     # every column and often one more than the heading — on BS.ENT.013983 the
     # rows outvoted the heading and the page fell back to its rules.

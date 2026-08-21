@@ -785,6 +785,26 @@ class PaddleEngine:
         said = self._recognize(crops)
         return [{**b, "text": t} for b, (t, _s) in zip(boxes, said)]
 
+    def _ruled_rows(self, image: Path, width: float, height: float, col: dict):
+        """The printed column, with rows taken from the table's rules."""
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        from page_geometry import analyze
+        from .tablegrid import TableGeometry
+        try:
+            geo = analyze(image)
+        except Exception:
+            return None
+        bands = geo.normalized_rows()
+        if len(bands) < MIN_PRINTED_ROWS:
+            return None
+        out = TableGeometry(width, height,
+                            [(a * height, b * height) for a, b in bands],
+                            col["name"], col.get("ordinal"), col.get("top", 0.0))
+        out.heading_found = col.get("heading") is not None
+        out.rows_from = "rules"
+        return out
+
     def _printed_table(self, image: Path, hint: dict | None = None):
         """The table measured from the page's own printing, or None.
 
@@ -793,7 +813,7 @@ class PaddleEngine:
         the rows are actually cut from.
         """
         from PIL import Image
-        from .tablegrid import heading_lines, table
+        from .tablegrid import columns, heading_lines, table
         Image.MAX_IMAGE_PIXELS = None
         small = self._readable_copy(image)
         try:
@@ -801,6 +821,7 @@ class PaddleEngine:
                 w, h = im.size
         except (OSError, ValueError):
             return None
+        found = None
         for side in (None, FINE_DETECT_SIDE):
             try:
                 boxes = self._detect(small, side)
@@ -812,8 +833,18 @@ class PaddleEngine:
             found = table(boxes, w, h, labelled=labelled, hint=hint)
             if found is not None and len(found.rows) >= MIN_PRINTED_ROWS:
                 return found
-        # a page that has no table at this resolution either: the caller falls
-        # back to the rules, which is where it was before any of this
+            # The column may be known while the rows are not. On OL.PRJ.17851
+            # the writing is too faint for the detector to find at all — thirty
+            # boxes on a page of twenty-three names — while the recogniser reads
+            # those names perfectly once a band is cut for it. The rules can
+            # supply the rows; what they cannot supply is the column, which is
+            # the half that was wrong before any of this.
+            col = columns(boxes, w, h, labelled) or (
+                {**hint, "top": 0.0, "heading": None} if hint else None)
+            if col:
+                ruled = self._ruled_rows(image, w, h, col)
+                if ruled is not None:
+                    return ruled
         return found
 
 
@@ -896,7 +927,9 @@ class PaddleEngine:
                           # which measurement the rows were cut from, because
                           # the two fail in different ways and a band that
                           # disagrees with the scan has to be traceable
-                          "measured_by": "printing" if printed else "rules",
+                          "measured_by": (getattr(geo, "rows_from", None) == "rules"
+                                          and "printed columns, ruled rows"
+                                          or ("printing" if printed else "rules")),
                           "read_from": "render" if from_render else "mask"},
             )
         except Exception as e:
