@@ -312,7 +312,7 @@ records, which tonight was managed by hand.
 | golden pages measured from the printing | 10 of 10 |
 | reading, 5 hand-read pages, 142 names | CER 0.362 |
 | findable by name | 92 of 142 |
-| findable when the crossing is named too | **109 of 142** |
+| findable when the crossing is named too | **111 of 142** |
 | typed pages | 42 of 42 |
 | cursive pages | 50 of 100 |
 
@@ -335,10 +335,12 @@ voyage parsing was worth the evening.
    BS.ENT.015061 p6 reads at CER 0.08 in places and 14 of its 46 names are
    findable, because they are Marias and Joses. Three scoring changes were tried
    tonight and all three lost names. The lever that does work is the crossing.
-3. **The voyage now counts for more.** Weighted at 0.6 rather than 0.25, a
-   searcher who names the ship or the year finds 109 of 142 rather than 96 — and
-   0.7 was measured and rejected, because there a weak name on the named ship
-   outranks a good name elsewhere. The penalty for contradicting the query is now
+3. **The voyage now counts for more.** Weighted at 0.6 rather than 0.25 and
+   matched against a strict ship floor of 0.85 rather than a forgiving 0.75, a
+   searcher who names the ship or the year finds **111 of 142** rather than 96.
+   Both were pushed until they broke: at a voyage weight of 0.7 a weak name on
+   the named ship outranks a good name elsewhere, and at a ship floor of 0.6 the
+   wrong ships match and lift everybody aboard them. The penalty for contradicting the query is now
    its own, much smaller constant: sharing one meant that rewarding a right year
    punished a wrong one just as hard, and a person misremembering a date is not
    someone to hide a record from.
