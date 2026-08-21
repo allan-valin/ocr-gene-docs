@@ -541,7 +541,14 @@ class Handler(BaseHTTPRequestHandler):
                 geo = {str(p["n"]): ui_geometry(p.get("geometry"))
                        for p in stored.get("pages") or []
                        if isinstance(p, dict) and p.get("geometry")}
-                return self._send(200, {"hash": q.get("hash", ""), "pages": geo})
+                # how each page was measured, which is the difference between a
+                # band drawn from the page's own printing and one drawn from
+                # rules the scan may have lost
+                how = {str(p["n"]): (p.get("geometry") or {}).get("measured_by")
+                       for p in stored.get("pages") or []
+                       if isinstance(p, dict) and (p.get("geometry") or {}).get("measured_by")}
+                return self._send(200, {"hash": q.get("hash", ""), "pages": geo,
+                                        "measured_by": how})
 
             if u.path == "/api/health":
                 return self._send(200, {"ok": True, "root": str(STATE["root"]),

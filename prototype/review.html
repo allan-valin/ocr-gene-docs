@@ -576,10 +576,20 @@ function renderDocList(){
     </div>`).join("");
 }
 function renderPageStrip(){
+  // How a page was measured is worth seeing: a table found from the page's own
+  // printing is a different thing from one fitted to rules the scan half lost,
+  // and until now nothing said which had happened.
+  const HOW = {
+    "printing": ["", "grade lida da própria impressão da página"],
+    "printed columns, ruled rows": ["~", "coluna lida da impressão; linhas vindas das réguas da tabela"],
+    "rules": ["!", "grade estimada pelas réguas — a impressão não foi encontrada"],
+  };
   $("#pagestrip").innerHTML = D.pages.map(p=>{
     const isT = rowsForPage(D,p.n).length>0;
+    const how = HOW[(D.measuredBy||{})[p.n]] || ["",""];
     return `<button data-p="${p.n}" aria-pressed="${p.n===D.pages[pageIdx].n}"
-      title="${isT?'página transcrita':''}">p.${p.n}${isT?" ✓":""}</button>`;
+      title="${[isT?'página transcrita':'', how[1]].filter(Boolean).join(" · ")}"
+      >p.${p.n}${isT?" ✓":""}${how[0]}</button>`;
   }).join("") + (D.total_pages>D.pages.length
     ? `<span style="align-self:center;color:var(--muted);font-size:11px">
         de ${D.total_pages} (as demais não foram renderizadas)</span>` : "");
@@ -605,7 +615,10 @@ function firstPageWithRows(doc){
 function loadGeometry(){
   if(!SERVED || !D || D.pageGeometry) return Promise.resolve();
   return fetch(`/api/geometry?hash=${encodeURIComponent(D.hash||"")}`)
-    .then(r=>r.json()).then(g=>{ D.pageGeometry=g.pages||{}; })
+    .then(r=>r.json()).then(g=>{
+      D.pageGeometry=g.pages||{}; D.measuredBy=g.measured_by||{};
+      renderPageStrip();
+    })
     .catch(()=>{ D.pageGeometry={}; });
 }
 function applyGeometry(){

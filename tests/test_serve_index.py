@@ -749,3 +749,23 @@ def test_a_hand_transcribed_document_reports_its_rows_too(server, monkeypatch):
     ]})
     st, body = call(f"{base}/api/check?hash={'m' * 8}&page=2")
     assert st == 200 and body["of"] == 2 and body["doubtful"] == 1
+
+
+def test_the_page_says_how_its_table_was_measured(server, monkeypatch):
+    """A table found from the page's own printing is a different thing from one
+    fitted to rules the scan half lost, and the reviewer should be able to see
+    which happened before trusting a band."""
+    base, folder = server
+    serve.JOBS.store("g" * 8, {"hash": "g" * 8, "pages": [
+        {"n": 1, "kind": "cover"},
+        {"n": 2, "kind": "list",
+         "geometry": {"rows": [[0.1, 0.2]], "columns": [0.1, 0.3],
+                      "measured_by": "printing"}},
+        {"n": 3, "kind": "list",
+         "geometry": {"rows": [[0.1, 0.2]], "columns": [0.1, 0.3],
+                      "measured_by": "printed columns, ruled rows"}},
+    ]})
+    st, body = call(f"{base}/api/geometry?hash={'g' * 8}")
+    assert st == 200
+    assert body["measured_by"] == {"2": "printing",
+                                   "3": "printed columns, ruled rows"}
