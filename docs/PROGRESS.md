@@ -120,6 +120,27 @@ a name this archive carries, marked so a person checking four hundred rows knows
 where to start. It says on hover — and in the endpoint's own answer — that a rare
 name is unknown here and perfectly correct.
 
+### How much of the corpus is inference, and how often it is right
+
+The position rule fills in a surname for a row that carries none, and it is 41%
+of the rows read tonight: **674 read, 521 by position, 65 off a mark, 10 off an
+indent.** That is a large share of a record used as evidence, so it was measured
+rather than assumed.
+
+On the hand-read page, of forty inherited rows **thirty-six attach to the family
+the page actually says**. The four that do not are one block: `Castiello Cosme`
+came back as `CastiettoCoome`, the recogniser having lost the space, so no new
+family started and four Castiellos were filed under Lorenzo. The failure mode is
+therefore bounded and legible — a missed family head cascades to its members —
+and every inherited surname says in the record and on screen that it was
+inherited.
+
+Splitting a joined word at its interior capital was tried, since that is exactly
+where the lost space is. It costs two findable names of sixty-eight, measured
+against the same index both ways, and was reverted: the mangled first half
+becomes a family head and the rows below it inherit something worse than what
+they had.
+
 ### A dossier that silently emptied itself
 
 BS.ENT.013942 came back from the run with **no rows at all**, an hour after it
