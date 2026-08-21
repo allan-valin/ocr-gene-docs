@@ -136,7 +136,11 @@
      Shape carries the meaning as well as colour, for colour-blind readers. */
   .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:5px;
        vertical-align:1px;border:1.5px solid transparent}
-  .dot.hi{background:var(--ok);border-color:var(--ok)}
+  /* A high decode score is not a high chance of being right: `Brges. iuig`
+     scores 0.86. So the engine's own number is shown neutral, and the green
+     dot means the one thing that does warrant it — a person read the scan. */
+  .dot.hi{background:var(--muted);border-color:var(--muted)}
+  .dot.person{background:var(--ok);border-color:var(--ok)}
   .dot.mid{background:var(--warn);border-color:var(--warn);
            background:repeating-linear-gradient(45deg,var(--warn) 0 2px,transparent 2px 4px)}
   .dot.lo{background:transparent;border-color:var(--bad);border-style:double;border-width:3px}
@@ -300,8 +304,15 @@ function rowMatches(r,q,scope){
 
 // ---- rendering ----
 function conf(r,f){const c=r.conf&&r.conf[f];return c==null?"":c<0.5?"lo":c<0.8?"mid":"hi";}
-const CONF_LABEL={hi:"alta confiança",mid:"confiança média — conferir",
-                  lo:"baixa confiança — conferir no original",none:"sem valor legível"};
+// What the number is: the recogniser's own decode score, which stays high on
+// confident nonsense. It is worth showing, because a *low* score does mean the
+// motor struggled — the asymmetry is the honest part. The CSV export made the
+// same distinction first, calling the column `score_motor` rather than
+// `precisão`.
+const CONF_LABEL={hi:"score do motor: alto — decodificação firme, não é medida de acerto",
+                  mid:"score do motor: médio — conferir no original",
+                  lo:"score do motor: baixo — conferir no original",
+                  none:"sem valor legível"};
 function dot(r,f){
   const c=r.conf&&r.conf[f];
   const k = c==null ? "none" : (c<0.5?"lo":c<0.8?"mid":"hi");
@@ -418,7 +429,7 @@ function stat(){
   if(!rows.length){ $("#stat").textContent="sem transcrição"+suffix; return; }
   const v=rows.filter(r=>r.verified).length;
   const lo=rows.filter(r=>Object.values(r.conf||{}).some(c=>c!=null&&c<0.5)).length;
-  $("#stat").textContent=`${v}/${rows.length} verificadas · ${lo} com campo de baixa confiança`+suffix;
+  $("#stat").textContent=`${v}/${rows.length} verificadas · ${lo} com campo de score baixo`+suffix;
 }
 
 function pageURL(doc,page){
@@ -636,8 +647,8 @@ function renderHits(d){
       <b>${h.text}</b>
       <span>${h.matched?"a bordo · ":""}${[h.ship, h.year].filter(Boolean).join(" · ")}${h.ship||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
         ${h.conf==null?"":`<span class="dot ${h.conf<0.5?"lo":h.conf<0.8?"mid":"hi"}"
-          role="img" aria-label="confiança da leitura: ${Math.round(h.conf*100)}%"
-          title="confiança da leitura: ${Math.round(h.conf*100)}%"></span>`}</span>
+          role="img" aria-label="score do motor: ${Math.round(h.conf*100)}%"
+          title="score do motor: ${Math.round(h.conf*100)}% — não é medida de acerto"></span>`}</span>
     </div>`).join("");
 }
 function corpusSearch(q){
@@ -939,7 +950,7 @@ $("#rows").addEventListener("input",e=>{
   // a human has now supplied this value, so the model's confidence no longer
   // applies to it: show it as verified rather than keeping a stale amber dot
   const d=e.target.parentElement.querySelector(".dot");
-  if(d){ d.className="dot hi"; d.title=d.ariaLabel="conferido por pessoa"; }
+  if(d){ d.className="dot person"; d.title=d.ariaLabel="conferido por pessoa"; }
   // reflect the edit into the row model, then persist
   const idx=+e.target.closest("tr").dataset.i;
   const val=e.target.textContent.trim();

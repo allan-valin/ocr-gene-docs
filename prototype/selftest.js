@@ -76,9 +76,16 @@ window.addEventListener("load",async()=>{
   ok("unreadable shown as ilegivel", document.querySelectorAll("#rows .null").length>0);
   ok("ditto marked", document.querySelectorAll("#rows .ditto").length>0);
 
-  // confidence must read as confidence, not as a spellchecker complaint
+  // the engine's decode score must not read as a claim that it got it right
   const dots=document.querySelectorAll("#rows .dot");
-  ok("confidence shown as semaphore dots", dots.length>0);
+  ok("engine score shown as semaphore dots", dots.length>0);
+  // `Brges. iuig` scored 0.86 and showed green. The number is the recogniser's
+  // decode score, and it stays high on confident nonsense.
+  ok("no dot calls the engine's score confidence",
+     [...dots].every(d=>!/confian/i.test(d.getAttribute("aria-label")||"")));
+  ok("a high score is not painted as a verified reading",
+     [...document.querySelectorAll("#rows .dot.hi")].every(
+       d=>!d.classList.contains("person")));
   ok("no wavy underline left behind",
      !document.querySelector("#rows .lo[style*='wavy'], #rows .mid[style*='wavy']"));
   ok("dots carry a text label for screen readers and colour-blind readers",
@@ -99,11 +106,11 @@ window.addEventListener("load",async()=>{
     }
   }
 
-  const hiBefore=document.querySelectorAll(".dot.hi").length;
+  const hiBefore=document.querySelectorAll(".dot.person").length;
   const ed=document.querySelector('#rows tr[data-i="4"] [data-f="nationality"]');
   if(ed){ ed.textContent="BELGA"; ed.dispatchEvent(new Event("input",{bubbles:true})); await wait();
-    ok("editing a cell clears its stale confidence",
-       document.querySelectorAll(".dot.hi").length>hiBefore); }
+    ok("a cell a person typed is marked as read by a person, not scored",
+       document.querySelectorAll(".dot.person").length>hiBefore); }
 
   // Structure without a model: on a ruled page the grid is measurable, so an
   // untranscribed document can still produce an empty table to fill in by hand.
