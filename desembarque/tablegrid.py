@@ -39,6 +39,11 @@ COLUMN_OVERLAP = 0.35
 # How many printed ordinals have to be legible before they are trusted to set
 # the pitch rather than the writing.
 MIN_ORDINALS = 8
+# How large a gap between two anchors still counts as the same table. The
+# printed footnote at the foot of the sheet sits in the name column too, and
+# extending the rows down to it gave BS.ENT.014231 p3 a hundred and twenty-eight
+# bands on a form that holds fifty.
+MAX_GAP_PITCHES = 4.0
 
 
 def fold(text: str) -> str:
@@ -138,7 +143,17 @@ def _ordinals(fragments: list[dict], col: dict) -> list[dict]:
     return out
 
 
-def written_lines(fragments: list[dict], col: dict) -> list[dict]:
+# The printed footing — `(1) Nome da empreza. — (2) Classe, nacionalidade...` —
+# sits in the name column as well, at the very bottom of the sheet and running
+# most of its width. Counted as a row, it stretched the table down to meet it:
+# BS.ENT.014231 p3 came back with a hundred and twenty-eight bands on a form
+# that holds fifty.
+FOOTING_FROM = 0.88
+FOOTING_WIDTH = 2.5
+
+
+def written_lines(fragments: list[dict], col: dict,
+                  height: float | None = None) -> list[dict]:
     """The fragments that lie on the name column, below the heading.
 
     Two ways to qualify, because the detector's boxes vary in how much of a row
@@ -153,6 +168,9 @@ def written_lines(fragments: list[dict], col: dict) -> list[dict]:
     out = []
     for f in fragments:
         if f["y0"] <= col["top"]:
+            continue
+        if (height and f["y0"] > FOOTING_FROM * height
+                and (f["x1"] - f["x0"]) > FOOTING_WIDTH * (x1 - x0)):
             continue
         over = _overlap(f["x0"], f["x1"], x0, x1)
         if over >= COLUMN_OVERLAP * (f["x1"] - f["x0"]) or over >= 0.5 * (x1 - x0):
@@ -175,7 +193,7 @@ def row_anchors(fragments: list[dict], col: dict | None,
     if not col:
         return []
     ords_ = _ordinals(fragments, col)
-    written = written_lines(fragments, col)
+    written = written_lines(fragments, col, height)
     ord_c = [(f["y0"] + f["y1"]) / 2 for f in ords_]
     wri_c = [(f["y0"] + f["y1"]) / 2 for f in written]
     # The ordinals are the better anchor because they are printed on the empty
@@ -197,6 +215,7 @@ def row_anchors(fragments: list[dict], col: dict | None,
 
     lo = min([*ord_c, *wri_c])
     hi = max([*ord_c, *wri_c])
+
     first = round((lo - base) / pitch)
     last = round((hi - base) / pitch)
     bands = []

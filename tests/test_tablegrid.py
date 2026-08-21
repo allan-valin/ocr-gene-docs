@@ -253,3 +253,33 @@ def test_without_a_hint_a_headingless_page_is_still_refused():
     from desembarque.tablegrid import table
     frs, W, H = page("013947-3")
     assert table(strip_text(frs), W, H, labelled=[]) is None
+
+
+def test_the_printing_at_the_foot_of_the_sheet_is_not_more_rows():
+    """The form's footnote sits in the name column, well below the last row, and
+    the rows were being extended down to meet it: BS.ENT.014231 p3 came back
+    with a hundred and twenty-eight bands on a form that holds fifty."""
+    from desembarque.tablegrid import row_anchors
+    col = {"name": (100.0, 400.0), "ordinal": (60.0, 100.0), "top": 100.0}
+    rows_ = [{"x0": 110, "x1": 380, "y0": 110 + 30 * i, "y1": 135 + 30 * i}
+             for i in range(20)]
+    footnote = [{"x0": 105, "x1": 395, "y0": 1800, "y1": 1820}]
+    # the footing runs most of the sheet's width, well below the last row
+    footnote[0].update(x0=80, x1=1900, y0=1800, y1=1820)
+    bands = row_anchors(rows_ + footnote, col, 2000)
+    assert 18 <= len(bands) <= 24, len(bands)
+    assert bands[-1][1] < 1000, "the rows reached the footing"
+
+
+def test_the_blank_ruled_rows_are_kept_when_their_numbers_are_printed():
+    """A blank row is a fact about the page: the clerk was given thirty lines and
+    used seven. Trimming the table at the last name would also drop a passenger
+    written after a long gap, which is worse."""
+    from desembarque.tablegrid import row_anchors
+    col = {"name": (100.0, 400.0), "ordinal": (60.0, 100.0), "top": 100.0}
+    ordinals = [{"x0": 70, "x1": 90, "y0": 110 + 30 * i, "y1": 130 + 30 * i}
+                for i in range(30)]
+    written = [{"x0": 110, "x1": 380, "y0": 110 + 30 * i, "y1": 135 + 30 * i}
+               for i in range(7)]
+    bands = row_anchors(ordinals + written, col, 2000)
+    assert len(bands) >= 28, len(bands)
