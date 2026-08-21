@@ -141,6 +141,28 @@ against the same index both ways, and was reverted: the mangled first half
 becomes a family head and the rows below it inherit something worse than what
 they had.
 
+#### What the guesses are actually worth
+
+Measured against the ninety-six hand-read names, with the list as it stands
+tonight (760 names, built from a corpus that is still being re-read):
+
+| | |
+|---|---|
+| rows where the archive list contains any word of the true name | 71 of 96 |
+| rows where the right name is among the four offered | 23 |
+| rows offered only wrong names | 67 |
+
+So it helps on about a quarter of rows and shows plausible-but-wrong names on two
+thirds. That is the argument for every constraint on it — off by default, in its
+own section, in the warning colour, and never a stored value. Lowering the
+threshold to 0.5 buys four more rows with the same amount of noise, which is not
+enough to justify moving it.
+
+The list is the limit rather than the matching: on a quarter of rows the archive
+simply does not contain the name. It should get better as the refresh replaces
+records read before the name column was measured properly — **rebuild it and
+measure again then**.
+
 ### A dossier that silently emptied itself
 
 BS.ENT.013942 came back from the run with **no rows at all**, an hour after it
