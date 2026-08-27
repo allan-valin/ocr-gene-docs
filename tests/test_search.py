@@ -619,3 +619,131 @@ def test_naming_the_right_year_lifts_the_row_it_belongs_to():
     rows[1]["year"] = 1917
     hits = search(rows, "Maria Rosa Carrara 1922")
     assert hits[0]["text"] == "MARIA ROSA CARRANA"
+
+
+# ---- a year range, and the shipping line ------------------------------------
+#
+# A person searching knows the crossing better than the spelling: the ship if
+# the dossier states one — a third of them do — and otherwise the line printed
+# on the letterhead, which two thirds of them state. And the year they know is
+# usually "sometime in the early twenties", not 1924.
+
+def test_a_range_of_years_narrows_the_way_one_year_does():
+    """`1924-1926` is what somebody who knows the decade but not the date
+    types. Left as two numbers it is matched against surnames."""
+    ranged = {h["text"]: h["score"] for h in search(ROWS, "Camtadore 1924-1926")}
+    plain = {h["text"]: h["score"] for h in search(ROWS, "Camtadore")}
+    assert ranged["Guudo Camtadore"] > plain["Guudo Camtadore"]
+    assert ranged["Guido Contadore"] > plain["Guido Contadore"]
+
+
+def test_a_year_outside_the_range_still_falls_behind():
+    rows = ROWS + [{"doc": "D8", "file": "d8.pdf", "page": 1, "row": 1,
+                    "text": "Guido Camtadore", "ship": "Sirio", "year": 1901}]
+    hits = {h["text"]: h["score"] for h in search(rows, "Camtadore 1924-1926")}
+    plain = {h["text"]: h["score"] for h in search(rows, "Camtadore")}
+    assert hits["Guido Camtadore"] < plain["Guido Camtadore"]
+
+
+def test_the_range_is_read_however_it_is_typed():
+    from desembarque.search import split_year
+    for q in ("1924-1926", "1924 – 1926", "1924 a 1926", "1924 to 1926",
+              "1924/1926", "1926-1924"):
+        assert split_year(f"Camtadore {q}") == ("Camtadore", (1924, 1926)), q
+    assert split_year("Camtadore 1924") == ("Camtadore", (1924, 1924))
+    assert split_year("Camtadore") == ("Camtadore", None)
+
+
+def test_a_range_on_its_own_lists_everyone_who_landed_in_it():
+    hits = search(ROWS, "1924-1925")
+    assert hits and all(h["matched"] == "year" for h in hits)
+    assert {h["year"] for h in hits} == {1924, 1925}
+
+
+def lined(*docs):
+    """Rows carrying the shipping line printed on the document's letterhead."""
+    rows = []
+    for d, (line, names) in enumerate(docs):
+        for i, t in enumerate(names):
+            rows.append({"doc": f"L{d}", "file": f"l{d}.pdf", "page": 1,
+                         "row": i + 1, "text": t, "line": line})
+    return rows
+
+
+LINED = lined(("KONINKLIJKE HOLLANDSCHE LLOYD", ["Jose Muerso", "Ana Silva"]),
+              ("Comnpanhia Nacional de Navegação Costeira", ["Guudo Camtadore"]))
+
+
+def test_the_line_is_carried_into_the_index(tmp_path):
+    """Two thirds of the corpus states a line and a third states a ship, so it
+    is the widest thing a searcher can narrow by — and it was not in the index
+    at all."""
+    from desembarque.search import load_index
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "h", "engine": "paddle", "file": "d.pdf", "schema": 12,
+        "voyage": {"line": "LLOYD SABAUDO"},
+        "rows": [{"n": 1, "surname": "CONTADORE", "given": "GUIDO"}],
+    }), encoding="utf-8")
+    assert load_index(tmp_path)[0]["line"] == "LLOYD SABAUDO"
+
+
+def test_naming_the_line_lifts_the_rows_that_travelled_on_it():
+    lifted = {h["text"]: h["score"]
+              for h in search(LINED, "Muesso Hollandsche Lloyd")}
+    plain = {h["text"]: h["score"] for h in search(LINED, "Muesso")}
+    assert lifted["Jose Muerso"] > plain["Jose Muerso"]
+
+
+def test_the_line_is_taken_out_of_the_name_query():
+    """Left in the string, `Hollandsche Lloyd` is compared against every
+    surname on every page and dilutes the name it was typed to narrow."""
+    from desembarque.search import split_line
+    assert split_line("Muesso Hollandsche Lloyd", LINED) == (
+        "Muesso", ["HOLLANDSCHE", "LLOYD"])
+
+
+def test_a_line_the_recogniser_mangled_still_matches_a_typed_one():
+    """The letterhead came off the page through the same recogniser as the
+    surnames — `Comnpanhia Nacional de Navegação Costeira` is what it read."""
+    lifted = {h["text"]: h["score"]
+              for h in search(LINED, "Camtadore Companhia Nacional de Navegação Costeira")}
+    plain = {h["text"]: h["score"] for h in search(LINED, "Camtadore")}
+    assert lifted["Guudo Camtadore"] > plain["Guudo Camtadore"]
+
+
+def test_a_word_short_enough_to_be_a_surname_is_not_a_line():
+    """`Lloyd` and `Nelson` are shipping lines and they are also people. A
+    single short word is searched as the name it probably is."""
+    from desembarque.search import split_line
+    assert split_line("Lloyd", LINED) == ("Lloyd", [])
+    assert split_line("Nelson Silva", LINED) == ("Nelson Silva", [])
+
+
+def test_a_passenger_whose_name_is_the_whole_line_is_still_searchable():
+    """What is left after the line comes out has to still be a name."""
+    from desembarque.search import split_line
+    assert split_line("Hollandsche", LINED) == ("Hollandsche", [])
+
+
+def test_a_line_on_its_own_lists_everyone_who_sailed_with_it():
+    """The same question as a ship typed on its own, and for the 015061 dossier
+    it is the only one that can be asked: the page names no ship."""
+    hits = search(LINED, "Koninklijke Hollandsche Lloyd")
+    assert hits and all(h["matched"] == "line" for h in hits)
+    assert {h["text"] for h in hits} == {"Jose Muerso", "Ana Silva"}
+
+
+def test_a_document_with_no_line_is_never_hidden_by_one():
+    rows = LINED + [{"doc": "L9", "file": "l9.pdf", "page": 1, "row": 1,
+                     "text": "Jose Muesso"}]
+    hits = search(rows, "Muesso Hollandsche Lloyd")
+    assert any(h["doc"] == "L9" for h in hits)
+
+
+def test_naming_the_line_does_not_promote_a_row_that_looks_like_nothing():
+    """The same failure the ship bonus had: a flat lift puts a row resembling
+    nothing above a good match on another letterhead."""
+    rows = lined(("KONINKLIJKE HOLLANDSCHE LLOYD", ["CONGE NGLONE A"]),
+                 ("LLOYD SABAUDO", ["Guudo Casrtadore"]))
+    hits = search(rows, "Contadore Hollandsche Lloyd")
+    assert hits[0]["text"] == "Guudo Casrtadore"

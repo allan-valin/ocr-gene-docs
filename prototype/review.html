@@ -808,8 +808,10 @@ function renderHits(d){
     <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
          data-row="${h.row||0}" title="Abrir o documento nesta linha">
       <b>${h.text}</b>${h.ship?`<button class="narrow" data-ship="${h.ship}"
-        title="Buscar o mesmo nome só neste navio — dizer o navio é o que faz um nome comum aparecer">só ${h.ship}</button>`:""}
-      <span>${h.matched?"a bordo · ":""}${[h.ship, h.year?`${h.year}${h.year_source==="stamp"?" (carimbo)":""}`:null].filter(Boolean).join(" · ")}${h.ship||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
+        title="Buscar o mesmo nome só neste navio — dizer o navio é o que faz um nome comum aparecer">só ${h.ship}</button>`
+        :h.line?`<button class="narrow" data-ship="${h.line}"
+        title="Buscar o mesmo nome só nesta companhia — dois terços dos documentos dizem a companhia e só um terço diz o navio">só ${h.line}</button>`:""}
+      <span>${{ship:"a bordo · ",line:"mesma companhia · ",year:"mesmo ano · "}[h.matched]||""}${[h.ship||h.line, h.year?`${h.year}${h.year_source==="stamp"?" (carimbo)":""}`:null].filter(Boolean).join(" · ")}${h.ship||h.line||h.year?" · ":""}${h.notation||h.file||""} · p.${h.page||"?"} · linha ${h.row||"?"}
         ${h.conf==null?"":`<span class="dot ${h.conf<0.5?"lo":h.conf<0.8?"mid":"hi"}"
           role="img" aria-label="score do motor: ${Math.round(h.conf*100)}%"
           title="score do motor: ${Math.round(h.conf*100)}% — não é medida de acerto"></span>`}</span>

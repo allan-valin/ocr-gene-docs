@@ -65,6 +65,24 @@ SHIP_FLOOR = 0.85
 # are recorded as measured rather than left to be re-tuned by taste.
 STRONG_NAME = 0.5
 RE_YEAR = re.compile(r"\b(1[6-9]\d{2}|20[0-2]\d)\b")
+# The year a person knows is usually a decade, not a date: "he came out some
+# time after the war". Two years with anything or nothing between them are read
+# as the span they obviously are.
+RE_RANGE = re.compile(
+    r"\b(1[6-9]\d{2}|20[0-2]\d)\s*(?:-|–|—|/|a|to|até|ate|until)?\s*"
+    r"(1[6-9]\d{2}|20[0-2]\d)\b")
+# A shipping line is a printed phrase, not a hand-written word, so it is matched
+# token by token — each token as forgivingly as a ship's name, because the
+# letterhead came through the same recogniser.
+LINE_FLOOR = 0.85
+# One word is only a line when it is too long to be somebody's surname. `Lloyd`
+# and `Nelson` are shipping lines and they are also people, and a person is what
+# a searcher usually means.
+LINE_SOLO = 7
+# How much of a line has to be named before "everyone who sailed with it" is the
+# question being asked rather than a name search that mentions it.
+LINE_COVERAGE = 0.5
+LINE_TERMS = 5
 
 
 def fold(s: str) -> str:
@@ -179,6 +197,11 @@ _ROWS: dict[str, tuple[tuple[int, int], list[dict]]] = {}
 # it describes has actually changed.
 _VERSION = 0
 _POSTINGS: tuple[tuple[int, int], dict] | None = None
+# The words of the shipping lines, and what each word typed was worth against
+# them. Both are answers about the corpus rather than about a query, so they
+# outlive the request and are thrown away when the corpus changes.
+_VOCAB: tuple[tuple[int, int], dict[str, set[str]]] | None = None
+_TERMS: dict[tuple[int, str], dict[str, float]] = {}
 
 
 def _rows_of(f: Path, engine_only: bool,
@@ -301,7 +324,7 @@ def _parse(f: Path, engine_only: bool,
             "notation": d.get("notation"),
             # the year travels with where it was read: a stamped year is a
             # weaker claim than one the clerk wrote, and the hit list says so
-            **{k: voyage[k] for k in ("ship", "year", "year_source")
+            **{k: voyage[k] for k in ("ship", "year", "year_source", "line")
                if voyage.get(k)},
             "file": d.get("file"),
             "page": r.get("page"),
@@ -313,20 +336,29 @@ def _parse(f: Path, engine_only: bool,
     return out
 
 
-def split_year(query: str) -> tuple[str, int | None]:
-    """The query with any year taken out of it, and the year.
+def split_year(query: str) -> tuple[str, tuple[int, int] | None]:
+    """The query with any year taken out of it, and the span it named.
 
     `Contadore 1924` is a name and a year, not a nine-character surname. Left in
     the string it competes with the spelling of the name it was meant to
-    narrow.
+    narrow. A single year is the span of one year, so everything downstream has
+    one thing to reason about; `1924-1926` is the span somebody types when they
+    know the decade and not the date, and typed as two loose numbers it was
+    matched against surnames.
     """
-    m = RE_YEAR.search(query or "")
-    if not m:
-        return (query or "").strip(), None
+    query = query or ""
+    m = RE_RANGE.search(query)
+    if m:
+        lo, hi = sorted((int(m.group(1)), int(m.group(2))))
+    else:
+        m = RE_YEAR.search(query)
+        if not m:
+            return query.strip(), None
+        lo = hi = int(m.group(1))
     # The remainder may be nothing at all — a year typed on its own is a whole
     # question, and `search` answers it by listing that year's arrivals rather
     # than by comparing four digits against every surname in the corpus.
-    return (query[:m.start()] + " " + query[m.end():]).strip(), int(m.group(1))
+    return (query[:m.start()] + " " + query[m.end():]).strip(), (lo, hi)
 
 
 def ship_similarity(a: str, b: str) -> float:
@@ -361,7 +393,137 @@ def split_ship(query: str, rows: list[dict]) -> tuple[str, str | None]:
     return query, None
 
 
-def voyage_bonus(row: dict, year: int | None, terms: list[str]) -> float:
+def line_tokens(s: str) -> list[str]:
+    """The words of a shipping line worth matching on.
+
+    `de`, `e`, `&` and the punctuation between them carry nothing: every second
+    line in the corpus contains them.
+    """
+    return [t for t in re.split(r"[^\w]+", fold(s)) if len(t) >= 3]
+
+
+def line_similarity(terms: list[str], line: str) -> float:
+    """How well a typed phrase accounts for a shipping line's name.
+
+    Zero unless *every* typed term is in the line — a phrase that is half a
+    letterhead and half a surname is not a letterhead. What is returned is how
+    close the terms that did match came, so a line read `Comnpanhia` is worth
+    slightly less than one read correctly and both are worth having.
+    """
+    known = line_tokens(line)
+    if not known or not terms:
+        return 0.0
+    total = 0.0
+    for t in terms:
+        best = max(difflib.SequenceMatcher(None, t, k).ratio() for k in known)
+        if best < LINE_FLOOR:
+            return 0.0
+        total += best
+    return total / len(terms)
+
+
+def line_scores(rows: list[dict], terms: list[str]) -> dict[str, float]:
+    """What each shipping line in the index is worth against these terms.
+
+    Two hundred lines against a million rows: the comparison is done once per
+    line, not once per passenger — the same reason the ship match is. And once
+    per *word* rather than once per line, because the words of the letterheads
+    are indexed: a query of four words against 237 lines is 20,000 string
+    comparisons done the obvious way, which is half the cost of a keystroke.
+    """
+    if not terms:
+        return {}
+    per_term = [_term_lines(rows, t) for t in terms]
+    common = set(per_term[0])
+    for d in per_term[1:]:
+        common &= set(d)
+    return {ln: sum(d[ln] for d in per_term) / len(per_term) for ln in common}
+
+
+def _lines(rows: list[dict]) -> set[str]:
+    return {r["line"] for r in rows if r.get("line")}
+
+
+def _vocab(rows: list[dict]) -> dict[str, set[str]]:
+    """Every word of every shipping line, and the lines it appears in."""
+    global _VOCAB
+    key = (getattr(rows, "version", None), len(rows))
+    if key[0] is not None and _VOCAB and _VOCAB[0] == key:
+        return _VOCAB[1]
+    vocab: dict[str, set[str]] = {}
+    for ln in _lines(rows):
+        for tok in line_tokens(ln):
+            vocab.setdefault(tok, set()).add(ln)
+    if key[0] is not None:
+        _VOCAB = (key, vocab)
+        _TERMS.clear()
+    return vocab
+
+
+def _term_lines(rows: list[dict], term: str) -> dict[str, float]:
+    """Which lines contain this word, and how close the spelling came.
+
+    Memoised per word: a searcher types the same letterhead for every ancestor
+    on the same crossing, and the answer only changes when the corpus does.
+    """
+    key = (getattr(rows, "version", None), term)
+    if key[0] is not None and key in _TERMS:
+        return _TERMS[key]
+    out: dict[str, float] = {}
+    for tok, lines in _vocab(rows).items():
+        # a word two letters longer or shorter than the one typed cannot come
+        # within the floor, and the cheap ratios refuse most of the rest
+        if abs(len(tok) - len(term)) > 2:
+            continue
+        m = difflib.SequenceMatcher(None, term, tok)
+        if m.real_quick_ratio() < LINE_FLOOR or m.quick_ratio() < LINE_FLOOR:
+            continue
+        sc = m.ratio()
+        if sc < LINE_FLOOR:
+            continue
+        for ln in lines:
+            if sc > out.get(ln, 0.0):
+                out[ln] = sc
+    if key[0] is not None:
+        _TERMS[key] = out
+    return out
+
+
+def split_line(query: str, rows: list[dict]) -> tuple[str, list[str]]:
+    """The query with a shipping line taken out of it, and its words.
+
+    A third of the corpus states a ship and two thirds state the line printed on
+    the letterhead, so for most dossiers the line is the only crossing a
+    searcher can name. It is decided against the index for the same reason the
+    ship is — no query says which of its words is a company — and taken out for
+    the same reason: left in, `Hollandsche Lloyd` is compared against every
+    surname on every page and dilutes the name it was typed to narrow.
+
+    The longest run of words that names one line wins, and only if what remains
+    is still a name.
+    """
+    if not _vocab(rows):
+        return query, []
+    words = query.split()
+    for size in range(min(LINE_TERMS, len(words)), 0, -1):
+        for i in range(len(words) - size + 1):
+            terms = [t for t in (fold(w) for w in words[i:i + size])
+                     if len(t) >= 3]
+            if not terms:
+                continue
+            if len(terms) == 1 and len(terms[0]) < LINE_SOLO:
+                continue
+            if not line_scores(rows, terms):
+                continue
+            rest = " ".join(words[:i] + words[i + size:]).strip()
+            if len(fold(rest)) < MIN_QUERY:
+                continue          # what is left has to still be a name
+            return rest, terms
+    return query, []
+
+
+def voyage_bonus(row: dict, years: tuple[int, int] | None, terms: list[str],
+                 lines: dict[str, float] | None = None) -> float:
     """How much the voyage a row belongs to agrees with what was typed.
 
     Never a filter. Most of the corpus has no voyage indexed yet, and a filter
@@ -371,8 +533,8 @@ def voyage_bonus(row: dict, year: int | None, terms: list[str]) -> float:
     not removed from them.
     """
     bonus = 0.0
-    if year and row.get("year"):
-        bonus += (VOYAGE_BONUS if int(row["year"]) == year
+    if years and row.get("year"):
+        bonus += (VOYAGE_BONUS if years[0] <= int(row["year"]) <= years[1]
                   else -VOYAGE_PENALTY)
     ship = row.get("ship")
     if ship and terms:
@@ -381,6 +543,8 @@ def voyage_bonus(row: dict, year: int | None, terms: list[str]) -> float:
         best = max(ship_similarity(t, ship) for t in terms)
         if best >= SHIP_FLOOR:
             bonus += VOYAGE_BONUS * best
+    if lines and row.get("line"):
+        bonus += VOYAGE_BONUS * lines.get(row["line"], 0.0)
     return bonus
 
 
@@ -452,9 +616,11 @@ def search(rows: list[dict], query: str, limit: int = 50,
     """Ranked matches, best first. An unrecognisable query returns nothing."""
     if len(fold(query)) < MIN_QUERY:
         return []
-    name_q, year = split_year(query)
+    name_q, years = split_year(query)
     name_q, ship_term = split_ship(name_q, rows)
+    name_q, line_terms = split_line(name_q, rows)
     terms = [ship_term] if ship_term else []
+    lines = line_scores(rows, line_terms)
     scored = []
     # An empty name query is not a query. Trigrams are padded, so `similarity`
     # of nothing against a row read as `B   B` comes out at 0.25 — a page of
@@ -475,7 +641,8 @@ def search(rows: list[dict], query: str, limit: int = 50,
             # put `CONGE NGLONE A` above `Guudo Casrtadore` for a query naming
             # the Contadores' ship. What is wanted is to sharpen a match, not
             # to manufacture one.
-            rank = max(0.0, min(1.0, s * (1 + voyage_bonus(r, year, terms))))
+            rank = max(0.0, min(1.0,
+                                 s * (1 + voyage_bonus(r, years, terms, lines))))
             scored.append({**r, "score": round(rank, 3), "name_score": round(s, 3)})
     scored.sort(key=lambda h: (-h["score"], h.get("file") or "", h["row"] or 0))
 
@@ -487,11 +654,16 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # and a surname, and somebody typing it means a person more often than not.
     seen = {(h["doc"], h["row"]) for h in scored}
     aboard = _aboard(rows, query, seen)
-    if not aboard and year and len(fold(name_q)) < MIN_QUERY:
+    if not aboard:
+        # The line is asked the same way the ship is, and for the dossiers that
+        # name no ship it is the only way to ask: two thirds of the corpus
+        # states a line, a third a ship.
+        aboard = _sailed(rows, query, seen)
+    if not aboard and years and len(fold(name_q)) < MIN_QUERY:
         # A year typed on its own is the same question as a ship typed on its
         # own, and it was stripped out of the query as a year should be —
         # leaving nothing at all to search for.
-        aboard = _arrived(rows, year, seen)
+        aboard = _arrived(rows, years, seen)
     # A row scoring 0.15 against a surname is noise; the passengers of the ship
     # that was typed are a certainty. Strong name matches keep the top of the
     # list, the ship's own dossier follows, and the guesses come after it.
@@ -500,10 +672,10 @@ def search(rows: list[dict], query: str, limit: int = 50,
     return (strong + aboard + weak)[:limit]
 
 
-def _arrived(rows: list[dict], year: int, already: set) -> list[dict]:
-    """Rows from every document that says it landed in this year."""
+def _arrived(rows: list[dict], years: tuple[int, int], already: set) -> list[dict]:
+    """Rows from every document that says it landed in these years."""
     out = [{**r, "score": 1.0, "matched": "year"} for r in rows
-           if r.get("year") and int(r["year"]) == year
+           if r.get("year") and years[0] <= int(r["year"]) <= years[1]
            and (r["doc"], r["row"]) not in already]
     out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
     return out
@@ -523,5 +695,30 @@ def _aboard(rows: list[dict], query: str, already: set) -> list[dict]:
     out = [{**r, "score": close[r["ship"]], "matched": "ship"}
            for r in rows
            if r.get("ship") in close and (r["doc"], r["row"]) not in already]
+    out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
+    return out
+
+
+def _sailed(rows: list[dict], query: str, already: set) -> list[dict]:
+    """Rows from every document printed on the letterhead that was typed.
+
+    Naming most of a line is a different question from mentioning it beside a
+    surname: `Muesso Hollandsche Lloyd` is a search for Muesso, and
+    `Koninklijke Hollandsche Lloyd` is a search for the line. The two are told
+    apart by how much of the letterhead the query accounts for.
+    """
+    terms = line_tokens(query)
+    if not terms:
+        return []
+    close = {}
+    for ln, sc in line_scores(rows, terms).items():
+        # every word typed is in the line; enough of the line was typed
+        if len(terms) / len(line_tokens(ln)) >= LINE_COVERAGE:
+            close[ln] = round(sc, 3)
+    if not close:
+        return []
+    out = [{**r, "score": close[r["line"]], "matched": "line"}
+           for r in rows
+           if r.get("line") in close and (r["doc"], r["row"]) not in already]
     out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
     return out

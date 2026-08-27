@@ -26,7 +26,7 @@ from desembarque.identity import cached_hash        # noqa: E402
 from desembarque.search import load_index, search   # noqa: E402
 
 
-def truth_rows(cache: Path, scans: Path) -> list[dict]:
+def truth_rows(cache: Path, scans: Path, with_line: bool = False) -> list[dict]:
     """Every hand-read name, with the row it should be found on."""
     out = []
     for f in sorted((ROOT / "data" / "truth").glob("*.json")):
@@ -51,8 +51,14 @@ def truth_rows(cache: Path, scans: Path) -> list[dict]:
                 # what somebody who knows the crossing would add: the ship if
                 # the dossier states one, otherwise the year
                 voyage = record.get("voyage") or {}
-                extra = voyage.get("ship") or (str(voyage["year"])
-                                               if voyage.get("year") else "")
+                # a third of the corpus names a ship and two thirds name the
+                # line printed on the letterhead, so for most dossiers the line
+                # is the only crossing somebody could type
+                extra = voyage.get("ship") or ""
+                if with_line and not extra:
+                    extra = voyage.get("line") or ""
+                if not extra and voyage.get("year"):
+                    extra = str(voyage["year"])
                 out.append({"name": name, "doc": doc, "page": t["page"],
                             "row": rows[off + i].get("n"),
                             "read": rows[off + i].get("name_raw") or "",
@@ -69,12 +75,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--voyage", action="store_true",
                     help="add the dossier's ship or year to each query, the way "
                          "somebody who knows the crossing would")
+    ap.add_argument("--with-line", action="store_true",
+                    help="where the dossier names no ship, hint with the "
+                         "shipping line on its letterhead instead of the year")
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
     sys.path.insert(0, str(ROOT / "scripts"))
 
     rows = load_index(args.cache, engine_only=False)
-    wanted = truth_rows(args.cache, args.scans)
+    wanted = truth_rows(args.cache, args.scans, with_line=args.with_line)
     print(f"{len(wanted)} hand-read names against {len(rows)} indexed rows")
 
     found, ranks, misses = 0, [], []
