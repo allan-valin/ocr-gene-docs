@@ -70,11 +70,12 @@ Honest about the limits:
 * **Typescript is solved; cursive is four fifths findable, if you know the crossing.**
   Measured by searching each of 142 hand-read names exactly as a person would type it,
   against the whole index: **41 of 42 names on the typewritten pages** come back in the top
-  ten either way, and on the cursive pages **49 of 100 typing only the name, 81 of 100 when
+  ten either way, and on the cursive pages **49 of 100 typing only the name, 84 of 100 when
   the ship, the line or the year is named as well**. `Ponticelli Giovanni` is read as
   `Pouticelli Sooai` — wrong as a transcription, findable as a search. The recogniser is
-  the ceiling and 18 of the 20 names still missing are below any matcher's floor: the row
-  simply does not resemble the name. A wider input, a bigger model, removing the printed
+  the ceiling and most of the 17 names still missing are below any matcher's floor: the
+  row simply does not resemble the name, and four of them are rows the recogniser returned
+  empty. A wider input, a bigger model, removing the printed
   rules and folding confusable letters were each measured and each was worse or no better,
   and pretrained handwriting models lost to the printed-text recogniser by a wide margin
   (CER 0.61 against 0.21, at 8 s a row). This needs training data of its own rather than

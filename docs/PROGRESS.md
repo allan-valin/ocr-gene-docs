@@ -21,10 +21,10 @@ the crossing would type it:
 | the name alone | 90 of 142 (63%) |
 | naming the ship, as of yesterday | 110 (77%) |
 | naming the **shipping line** where no ship is stated | 119 (84%) |
-| plus **comparing letters inside the named crossing** | **122 (86%)** |
+| plus **comparing letters inside the named crossing** | **125 (88%)** |
 
 The hard page — BS.ENT.015061 p6, 46 Marias and Joses on a dossier that names
-no ship — goes from 23 findable to 33.
+no ship — goes from 23 findable to 37.
 
 * **The line is indexed and searchable.** Two thirds of the dossiers state the
   shipping line printed on the letterhead against a third that state a ship, so
@@ -42,8 +42,11 @@ no ship — goes from 23 findable to 33.
   Meesoo` shares no trigram with what a person types and stands at 0.58 by edit
   distance; `Manoel da Cruz` read as `Manvil' Dar Cuy` is 0.69. Naming the
   crossing cuts the pool to a few hundred rows, and there the comparison is
-  affordable. Floor swept: 86 findable at 0.45, 112 at 0.5, **122 at 0.55**,
-  119 at 0.7.
+  affordable, and a row keeps the better of the two measures rather than being
+  scored twice — `Manvil' Dar Cuy` shares just enough trigrams with *Manoel da
+  Cruz* to score 0.15, which used to put it in the results at rank forty with a
+  0.69 reading of itself never looked at. Floor swept: 125 findable at 0.55,
+  0.6 and 0.65, 119 at 0.7 where the pass stops adding anything.
 
 ### 301 pages the corpus had given up on, and nobody was told
 

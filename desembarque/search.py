@@ -73,10 +73,11 @@ STRONG_NAME = 0.5
 # compared, and most of them are somebody else.
 #
 # Swept against the hand-read pages, with the crossing named the way somebody
-# who knows it would: 86 findable at 0.45, 112 at 0.5, **122 at 0.55**, 121 at
-# 0.6 and 0.65, 119 at 0.7 — which is where the pass stops finding anything the
-# trigrams did not. The collapse below 0.5 is the point: a forgiving floor does
-# not find more people, it fills the top ten with other people's names.
+# who knows it would: 124 findable at 0.45, 123 at 0.5, **125 at 0.55, 0.6 and
+# 0.65**, and 119 at 0.7 — where the pass stops finding anything the trigrams
+# did not. It is flat because a row keeps the better of the two measures rather
+# than being added twice; when the pass could only add rows, a floor of 0.45
+# cost 39 names by displacing them.
 EDIT_FLOOR = 0.55
 #
 # Running the same comparison over the *whole* corpus, as a second attempt when
