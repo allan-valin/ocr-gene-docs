@@ -78,6 +78,16 @@ STRONG_NAME = 0.5
 # trigrams did not. The collapse below 0.5 is the point: a forgiving floor does
 # not find more people, it fills the top ten with other people's names.
 EDIT_FLOOR = 0.55
+#
+# Running the same comparison over the *whole* corpus, as a second attempt when
+# the trigrams found nothing, was measured and dropped. In isolation it looks
+# strong — 29 of the 52 hand-read names the trigrams miss come back in the top
+# ten of its own list, from a median pool of 53 rows out of 30,000. Merged with
+# the trigram hits it is worth nothing: 91 findable of 142 against 90 at a floor
+# of 0.65, and 66 at 0.55, because an edit score and a trigram score are not the
+# same measure and the rows it pulls displace the ones that were already right.
+# The crossing is what makes this pass work, by cutting the pool before it runs
+# rather than by scoring harder afterwards.
 RE_YEAR = re.compile(r"\b(1[6-9]\d{2}|20[0-2]\d)\b")
 # The year a person knows is usually a decade, not a date: "he came out some
 # time after the war". Two years with anything or nothing between them are read

@@ -810,3 +810,12 @@ def test_a_good_trigram_match_still_wins():
     rows = voyaged(("Valdivia", 1924, ["bmike Meesoo", "EMILI MUESSO"]))
     hits = search(rows, "EMILI MUESSO Valdivia")
     assert hits[0]["text"] == "EMILI MUESSO"
+
+
+def test_the_crossing_is_what_buys_the_last_of_them():
+    """`EMILI MUESSO` read as `bmike Meesoo` stands at 0.58, under the floor a
+    corpus-wide scan can afford. Naming the ship cuts the pool to a dossier and
+    the same reading is reachable — which is what the crossing is for."""
+    rows = voyaged(("Valdivia", 1924, ["bmike Meesoo"]))
+    assert search(rows, "EMILI MUESSO") == []
+    assert search(rows, "EMILI MUESSO Valdivia")[0]["text"] == "bmike Meesoo"
