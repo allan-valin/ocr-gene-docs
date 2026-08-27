@@ -837,3 +837,36 @@ def test_the_letter_pass_finds_the_same_rows_through_the_index(tmp_path):
     hits = search(rows, "EMILI MUESSO Valdivia")
     assert [h["text"] for h in hits] == ["bmike Meesoo"]
     assert search(list(rows), "EMILI MUESSO Valdivia")[0]["text"] == "bmike Meesoo"
+
+
+# ---- queries that are not names ---------------------------------------------
+#
+# The search box takes whatever a person types, including what they paste out of
+# a spreadsheet or an archive listing. None of it may raise.
+
+def test_odd_queries_are_answered_rather_than_raising():
+    rows = ROWS + LINED
+    for q in ("....", "1924-", "-1924", "1924--1926", "1924 1925 1926",
+              "  Contadore  ", "Lloyd — Brasileiro", "N.º 12 Contadore",
+              "MARIA" * 40, "ñçõ", "Валдивия", "BR_RJANRIO_BS_0_RPV_ENT_013947",
+              "Camtadore Valdivia 1924 Hollandsche Lloyd"):
+        hits = search(rows, q)
+        assert isinstance(hits, list), q
+        assert all("score" in h for h in hits), q
+
+
+def test_a_query_of_only_a_range_is_still_a_range():
+    from desembarque.search import split_year
+    assert split_year("1924-1926") == ("", (1924, 1926))
+
+
+def test_two_years_that_are_not_a_range_do_not_swallow_the_name():
+    """`Contadore 1924` twice over is still one year and one name."""
+    from desembarque.search import split_year
+    name, years = split_year("Contadore 1924")
+    assert (name, years) == ("Contadore", (1924, 1924))
+
+
+def test_a_line_of_short_words_is_not_a_line():
+    from desembarque.search import split_line
+    assert split_line("de la e do", LINED) == ("de la e do", [])
