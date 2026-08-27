@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         # A page the geometry could not measure is stored with nothing on it,
         # and the record around it stays current — so no run will ever look at
         # it again unless it is counted here.
-        wanting = pages_wanting_a_reading(d)
+        wanting = pages_wanting_a_reading(d, schema=SCHEMA)
         if wanting:
             unread += len(wanting)
             unread_docs += 1

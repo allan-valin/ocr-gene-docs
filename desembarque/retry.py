@@ -23,12 +23,17 @@ are. One page of a record was read again; the document was not.
 from __future__ import annotations
 
 
-def pages_wanting_a_reading(record: dict) -> list[int]:
+def pages_wanting_a_reading(record: dict, schema: int = 0) -> list[int]:
     """Page numbers stored with no reading that the engine could try again.
 
     A page the engine *failed* on is not one of them: an error makes the whole
     record stale, and an index run reads the document from the top. Repairing
     it here would take the document off that list with nobody told.
+
+    Nor is a page that was already read again by this engine and came back
+    empty. Two hundred of them are genuinely blank paper, and re-proving that
+    on every future run costs an hour and finds nobody. The stamp is the
+    engine's schema, so when the engine learns something they all come back.
     """
     if not record or not record.get("engine"):
         return []          # a document nobody read is an index run's work
@@ -39,6 +44,8 @@ def pages_wanting_a_reading(record: dict) -> list[int]:
         if not isinstance(p, dict) or p.get("error"):
             continue
         if p.get("kind") != "unknown" or p.get("n") in has_rows:
+            continue
+        if schema and int(p.get("retried") or 0) >= schema:
             continue
         out.append(p.get("n"))
     return [n for n in out if n]
@@ -70,4 +77,23 @@ def with_page(record: dict, page_n: int, page: dict,
     out["pages"] = pages
     out["rows"] = sorted([*(record.get("rows") or []), *fresh],
                          key=lambda r: (r.get("page") or 0, r.get("n") or 0))
+    return out
+
+
+def with_nothing_found(record: dict, page_n: int, schema: int) -> dict | None:
+    """The record with `page_n` marked as read again and still empty.
+
+    Nothing else moves — not the rows, not what a person typed over them, not
+    the record's own stamps. This says one page was tried by one engine, which
+    is the only thing that was learned.
+    """
+    pages, found = [], False
+    for p in record.get("pages") or []:
+        if isinstance(p, dict) and p.get("n") == page_n:
+            p, found = {**p, "retried": int(schema)}, True
+        pages.append(p)
+    if not found:
+        return None
+    out = dict(record)
+    out["pages"] = pages
     return out

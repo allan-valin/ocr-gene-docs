@@ -33,7 +33,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from desembarque.batch import collect_pdfs                            # noqa: E402
 from desembarque.identity import cached_hash                          # noqa: E402
-from desembarque.retry import pages_wanting_a_reading, with_page      # noqa: E402
+from desembarque.retry import (pages_wanting_a_reading, with_nothing_found,
+                               with_page)                             # noqa: E402
+from desembarque.search import SCHEMA                                 # noqa: E402
 from page_geometry import page_image                                  # noqa: E402
 
 _ENGINE = None
@@ -106,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             record = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        wanted = pages_wanting_a_reading(record)
+        wanted = pages_wanting_a_reading(record, schema=SCHEMA)
         if not wanted:
             done_already += 1
             continue
@@ -132,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
             f, record, wanted = futures[fut]
             got = fut.result()
             done += 1
-            out, wrote, names = record, 0, 0
+            out, wrote, names, marked = record, 0, 0, 0
             for n in wanted:
                 fresh = got.get(n)
                 if fresh is None:
@@ -141,11 +143,20 @@ def main(argv: list[str] | None = None) -> int:
                 nxt = with_page(out, n, fresh["page"], fresh["rows"])
                 if nxt is None:
                     refused += 1
+                    # It was read again by this engine and there was nothing on
+                    # it. Said so on the page, the next run spends its hour on
+                    # pages that might still give somebody up.
+                    stamped = with_nothing_found(out, n, SCHEMA)
+                    if stamped is not None:
+                        out, marked = stamped, marked + 1
                     continue
                 out, wrote = nxt, wrote + len(fresh["rows"])
                 names += sum(1 for r in fresh["rows"]
                              if (r.get("name_raw") or "").strip())
             if not wrote:
+                if marked and not args.dry_run:
+                    f.write_text(json.dumps(out, ensure_ascii=False, indent=2),
+                                 encoding="utf-8")
                 print(f"  [{done}/{len(jobs)}] "
                       f"{record.get('notation') or record.get('file')}: "
                       f"{len(wanted)} page(s) still read nothing", flush=True)

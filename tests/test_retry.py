@@ -59,6 +59,25 @@ def test_rows_stay_in_page_order_when_the_repaired_page_is_first():
     assert [r["page"] for r in out["rows"]] == [1, 2]
 
 
+def test_a_page_already_tried_by_this_engine_is_not_tried_again():
+    """A page that came back empty when it was read again will come back empty
+    every time, and there are two hundred of them: an hour of every future run
+    spent proving the same thing. The stamp is the engine's schema, so the next
+    time the engine learns something they all come back into the list."""
+    from desembarque.retry import with_nothing_found
+    r = with_nothing_found(record(), 3, schema=18)
+    assert r["pages"][2]["retried"] == 18
+    assert pages_wanting_a_reading(r, schema=18) == []
+    assert pages_wanting_a_reading(r, schema=19) == [3]
+
+
+def test_marking_a_page_tried_touches_nothing_else():
+    from desembarque.retry import with_nothing_found
+    r = with_nothing_found(record(), 3, schema=18)
+    assert r["rows"] == record()["rows"]
+    assert r["schema"] == 18 and "read_schema" not in r
+
+
 def test_a_page_that_still_reads_nothing_is_refused():
     """Nothing was gained, and rewriting the file would cost every future run
     the cache it resumes from."""
