@@ -205,3 +205,30 @@ def test_search_results_leave_as_a_list_of_places_to_look():
 def test_an_empty_search_still_exports_its_header():
     from desembarque.export import hits_to_csv
     assert "consulta" in hits_to_csv("x", "").splitlines()[0]
+
+
+def test_the_search_csv_carries_the_shipping_line():
+    """Two thirds of the dossiers name a line and a third name a ship, so for
+    most of a result list the line is the only crossing on the row — and it is
+    what somebody ordering copies takes to the archive."""
+    from desembarque.export import hits_to_csv
+    out = hits_to_csv("Muesso", [{"text": "Jose Muerso", "line": "LLOYD SABAUDO",
+                                  "page": 2, "row": 3, "score": 0.7}])
+    assert "companhia" in out.splitlines()[0]
+    assert "LLOYD SABAUDO" in out
+
+
+def test_the_search_csv_says_a_row_came_back_for_its_letterhead():
+    from desembarque.export import hits_to_csv
+    out = hits_to_csv("Hollandsche Lloyd",
+                      [{"text": "Ana Silva", "matched": "line", "row": 1}])
+    assert "todos os passageiros desta companhia" in out
+
+
+def test_the_search_csv_says_a_row_was_matched_letter_by_letter():
+    """A row that shares no trigram with the query is a different kind of
+    answer, and the person checking it against the scan should know."""
+    from desembarque.export import hits_to_csv
+    out = hits_to_csv("EMILI MUESSO Valdivia",
+                      [{"text": "bmike Meesoo", "matched": "letters", "row": 1}])
+    assert "comparação letra a letra" in out

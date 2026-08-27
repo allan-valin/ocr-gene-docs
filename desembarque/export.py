@@ -103,14 +103,19 @@ def rows_to_csv(doc: dict, catalogued: str | None = None) -> str:
 
 HIT_FIELDS = [
     "consulta", "leitura", "notacao", "arquivo", "pagina", "linha",
-    "navio", "ano", "origem_do_ano", "pontuacao", "achado_por", "score_motor",
+    "navio", "companhia", "ano", "origem_do_ano", "pontuacao", "achado_por",
+    "score_motor",
 ]
 
 # Why a row came back. A name that resembles what was typed is a different kind
 # of answer from every passenger on a ship that was typed, and somebody ordering
 # copies from the archive is entitled to know which they are looking at.
 FOUND_BY = {"ship": "todos os passageiros deste navio",
+            "line": "todos os passageiros desta companhia",
             "year": "todas as chegadas deste ano",
+            # a row that shares no trigram with the query, found by comparing
+            # letters within the crossing that was named
+            "letters": "comparação letra a letra dentro da viagem indicada",
             None: "semelhança com o nome procurado"}
 
 
@@ -134,6 +139,7 @@ def hits_to_csv(query: str, hits: list[dict]) -> str:
             "pagina": h.get("page") or "",
             "linha": h.get("row") or "",
             "navio": h.get("ship") or "",
+            "companhia": h.get("line") or "",
             "ano": h.get("year") or "",
             "origem_do_ano": h.get("year_source") or "",
             "pontuacao": h.get("score") if h.get("score") is not None else "",

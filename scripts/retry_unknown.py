@@ -146,6 +146,9 @@ def main(argv: list[str] | None = None) -> int:
                 names += sum(1 for r in fresh["rows"]
                              if (r.get("name_raw") or "").strip())
             if not wrote:
+                print(f"  [{done}/{len(jobs)}] "
+                      f"{record.get('notation') or record.get('file')}: "
+                      f"{len(wanted)} page(s) still read nothing", flush=True)
                 continue
             gained += 1
             rows_gained += wrote
