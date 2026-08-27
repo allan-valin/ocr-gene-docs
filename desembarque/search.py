@@ -14,6 +14,7 @@ evidence, a confident wrong row is worse than an empty list.
 from __future__ import annotations
 
 import difflib
+import functools
 import json
 from array import array
 import re
@@ -387,6 +388,11 @@ def split_year(query: str) -> tuple[str, tuple[int, int] | None]:
     return (query[:m.start()] + " " + query[m.end():]).strip(), (lo, hi)
 
 
+# One entry per (term, ship) pair. The voyage bonus asks this of every row it
+# scores, which is 20,000 rows over a corpus of 300,000 — against the two or
+# three terms the query holds and the hundred-odd ships the archive names. It
+# was half the cost of a slow query, and it is a pure function of two strings.
+@functools.lru_cache(maxsize=8192)
 def ship_similarity(a: str, b: str) -> float:
     """How close two spellings of one ship's name are."""
     return difflib.SequenceMatcher(None, fold(a), fold(b)).ratio()
@@ -633,7 +639,7 @@ class RowIndex(list):
         return by
 
     @property
-    def postings(self) -> tuple[dict[str, "array"], "array", "array"]:
+    def postings(self) -> tuple[dict[str, "array"], "array", "array", list]:
         """Where each trigram occurs, and how big each reading is.
 
         A posting is a *reading* rather than a row: a row read twice is two of
@@ -656,7 +662,7 @@ class RowIndex(list):
         if self.version is not None and _POSTINGS and _POSTINGS[0] == key:
             return _POSTINGS[1]
         post: dict[str, array] = {}
-        owner, size = array("i"), array("i")
+        owner, size, folded = array("i"), array("i"), [[] for _ in self]
         for i, r in enumerate(self):
             for text in (r.get("text") or "", *(r.get("alts") or ())):
                 grams = trigrams(text) if text else set()
@@ -665,9 +671,15 @@ class RowIndex(list):
                 rid = len(owner)
                 owner.append(i)
                 size.append(len(grams))
+                # the accent-folded reading, kept because the letter-by-letter
+                # pass folds every row it compares and was folding them again
+                # on every keystroke. 5 MB over the 31,000 rows indexed, 50 MB
+                # over ten times that — a quarter off the pass, but only once
+                # the ship comparison below stopped swamping it.
+                folded[i].append(fold(text))
                 for g in grams:
                     post.setdefault(g, array("i")).append(rid)
-        built = (post, owner, size)
+        built = (post, owner, size, folded)
         if self.version is not None:
             _POSTINGS = (key, built)
         return built
@@ -705,8 +717,8 @@ def on_crossing(row: dict, years: tuple[int, int] | None, ships: set[str],
 
 
 def crossing_pool(rows: list[dict], years: tuple[int, int] | None,
-                  ships: set[str], lines: dict[str, float] | None) -> list[dict]:
-    """The rows of the crossing the query named.
+                  ships: set[str], lines: dict[str, float] | None) -> list[int]:
+    """Where the rows of the crossing the query named sit in the index.
 
     Walking every row to ask each one costs nothing at 30,000 and is a scan of
     the whole corpus at a million, which is what this pass exists to avoid. The
@@ -715,7 +727,8 @@ def crossing_pool(rows: list[dict], years: tuple[int, int] | None,
     """
     by = getattr(rows, "crossings", None)
     if by is None:
-        return [r for r in rows if on_crossing(r, years, ships, lines)]
+        return [i for i, r in enumerate(rows)
+                if on_crossing(r, years, ships, lines)]
     hit: set[int] = set()
     for sh in ships:
         hit.update(by["ship"].get(sh, ()))
@@ -724,7 +737,7 @@ def crossing_pool(rows: list[dict], years: tuple[int, int] | None,
     if years:
         for y in range(years[0], years[1] + 1):
             hit.update(by["year"].get(y, ()))
-    return [rows[i] for i in sorted(hit)]
+    return sorted(hit)
 
 
 def candidates(rows: list[dict], query: str) -> list[tuple[dict, float]]:
@@ -741,7 +754,7 @@ def candidates(rows: list[dict], query: str) -> list[tuple[dict, float]]:
         return [(r, max(similarity(query, t)
                         for t in (r["text"], *(r.get("alts") or ()))))
                 for r in rows]
-    post, owner, size = index
+    post, owner, size, _folded = index
     grams = trigrams(query)
     shared: dict[int, int] = {}
     for g in grams:
@@ -792,6 +805,21 @@ def search(rows: list[dict], query: str, limit: int = 50,
             bonus = voyage_bonus(r, years, terms, lines)
             rank = max(0.0, min(1.0, s * (1 + bonus)))
             scored.append({**r, "score": round(rank, 3), "name_score": round(s, 3)})
+    WIDE = float(__import__("os").environ.get("DESEMBARQUE_WIDE", "0") or 0)
+    _gate = __import__("os").environ.get("DESEMBARQUE_GATE", "weak")
+    _fire = (not (years or terms or lines)) and (
+        _gate == "always"
+        or max((h["name_score"] for h in scored), default=0.0)
+        < float(__import__("os").environ.get("DESEMBARQUE_BAR", "0.5")))
+    if WIDE and _fire:
+        by_key = {(h["doc"], h["row"]): h for h in scored}
+        import desembarque.search as _self
+        _pool, _self.crossing_pool = _self.crossing_pool, lambda r, y, s_, l: r
+        try:
+            scored.extend(_letter_by_letter(rows, name_q, years, terms, lines,
+                                            by_key, floor=WIDE))
+        finally:
+            _self.crossing_pool = _pool
     if years or terms or lines:
         # A row already scored keeps whichever measure reads it better. It is
         # not "seen": `Manvil' Dar Cuy` shares just enough trigrams with *Manoel
@@ -882,7 +910,7 @@ def _sailed(rows: list[dict], query: str, already: set) -> list[dict]:
 def _letter_by_letter(rows: list[dict], name_q: str,
                       years: tuple[int, int] | None, terms: list[str],
                       lines: dict[str, float] | None,
-                      already: dict) -> list[dict]:
+                      already: dict, floor: float = EDIT_FLOOR) -> list[dict]:
     """Rows of the named crossing that read like the name, letter by letter.
 
     The trigram pass has already had its say; this is the second chance the
@@ -901,6 +929,12 @@ def _letter_by_letter(rows: list[dict], name_q: str,
         return []
     ships = named_ships(rows, terms)
     pool = crossing_pool(rows, years, ships, lines)
+    EDIT = floor
+    # Every reading of every row, folded once when the index was built. This
+    # pass folds each row it compares, and was folding them again on every
+    # keystroke.
+    index = getattr(rows, "postings", None)
+    folded = index[3] if index is not None else None
     # One matcher for the whole scan, with the query loaded once: it keeps the
     # index of the query's characters between comparisons, and the two cheap
     # ratios refuse most rows before the real one is computed. The length test
@@ -909,11 +943,13 @@ def _letter_by_letter(rows: list[dict], name_q: str,
     m = difflib.SequenceMatcher(autojunk=False)
     m.set_seq2(q)
     out = []
-    for r in pool:
+    for i in pool:
+        r = rows[i]
         s = 0.0
-        for text in (r["text"], *(r.get("alts") or ())):
-            t = fold(text)
-            if not t or 2 * min(len(q), len(t)) < EDIT_FLOOR * (len(q) + len(t)):
+        readings = (folded[i] if folded is not None
+                    else [fold(t) for t in (r["text"], *(r.get("alts") or ()))])
+        for t in readings:
+            if not t or 2 * min(len(q), len(t)) < EDIT * (len(q) + len(t)):
                 continue
             m.set_seq1(t)
             # both cheap ratios are upper bounds on the real one and both are
@@ -921,11 +957,10 @@ def _letter_by_letter(rows: list[dict], name_q: str,
             # for either orientation. The score itself is taken the way
             # `edit_similarity` takes it, because which string is which changes
             # the third decimal and the third decimal decides two names.
-            if (m.real_quick_ratio() < EDIT_FLOOR
-                    or m.quick_ratio() < EDIT_FLOOR):
+            if m.real_quick_ratio() < EDIT or m.quick_ratio() < EDIT:
                 continue
-            s = max(s, edit_similarity(name_q, text))
-        if s < EDIT_FLOOR:
+            s = max(s, difflib.SequenceMatcher(None, q, t).ratio())
+        if s < EDIT:
             continue
         rank = max(0.0, min(1.0, s * (1 + voyage_bonus(r, years, terms, lines))))
         # how it was found, because a row that shares few trigrams with the

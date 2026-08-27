@@ -899,3 +899,44 @@ def test_a_poor_trigram_score_does_not_block_the_letter_comparison():
     # and it does not claim to have been found letter by letter: the trigrams
     # had it, badly, and a hit that explains itself when it need not is noise
     assert "matched" not in hits[0]
+
+
+def test_the_cached_folding_answers_what_folding_on_the_spot_answered():
+    """The postings keep every reading accent-folded, because the letter pass
+    folds each row it compares and was doing it again on every keystroke.
+
+    The cache is built inside the loop that builds the trigram postings, and
+    that loop skips a reading with nothing in it — so the cached list of
+    readings and the list the pass would fold for itself are assembled by two
+    different rules, and have to be shown to agree. A plain list has no cache
+    and folds on the spot, which is the comparison.
+    """
+    from desembarque.search import RowIndex
+    names = ["Manvil' Dar Cuy", "Manoel Dias", "", "MARIA SILVA"]
+    made = lambda: voyaged(("Valdivia", 1924, names))
+    plain, indexed = made(), RowIndex(made())
+    for q in ("Manoel da Cruz Valdivia", "Maria Silva Valdivia",
+              "Dias Valdivia", "Valdivia 1924"):
+        assert search(indexed, q) == search(plain, q), f"{q} came out different"
+
+
+def test_a_ship_name_is_compared_once_rather_than_once_per_passenger():
+    """The voyage bonus asks how close each row's ship is to what was typed,
+    and it asks it of every row that survives the trigram pass — 20,000 of them
+    on a corpus of 300,000, against the same handful of terms and the same
+    handful of ships. Half of a slow query was spent re-deciding that
+    `Valdivia` reads like `Valdivia`.
+
+    The comparison is a pure function of two strings, so it is asked once per
+    distinct pair and remembered.
+    """
+    from desembarque.search import ship_similarity
+    rows = voyaged(("Valdivia", 1924, [f"MARIA SILVA {i}" for i in range(60)]),
+                   ("Gelria", 1925, [f"JOAO SILVA {i}" for i in range(60)]))
+    ship_similarity.cache_clear()
+    hits = search(rows, "Silva Valdivia")
+    assert hits, "the query stopped finding anything"
+    # two ships, and the query's terms — nowhere near the 120 rows scored
+    info = ship_similarity.cache_info()
+    assert info.misses <= 8, f"compared {info.misses} distinct pairs"
+    assert info.hits > 100, f"only {info.hits} of the comparisons were reused"

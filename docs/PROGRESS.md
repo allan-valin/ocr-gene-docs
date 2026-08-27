@@ -142,6 +142,36 @@ The first of those was next on yesterday's list. The saving it was after was
 already in the code: a page that finds no table of its own falls back to the
 carried columns *before* it pays for the 2000 px detection.
 
+### Search got twice as fast again, by measuring before optimising
+
+The letter-by-letter pass folds every row it compares, and was folding them
+again on every keystroke, so the postings now keep each reading folded once at
+build time. On its own that changed almost nothing — 570 ms to 516 ms — which
+was the useful result: a profile of the slow query put **half its time in
+`ship_similarity`**, not in the pass being tuned. The voyage bonus asks how
+close each row's ship is to what was typed, once per row, against a query
+holding two or three terms and an archive naming a hundred-odd ships. It is a
+pure function of two strings, so it is now asked once per distinct pair.
+
+With the ship comparison out of the way the folded cache is worth what it
+looked like it should be: 391 ms to 283 ms, a quarter off.
+
+| minimum of 15, 310,680 rows | committed | now |
+|---|---|---|
+| `Maria Silva Gelria 1924` — letter pass and a year | 570 ms | 283 ms |
+| `Manoel da Cruz Valdivia` — letter pass, ship named | 328 ms | 155 ms |
+| `Contadore` — trigrams only, no ship to compare | 83 ms | 66 ms |
+
+Over the 31,000 rows actually indexed today those are 80 → 28 ms, 49 → 14 ms
+and 16 → 6 ms. The folded readings cost 5 MB there and 50 MB at ten times the
+size. Same hits and same scores throughout: the letter pass is pinned to what
+folding on the spot returned, including for the readings the trigram loop skips
+because they hold nothing to index.
+
+The lesson is the cheap one and it was nearly missed: the pass that *looks*
+expensive is not always the one that is. The first fix was written, measured at
+4%, and would have been committed as a win.
+
 ### Next, in order
 
 1. **Handwriting recognition, still the ceiling, and now every cheap lever has
