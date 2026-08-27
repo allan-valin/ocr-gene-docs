@@ -589,3 +589,56 @@ def test_an_empty_ruled_row_is_not_sent_to_the_recogniser():
     assert len(rows) == 3, "an empty row is still a row"
     assert seen == [1], f"the recogniser was handed {seen} crops, not one"
     assert rows[0]["name_raw"] and rows[1]["name_raw"] == ""
+
+
+# --- what the carried columns are for, and what they are not -----------------
+#
+# A passenger list runs to many pages of the same printed sheet, and the columns
+# found on one page are carried to the next. It is tempting to let them save the
+# search for a table altogether — a detection pass and a recogniser batch per
+# page. Measured on OL.PRJ.16326 that reads 20% faster and loses a quarter of
+# the names: the pages of that dossier do print their own headings, and the
+# rules under the carried columns account for 14 rows of a page whose printing
+# accounts for 164. The saving that is safe is already here — a page that finds
+# no table of its own falls back to the carried columns before it pays for the
+# 2000 px detection — and the order is the whole point.
+
+class Detects:
+    """An engine with the paddle parts replaced by counters."""
+
+    def __init__(self, tmp_path, boxes=None):
+        from PIL import Image
+        from desembarque.engine_paddle import PaddleEngine
+        from desembarque.tablegrid import TableGeometry
+        self.page = tmp_path / "p.png"
+        Image.new("L", (40, 60), 255).save(self.page)
+        self.sides = []
+        eng = PaddleEngine()
+        eng._readable_copy = lambda image: self.page
+        eng._detect = lambda image, side=None: (self.sides.append(side) or
+                                                (boxes if boxes is not None else
+                                                 [{"x0": 1.0, "y0": 1.0,
+                                                   "x1": 9.0, "y1": 5.0}]))
+        eng._read_boxes = lambda image, boxes: []
+        geo = TableGeometry(40, 60, [(float(i), i + 1.0) for i in range(8)],
+                            (5.0, 30.0), None, 0.0)
+        geo.rows_from = "rules"
+        eng._ruled_rows = lambda image, w, h, col: geo
+        self.eng, self.geo = eng, geo
+
+
+def test_carried_columns_save_the_expensive_detection(tmp_path):
+    """A page that prints no headings of its own is measured from the columns
+    the dossier already gave up, rather than from a second detection at 2000 px
+    that will not find headings that are not there."""
+    d = Detects(tmp_path)
+    found = d.eng._printed_table(d.page, hint={"name": (5.0, 30.0), "ordinal": None})
+    assert found is d.geo
+    assert d.sides == [None], "the 2000 px detection ran when the columns were known"
+
+
+def test_a_page_with_no_columns_to_carry_still_pays_for_the_search(tmp_path):
+    d = Detects(tmp_path)
+    d.eng._ruled_rows = lambda image, w, h, col: None
+    d.eng._printed_table(d.page)
+    assert d.sides == [None, 2000]
