@@ -70,6 +70,27 @@ corpus has nothing to gain from being read again.
 |---|---|---|
 | skipping the table search on pages after the first, using the columns carried forward | 20% faster, **a quarter of the names lost** on OL.PRJ.16326 — those pages do print their own headings, and the rules under the carried columns account for 14 rows of a page whose printing accounts for 164 | reverted; two tests now hold the order in place |
 | comparing letters over the **whole** corpus when the trigrams find nothing | 91 findable of 142 against 90 at a floor of 0.65, and 66 at 0.55 — in isolation it recovers 29 of 52, but merged with the trigram hits it displaces more than it finds | reverted; the numbers are in the comment beside `EDIT_FLOOR` |
+| keeping the loose second reading when it splits into a different number of words (1,241 rows of 30,540 carry one and lose it) | 121 findable against 122 with the crossing named, 90 against 90 without | left as it was |
+
+### Search got four times faster, and the same answers
+
+A query over 300,000 rows spent half a second calling `trigrams` a hundred
+thousand times — once per candidate reading, on every keystroke — rebuilding
+what the posting list already knew. A posting is now a *reading* rather than a
+row, with the number of trigrams in it beside it, so the overlap counted off
+the postings **is** the score: shared over the union. Nothing is rebuilt.
+
+| | before | now |
+|---|---|---|
+| `Contadore`, 30,000 rows | 80 ms | 25 ms |
+| the worst query measured, 30,000 rows | 266 ms | 67 ms |
+| `Contadore`, 306,000 rows | 750 ms | 135 ms |
+
+Same hits and same scores: 33 real queries compared against the scanning path,
+zero differences. The rows are indexed by ship, line and year as well, so the
+letter pass takes its pool instead of walking the corpus for it — a wash on a
+ship, a fifth off a year, and at a million rows the difference between a set
+lookup and a million of them.
 
 The first of those was next on yesterday's list. The saving it was after was
 already in the code: a page that finds no table of its own falls back to the

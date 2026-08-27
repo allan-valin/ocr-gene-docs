@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -120,11 +120,18 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{len(jobs)} records, {pages} pages to read again, "
           f"{args.workers} workers, {done_already} records with nothing to retry")
 
-    gained = rows_gained = names_gained = refused = 0
+    gained = rows_gained = names_gained = refused = done = 0
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        read = pool.map(read_pages, [(pdf, wanted, args.pagecache)
-                                     for _, _, wanted, pdf in jobs])
-        for (f, record, wanted, _), got in zip(jobs, read):
+        # Reported as each record finishes rather than in the order they were
+        # submitted: these pages take between twenty seconds and four minutes,
+        # and in submission order a slow one hides an hour of finished work
+        # from whoever is watching the run.
+        futures = {pool.submit(read_pages, (pdf, wanted, args.pagecache)):
+                   (f, record, wanted) for f, record, wanted, pdf in jobs}
+        for fut in as_completed(futures):
+            f, record, wanted = futures[fut]
+            got = fut.result()
+            done += 1
             out, wrote, names = record, 0, 0
             for n in wanted:
                 fresh = got.get(n)
@@ -146,7 +153,8 @@ def main(argv: list[str] | None = None) -> int:
             if not args.dry_run:
                 f.write_text(json.dumps(out, ensure_ascii=False, indent=2),
                              encoding="utf-8")
-            print(f"  {record.get('notation') or record.get('file')}: "
+            print(f"  [{done}/{len(jobs)}] "
+                  f"{record.get('notation') or record.get('file')}: "
                   f"{names} names in {wrote} rows off {len(wanted)} page(s)"
                   f"{' (dry run)' if args.dry_run else ''}", flush=True)
 
