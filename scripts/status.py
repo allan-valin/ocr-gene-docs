@@ -19,7 +19,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from desembarque.search import SCHEMA          # noqa: E402
+from desembarque.retry import pages_wanting_a_reading   # noqa: E402
+from desembarque.search import SCHEMA                   # noqa: E402
 
 
 def run_state(port: int) -> dict | None:
@@ -38,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--port", type=int, default=8799)
     args = ap.parse_args(argv)
 
-    records = rows = named = errors = stale = 0
+    records = rows = named = errors = stale = unread = unread_docs = 0
     voyage = Counter()
     ditto = Counter()
     for f in sorted(args.cache.glob("*.json")):
@@ -52,6 +53,13 @@ def main(argv: list[str] | None = None) -> int:
             stale += 1
         if any(p.get("error") for p in d.get("pages") or [] if isinstance(p, dict)):
             errors += 1
+        # A page the geometry could not measure is stored with nothing on it,
+        # and the record around it stays current — so no run will ever look at
+        # it again unless it is counted here.
+        wanting = pages_wanting_a_reading(d)
+        if wanting:
+            unread += len(wanting)
+            unread_docs += 1
         v = d.get("voyage") or {}
         for k in ("ship", "year", "port", "origin", "line"):
             voyage[k] += bool(v.get(k))
@@ -69,6 +77,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"   {stale} were read by an older engine — an index run redoes them")
     if errors:
         print(f"   {errors} carry a page the engine failed on — they will be read again")
+    if unread:
+        print(f"   {unread} pages in {unread_docs} records read nothing — "
+              "scripts/retry_unknown.py reads them again")
     print("   voyage: " + ", ".join(
         f"{k} {voyage[k]} ({voyage[k] / max(records, 1):.0%})"
         for k in ("ship", "year", "port", "origin", "line")))

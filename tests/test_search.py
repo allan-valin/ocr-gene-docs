@@ -747,3 +747,66 @@ def test_naming_the_line_does_not_promote_a_row_that_looks_like_nothing():
                  ("LLOYD SABAUDO", ["Guudo Casrtadore"]))
     hits = search(rows, "Contadore Hollandsche Lloyd")
     assert hits[0]["text"] == "Guudo Casrtadore"
+
+
+# ---- comparing letters, once the crossing has cut the pool -------------------
+#
+# Trigrams survive a letter dropped or doubled and collapse when the recogniser
+# substitutes systematically: `EMILI MUESSO` read as `bmike Meesoo` shares not
+# one trigram with what a person types, and edit distance puts the two at 0.58.
+# Of the 23 hand-read names still unfound, 18 score below the search floor
+# against their own row and most of those score well above it letter by letter.
+#
+# Letter by letter over 70,000 rows is neither affordable nor precise — every
+# Maria in the corpus scores against every other. But a searcher who names the
+# ship, the line or the year has already cut the pool to a few hundred rows,
+# and there the comparison is both cheap and meaningful.
+
+def test_a_name_trigrams_cannot_reach_is_found_when_the_ship_is_named():
+    rows = voyaged(("Valdivia", 1924, ["bmike Meesoo", "CONGE NGLONE A"]),
+                   ("Baden", 1925, ["Maria Silva"]))
+    hits = search(rows, "EMILI MUESSO Valdivia")
+    assert hits and hits[0]["text"] == "bmike Meesoo"
+
+
+def test_the_letter_by_letter_pass_needs_a_crossing_to_run_in():
+    """Without one there is no pool small enough to compare exhaustively, and
+    the answer is an honest empty list rather than the nearest Maria."""
+    rows = voyaged(("Valdivia", 1924, ["bmike Meesoo"]))
+    assert search(rows, "EMILI MUESSO") == []
+
+
+def test_a_row_on_the_named_ship_that_resembles_nothing_is_still_refused():
+    rows = voyaged(("Valdivia", 1924, ["CONGE NGLONE A"]))
+    assert search(rows, "EMILI MUESSO Valdivia") == []
+
+
+def test_the_line_opens_the_same_door_as_the_ship():
+    rows = lined(("KONINKLIJKE HOLLANDSCHE LLOYD", ["bmike Meesoo"]),
+                 ("LLOYD SABAUDO", ["Maria Silva"]))
+    hits = search(rows, "EMILI MUESSO Hollandsche Lloyd")
+    assert hits and hits[0]["text"] == "bmike Meesoo"
+
+
+def test_so_does_a_year():
+    rows = voyaged(("Valdivia", 1924, ["bmike Meesoo"]),
+                   ("Baden", 1931, ["Maria Silva"]))
+    hits = search(rows, "EMILI MUESSO 1924")
+    assert hits and hits[0]["text"] == "bmike Meesoo"
+
+
+def test_a_row_off_the_named_crossing_is_not_read_letter_by_letter():
+    """The pool is the crossing. A row on another ship is where it always was:
+    matched by trigram or not at all."""
+    rows = voyaged(("Valdivia", 1924, ["Maria Silva"]),
+                   ("Baden", 1925, ["bmike Meesoo"]))
+    hits = search(rows, "EMILI MUESSO Valdivia")
+    assert not any(h["text"] == "bmike Meesoo" for h in hits)
+
+
+def test_a_good_trigram_match_still_wins():
+    """The letters are a second chance, not a re-ranking: a row that reads what
+    was typed stays above one that has to be argued for."""
+    rows = voyaged(("Valdivia", 1924, ["bmike Meesoo", "EMILI MUESSO"]))
+    hits = search(rows, "EMILI MUESSO Valdivia")
+    assert hits[0]["text"] == "EMILI MUESSO"

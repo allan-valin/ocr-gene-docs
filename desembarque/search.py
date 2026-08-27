@@ -64,6 +64,20 @@ SHIP_FLOOR = 0.85
 # finds 111. The same is true of MIN_SCORE at 0.05, 0.10 and 0.15 — all 95. Both
 # are recorded as measured rather than left to be re-tuned by taste.
 STRONG_NAME = 0.5
+# How close a reading has to be letter by letter, inside a crossing the searcher
+# named, before it is offered. Trigrams survive a letter dropped or doubled and
+# collapse when the recogniser substitutes systematically — `EMILI MUESSO` read
+# as `bmike Meesoo` shares no trigram with what a person types and stands at
+# 0.58 by edit distance. The floor is set where the hand-read pages put it, and
+# it is high because the pool is small: every row of the named crossing is
+# compared, and most of them are somebody else.
+#
+# Swept against the hand-read pages, with the crossing named the way somebody
+# who knows it would: 86 findable at 0.45, 112 at 0.5, **122 at 0.55**, 121 at
+# 0.6 and 0.65, 119 at 0.7 — which is where the pass stops finding anything the
+# trigrams did not. The collapse below 0.5 is the point: a forgiving floor does
+# not find more people, it fills the top ten with other people's names.
+EDIT_FLOOR = 0.55
 RE_YEAR = re.compile(r"\b(1[6-9]\d{2}|20[0-2]\d)\b")
 # The year a person knows is usually a decade, not a date: "he came out some
 # time after the war". Two years with anything or nothing between them are read
@@ -593,6 +607,37 @@ class RowIndex(list):
         return post
 
 
+def edit_similarity(a: str, b: str) -> float:
+    """How close two spellings are letter by letter."""
+    return difflib.SequenceMatcher(None, fold(a), fold(b)).ratio()
+
+
+def named_ships(rows: list[dict], terms: list[str]) -> set[str]:
+    """The ships in the index that the query named.
+
+    Once per ship rather than once per passenger: a hundred and twenty-eight
+    spellings against a million rows.
+    """
+    if not terms:
+        return set()
+    return {sh for sh in {r["ship"] for r in rows if r.get("ship")}
+            if max(ship_similarity(t, sh) for t in terms) >= SHIP_FLOOR}
+
+
+def on_crossing(row: dict, years: tuple[int, int] | None, ships: set[str],
+                lines: dict[str, float] | None) -> bool:
+    """Whether this row belongs to the crossing the query named.
+
+    The same agreement the voyage bonus rewards, asked as a yes or no: this is
+    what decides which rows are cheap enough to compare letter by letter.
+    """
+    if years and row.get("year") and years[0] <= int(row["year"]) <= years[1]:
+        return True
+    if ships and row.get("ship") in ships:
+        return True
+    return bool(lines and row.get("line") in lines)
+
+
 def candidates(rows: list[dict], query: str) -> list[dict]:
     """The rows worth scoring against this query.
 
@@ -644,6 +689,9 @@ def search(rows: list[dict], query: str, limit: int = 50,
             rank = max(0.0, min(1.0,
                                  s * (1 + voyage_bonus(r, years, terms, lines))))
             scored.append({**r, "score": round(rank, 3), "name_score": round(s, 3)})
+    if years or terms or lines:
+        scored.extend(_letter_by_letter(rows, name_q, years, terms, lines,
+                                        {(h["doc"], h["row"]) for h in scored}))
     scored.sort(key=lambda h: (-h["score"], h.get("file") or "", h["row"] or 0))
 
     # "Show me everyone on the Itapuca" is the other half of this tool, and a
@@ -721,4 +769,61 @@ def _sailed(rows: list[dict], query: str, already: set) -> list[dict]:
            for r in rows
            if r.get("line") in close and (r["doc"], r["row"]) not in already]
     out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
+    return out
+
+
+def _letter_by_letter(rows: list[dict], name_q: str,
+                      years: tuple[int, int] | None, terms: list[str],
+                      lines: dict[str, float] | None,
+                      already: set) -> list[dict]:
+    """Rows of the named crossing that read like the name, letter by letter.
+
+    The trigram pass has already had its say; this is the second chance the
+    recogniser's systematic substitutions need — `Manvil' Dar Cuy` for *Manoel
+    da Cruz*, which shares no trigram with it and stands at 0.69 by edit
+    distance. It is affordable only because the crossing cut the pool: a
+    dossier is a few hundred rows, and a name compared against 70,000 of them
+    letter by letter would be both slow and full of Marias.
+
+    The score is the edit distance, ranked by the same voyage bonus as
+    everything else, so a row argued for this way sits below a row that plainly
+    reads what was typed.
+    """
+    q = fold(name_q)
+    if len(q) < MIN_QUERY:
+        return []
+    ships = named_ships(rows, terms)
+    # One matcher for the whole scan, with the query loaded once: it keeps the
+    # index of the query's characters between comparisons, and the two cheap
+    # ratios refuse most rows before the real one is computed. The length test
+    # in front of them is cheaper still — two strings that differ enough in
+    # length cannot reach the floor whatever their letters are.
+    m = difflib.SequenceMatcher(autojunk=False)
+    m.set_seq2(q)
+    out = []
+    for r in rows:
+        if (r["doc"], r["row"]) in already or not on_crossing(r, years, ships, lines):
+            continue
+        s = 0.0
+        for text in (r["text"], *(r.get("alts") or ())):
+            t = fold(text)
+            if not t or 2 * min(len(q), len(t)) < EDIT_FLOOR * (len(q) + len(t)):
+                continue
+            m.set_seq1(t)
+            # both cheap ratios are upper bounds on the real one and both are
+            # symmetric — lengths, and letters in common — so they refuse rows
+            # for either orientation. The score itself is taken the way
+            # `edit_similarity` takes it, because which string is which changes
+            # the third decimal and the third decimal decides two names.
+            if (m.real_quick_ratio() < EDIT_FLOOR
+                    or m.quick_ratio() < EDIT_FLOOR):
+                continue
+            s = max(s, edit_similarity(name_q, text))
+        if s < EDIT_FLOOR:
+            continue
+        rank = max(0.0, min(1.0, s * (1 + voyage_bonus(r, years, terms, lines))))
+        out.append({**r, "score": round(rank, 3), "name_score": round(s, 3),
+                    # how it was found, because a row that shares no trigram
+                    # with the query looks like a broken search otherwise
+                    "matched": "letters"})
     return out
