@@ -763,12 +763,13 @@ def search(rows: list[dict], query: str, limit: int = 50,
     terms = [ship_term] if ship_term else []
     lines = line_scores(rows, line_terms)
     scored = []
-    # An empty name query is not a query. Trigrams are padded, so `similarity`
-    # of nothing against a row read as `B   B` comes out at 0.25 — a page of
-    # whitespace ranked above the ship somebody actually typed.
-    # the score is the better of what the row was read as and what the second
-    # reading said: the two differ only where the hand was hard, which is
-    # exactly where a search fails
+    # Each candidate comes with its name score: the better of what the row was
+    # read as and what the second reading said, which differ only where the
+    # hand was hard — exactly where a search fails.
+    #
+    # An empty name query is not a query, and is not asked. Trigrams are
+    # padded, so the score of nothing against a row read as `B   B` comes out
+    # at 0.25 — a page of whitespace ranked above the ship somebody typed.
     pool = candidates(rows, name_q) if len(fold(name_q)) >= MIN_QUERY else ()
     for r, s in pool:
         # the floor is applied to the name alone: the voyage orders what was
@@ -780,8 +781,8 @@ def search(rows: list[dict], query: str, limit: int = 50,
             # put `CONGE NGLONE A` above `Guudo Casrtadore` for a query naming
             # the Contadores' ship. What is wanted is to sharpen a match, not
             # to manufacture one.
-            rank = max(0.0, min(1.0,
-                                 s * (1 + voyage_bonus(r, years, terms, lines))))
+            bonus = voyage_bonus(r, years, terms, lines)
+            rank = max(0.0, min(1.0, s * (1 + bonus)))
             scored.append({**r, "score": round(rank, 3), "name_score": round(s, 3)})
     if years or terms or lines:
         scored.extend(_letter_by_letter(rows, name_q, years, terms, lines,
