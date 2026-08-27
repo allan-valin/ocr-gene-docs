@@ -26,7 +26,30 @@ from desembarque.identity import cached_hash        # noqa: E402
 from desembarque.search import load_index, search   # noqa: E402
 
 
-def truth_rows(cache: Path, scans: Path, with_line: bool = False) -> list[dict]:
+def catalogue_ships(scans: Path) -> dict[str, str]:
+    """The archive's own index: filename -> the ship it filed the dossier under.
+
+    The application passes this to `load_index` and the bench did not, so every
+    number this file has printed was measured against a corpus with a ship on a
+    third of its rows where the app has one on nearly all of them.
+    """
+    out: dict[str, str] = {}
+    manifest = scans / "manifest.jsonl"
+    if not manifest.exists():
+        return out
+    for line in manifest.open(encoding="utf-8"):
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        for f in row.get("files") or []:
+            if row.get("ship"):
+                out[f] = row["ship"]
+    return out
+
+
+def truth_rows(cache: Path, scans: Path, with_line: bool = False,
+               ships: dict[str, str] | None = None) -> list[dict]:
     """Every hand-read name, with the row it should be found on."""
     out = []
     for f in sorted((ROOT / "data" / "truth").glob("*.json")):
@@ -55,6 +78,10 @@ def truth_rows(cache: Path, scans: Path, with_line: bool = False) -> list[dict]:
                 # line printed on the letterhead, so for most dossiers the line
                 # is the only crossing somebody could type
                 extra = voyage.get("ship") or ""
+                if not extra and ships:
+                    # what the archive filed it under, typed and unmangled —
+                    # and the name a person searching actually knows
+                    extra = ships.get(t["pdf"], "")
                 if with_line and not extra:
                     extra = voyage.get("line") or ""
                 if not extra and voyage.get("year"):
@@ -75,6 +102,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--voyage", action="store_true",
                     help="add the dossier's ship or year to each query, the way "
                          "somebody who knows the crossing would")
+    ap.add_argument("--catalogue", action="store_true",
+                    help="index the ship the archive filed each dossier under, "
+                         "and hint with it — what the application does")
     ap.add_argument("--with-line", action="store_true",
                     help="where the dossier names no ship, hint with the "
                          "shipping line on its letterhead instead of the year")
@@ -82,8 +112,10 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     sys.path.insert(0, str(ROOT / "scripts"))
 
-    rows = load_index(args.cache, engine_only=False)
-    wanted = truth_rows(args.cache, args.scans, with_line=args.with_line)
+    ships = catalogue_ships(args.scans) if args.catalogue else {}
+    rows = load_index(args.cache, engine_only=False, ships=ships or None)
+    wanted = truth_rows(args.cache, args.scans, with_line=args.with_line,
+                        ships=ships)
     print(f"{len(wanted)} hand-read names against {len(rows)} indexed rows")
 
     found, ranks, misses = 0, [], []
