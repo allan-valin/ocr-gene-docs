@@ -6,6 +6,89 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-08-27 — the crossing, and the pages nobody was told about
+
+Allan away for the day; the laptop worked through it. Everything below is
+committed and pushed. **Start here.**
+
+### What a searcher can now say, and what it is worth
+
+Measured on the 142 hand-read names, each searched the way somebody who knows
+the crossing would type it:
+
+| | findable in the top ten |
+|---|---|
+| the name alone | 90 of 142 (63%) |
+| naming the ship, as of yesterday | 110 (77%) |
+| naming the **shipping line** where no ship is stated | 119 (84%) |
+| plus **comparing letters inside the named crossing** | **122 (86%)** |
+
+The hard page — BS.ENT.015061 p6, 46 Marias and Joses on a dossier that names
+no ship — goes from 23 findable to 33.
+
+* **The line is indexed and searchable.** Two thirds of the dossiers state the
+  shipping line printed on the letterhead against a third that state a ship, so
+  for most of the corpus it is the only crossing a person can name. It is taken
+  out of the name query the way a ship is, it is worth the same bonus when it
+  agrees, and typed on its own it lists everyone who sailed with that company —
+  provided enough of the letterhead was named to make that the question.
+* **A year can be a span.** `1924-1926` is what somebody types who knows the
+  decade and not the date, however it is punctuated. A single year is now a
+  span of one year, so nothing downstream has two things to reason about.
+* **Letter by letter, inside the crossing.** Of the 23 names still unfound, 18
+  score *below the search floor* against their own row: no ranking change can
+  reach them. Trigrams survive a letter dropped or doubled and collapse when
+  the recogniser substitutes systematically — `EMILI MUESSO` read as `bmike
+  Meesoo` shares no trigram with what a person types and stands at 0.58 by edit
+  distance; `Manoel da Cruz` read as `Manvil' Dar Cuy` is 0.69. Naming the
+  crossing cuts the pool to a few hundred rows, and there the comparison is
+  affordable. Floor swept: 86 findable at 0.45, 112 at 0.5, **122 at 0.55**,
+  119 at 0.7.
+
+### 301 pages the corpus had given up on, and nobody was told
+
+A page whose geometry found no table is stored as `unknown` with nothing on it,
+and the record around it keeps the current schema stamp — so every future index
+run skips the document and reports success. 301 pages of the corpus were in that
+state. They are not blank paper: today's engine reads 28 names off one of them
+and 19 off another in the same dossier.
+
+This is the third time this exact shape has appeared here — the empty manual
+note, the errored page stored as current, and now the unmeasured page. It is
+what `scripts/status.py` now counts, in the line that begins *"N pages in M
+records read nothing"*, so the next one is visible without being looked for.
+
+`scripts/retry_unknown.py` reads those pages again and merges what they give:
+half an hour of machine time against the eleven hours a full re-read costs. The
+choice is measured — a dossier with **no** unknown pages was re-read and gave
+exactly what is already on disk (36 and 48 rows, unchanged), so the rest of the
+corpus has nothing to gain from being read again.
+
+### Measured and rejected today
+
+| | result | verdict |
+|---|---|---|
+| skipping the table search on pages after the first, using the columns carried forward | 20% faster, **a quarter of the names lost** on OL.PRJ.16326 — those pages do print their own headings, and the rules under the carried columns account for 14 rows of a page whose printing accounts for 164 | reverted; two tests now hold the order in place |
+| comparing letters over the **whole** corpus when the trigrams find nothing | 91 findable of 142 against 90 at a floor of 0.65, and 66 at 0.55 — in isolation it recovers 29 of 52, but merged with the trigram hits it displaces more than it finds | reverted; the numbers are in the comment beside `EDIT_FLOOR` |
+
+The first of those was next on yesterday's list. The saving it was after was
+already in the code: a page that finds no table of its own falls back to the
+carried columns *before* it pays for the 2000 px detection.
+
+### Next, in order
+
+1. **Handwriting recognition, still the ceiling.** 18 of the 23 remaining misses
+   are unreachable by any matcher: the row does not resemble the name. What is
+   left is a model that reads cursive Portuguese and Spanish on a CPU, a GPU, or
+   this archive's own hand-read rows as training data.
+2. **The letter pass wants an index at scale.** It filters by a set lookup and
+   two cheap ratios, which is 20 ms of a query at 30,000 rows and a scan of
+   every row at a million. An index by ship, line and year is what it wants.
+3. **`data/transcriptions/` will outgrow memory** — unchanged from yesterday.
+   Search loads every row; at 7,000 dossiers that is roughly a million.
+4. **Rebuild `data/names.json` after each refresh** (`--min 2`); it was rebuilt
+   this morning and stands at 1,033 names.
+
 ## 2026-08-22 — checkpoint, machine idle
 
 Everything is committed and pushed, nothing is running, and the laptop is quiet.
