@@ -64,6 +64,40 @@ choice is measured — a dossier with **no** unknown pages was re-read and gave
 exactly what is already on disk (36 and 48 rows, unchanged), so the rest of the
 corpus has nothing to gain from being read again.
 
+### The retry run, and how to carry it on
+
+```sh
+.venv-ocr/bin/python scripts/retry_unknown.py            # resumes; writes as it goes
+.venv/bin/python scripts/status.py                       # says how many pages are left
+```
+
+It is resumable in the only way that matters: a page it repairs leaves the list,
+so starting it again picks up where it stopped. Each record is written the
+moment its pages are read, so an interrupted run keeps everything it finished.
+
+It is slower than it looks — about five minutes a record, three workers, because
+these are by definition the pages the geometry finds hardest and most of them
+end up rendered at 300 dpi and read twice. 283 pages were left when this was
+written; that is most of a day of machine time, and nothing else depends on it.
+
+### What finishing the corpus actually costs
+
+| | |
+|---|---|
+| dossiers catalogued | 7,679 |
+| downloaded so far | 660 (8.6%) |
+| the whole archive on disk, at 2.6 MB a dossier | ~20 GB |
+| downloading the rest, at the polite 1.5 s a dossier | ~3 hours |
+| **indexing the rest, at a dossier a minute** | **~5 days of machine time** |
+
+The download is not the constraint and never was. If the whole archive is the
+goal, the number to attack is the minute a dossier costs to read — and today's
+measurements say most of that minute is the geometry's second detection pass and
+the recogniser reading each row twice, both of which are there for good reasons
+that were measured. **Allan's call**: whether to download the rest unattended,
+and whether five days of the laptop's evenings is a price worth paying for the
+other 91% of the archive.
+
 ### Measured and rejected today
 
 | | result | verdict |
