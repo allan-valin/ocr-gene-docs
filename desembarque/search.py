@@ -226,6 +226,7 @@ _POSTINGS: tuple[tuple[int, int], dict] | None = None
 # outlive the request and are thrown away when the corpus changes.
 _VOCAB: tuple[tuple[int, int], dict[str, set[str]]] | None = None
 _TERMS: dict[tuple[int, str], dict[str, float]] = {}
+_CROSSINGS: tuple[tuple[int, int], dict[str, dict]] | None = None
 
 
 def _rows_of(f: Path, engine_only: bool,
@@ -596,25 +597,72 @@ class RowIndex(list):
         self.version = version
 
     @property
-    def postings(self) -> dict[str, "array"]:
-        # The search endpoint loads the index on every request — that is what
-        # makes a correction searchable the moment it is typed — so the
-        # postings are kept beside the row cache and rebuilt only when the
-        # rows themselves were re-read.
+    def crossings(self) -> dict[str, dict]:
+        """Rows by the ship, line and year they belong to.
+
+        Kept beside the rows for the same reason the trigram postings are: the
+        search endpoint loads the index on every request, and this describes the
+        corpus rather than the query.
+        """
+        global _CROSSINGS
+        key = (self.version, len(self))
+        if self.version is not None and _CROSSINGS and _CROSSINGS[0] == key:
+            return _CROSSINGS[1]
+        by: dict[str, dict] = {"ship": {}, "line": {}, "year": {}}
+        for i, r in enumerate(self):
+            for field in ("ship", "line", "year"):
+                v = r.get(field)
+                if v is None:
+                    continue
+                if field == "year":
+                    try:
+                        v = int(v)
+                    except (TypeError, ValueError):
+                        continue
+                by[field].setdefault(v, array("i")).append(i)
+        if self.version is not None:
+            _CROSSINGS = (key, by)
+        return by
+
+    @property
+    def postings(self) -> tuple[dict[str, "array"], "array", "array"]:
+        """Where each trigram occurs, and how big each reading is.
+
+        A posting is a *reading* rather than a row: a row read twice is two of
+        them, and the score of a row is the better of the two — which is what
+        the scan did by recomputing both readings' trigrams on every query.
+        That recomputation was the whole cost of a search at scale: 100,000
+        calls to `trigrams` for one query over 300,000 rows, half a second of
+        rebuilding what the postings already knew.
+
+        With the size of each reading kept beside it, the overlap counted off
+        the postings is exactly the score `similarity` computes — shared over
+        the union — and no candidate's trigrams are built again.
+
+        The search endpoint loads the index on every request, which is what
+        makes a correction searchable the moment it is typed, so this is kept
+        beside the row cache and rebuilt only when the rows were re-read.
+        """
         global _POSTINGS
         key = (self.version, len(self))
         if self.version is not None and _POSTINGS and _POSTINGS[0] == key:
             return _POSTINGS[1]
         post: dict[str, array] = {}
+        owner, size = array("i"), array("i")
         for i, r in enumerate(self):
-            grams = set(trigrams(r.get("text") or ""))
-            for alt in r.get("alts") or ():
-                grams |= trigrams(alt)
-            for g in grams:
-                post.setdefault(g, array("i")).append(i)
+            for text in (r.get("text") or "", *(r.get("alts") or ())):
+                grams = trigrams(text) if text else set()
+                if not grams:
+                    continue
+                rid = len(owner)
+                owner.append(i)
+                size.append(len(grams))
+                for g in grams:
+                    post.setdefault(g, array("i")).append(rid)
+        built = (post, owner, size)
         if self.version is not None:
-            _POSTINGS = (key, post)
-        return post
+            _POSTINGS = (key, built)
+        return built
 
 
 def edit_similarity(a: str, b: str) -> float:
@@ -648,22 +696,60 @@ def on_crossing(row: dict, years: tuple[int, int] | None, ships: set[str],
     return bool(lines and row.get("line") in lines)
 
 
-def candidates(rows: list[dict], query: str) -> list[dict]:
-    """The rows worth scoring against this query.
+def crossing_pool(rows: list[dict], years: tuple[int, int] | None,
+                  ships: set[str], lines: dict[str, float] | None) -> list[dict]:
+    """The rows of the crossing the query named.
 
-    Everything, unless the rows carry a posting list. The union is taken over
-    the query's trigrams: a row missing from all of them scores zero and would
-    be dropped by the floor anyway.
+    Walking every row to ask each one costs nothing at 30,000 and is a scan of
+    the whole corpus at a million, which is what this pass exists to avoid. The
+    rows carry an index by ship, line and year once they come out of
+    `load_index`; a plain list is still walked.
     """
-    post = getattr(rows, "postings", None)
-    if post is None:
-        return rows
+    by = getattr(rows, "crossings", None)
+    if by is None:
+        return [r for r in rows if on_crossing(r, years, ships, lines)]
     hit: set[int] = set()
-    for g in trigrams(query):
-        ids = post.get(g)
-        if ids:
-            hit.update(ids)
+    for sh in ships:
+        hit.update(by["ship"].get(sh, ()))
+    for ln in (lines or ()):
+        hit.update(by["line"].get(ln, ()))
+    if years:
+        for y in range(years[0], years[1] + 1):
+            hit.update(by["year"].get(y, ()))
     return [rows[i] for i in sorted(hit)]
+
+
+def candidates(rows: list[dict], query: str) -> list[tuple[dict, float]]:
+    """The rows worth scoring against this query, with their name score.
+
+    Without a posting list every row is compared, the way it always was. With
+    one, the overlap is counted off the postings and the score comes out of the
+    arithmetic — the same number `similarity` returns, without rebuilding any
+    row's trigrams. A row missing from every posting of the query scores zero
+    and would be dropped by the floor anyway.
+    """
+    index = getattr(rows, "postings", None)
+    if index is None:
+        return [(r, max(similarity(query, t)
+                        for t in (r["text"], *(r.get("alts") or ()))))
+                for r in rows]
+    post, owner, size = index
+    grams = trigrams(query)
+    shared: dict[int, int] = {}
+    for g in grams:
+        ids = post.get(g)
+        if not ids:
+            continue
+        for rid in ids:
+            shared[rid] = shared.get(rid, 0) + 1
+    best: dict[int, float] = {}
+    n = len(grams)
+    for rid, common in shared.items():
+        s = common / (n + size[rid] - common)
+        i = owner[rid]
+        if s > best.get(i, 0.0):
+            best[i] = s
+    return [(rows[i], best[i]) for i in sorted(best)]
 
 
 def search(rows: list[dict], query: str, limit: int = 50,
@@ -680,13 +766,11 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # An empty name query is not a query. Trigrams are padded, so `similarity`
     # of nothing against a row read as `B   B` comes out at 0.25 — a page of
     # whitespace ranked above the ship somebody actually typed.
+    # the score is the better of what the row was read as and what the second
+    # reading said: the two differ only where the hand was hard, which is
+    # exactly where a search fails
     pool = candidates(rows, name_q) if len(fold(name_q)) >= MIN_QUERY else ()
-    for r in pool:
-        # the better of what the row was read as and what the second reading
-        # said: the two differ only where the hand was hard, which is exactly
-        # where a search fails
-        readings = [r["text"], *(r.get("alts") or ())]
-        s = max(similarity(name_q, t) for t in readings)
+    for r, s in pool:
         # the floor is applied to the name alone: the voyage orders what was
         # found, it does not decide what counts as found
         if s >= min_score:
@@ -803,6 +887,7 @@ def _letter_by_letter(rows: list[dict], name_q: str,
     if len(q) < MIN_QUERY:
         return []
     ships = named_ships(rows, terms)
+    pool = crossing_pool(rows, years, ships, lines)
     # One matcher for the whole scan, with the query loaded once: it keeps the
     # index of the query's characters between comparisons, and the two cheap
     # ratios refuse most rows before the real one is computed. The length test
@@ -811,8 +896,8 @@ def _letter_by_letter(rows: list[dict], name_q: str,
     m = difflib.SequenceMatcher(autojunk=False)
     m.set_seq2(q)
     out = []
-    for r in rows:
-        if (r["doc"], r["row"]) in already or not on_crossing(r, years, ships, lines):
+    for r in pool:
+        if (r["doc"], r["row"]) in already:
             continue
         s = 0.0
         for text in (r["text"], *(r.get("alts") or ())):

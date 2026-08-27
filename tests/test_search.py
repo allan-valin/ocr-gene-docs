@@ -433,7 +433,7 @@ def test_the_index_narrows_the_rows_a_query_is_scored_against():
     """
     from desembarque.search import RowIndex, candidates
     rows = RowIndex(idx("JOSE MUESSO", "EMMA CONTADORE", "MARIA SILVA"))
-    pool = [r["text"] for r in candidates(rows, "muesso")]
+    pool = [r["text"] for r, _s in candidates(rows, "muesso")]
     assert "JOSE MUESSO" in pool
     # It narrows rather than filters: the padding trigrams a query shares with
     # any row beginning the same way keep a few strangers in the pool, and they
@@ -819,3 +819,21 @@ def test_the_crossing_is_what_buys_the_last_of_them():
     rows = voyaged(("Valdivia", 1924, ["bmike Meesoo"]))
     assert search(rows, "EMILI MUESSO") == []
     assert search(rows, "EMILI MUESSO Valdivia")[0]["text"] == "bmike Meesoo"
+
+
+def test_the_letter_pass_finds_the_same_rows_through_the_index(tmp_path):
+    """The rows a search runs over carry a posting list once they come out of
+    `load_index`, and the crossing scan has to walk a few hundred rows of the
+    named ship rather than every row in the corpus. Same answer, both ways."""
+    import json as _json
+    for i, (ship, name) in enumerate([("Valdivia", "bmike Meesoo"),
+                                      ("Baden", "MARIA SILVA")]):
+        (tmp_path / f"{i}.json").write_text(_json.dumps({
+            "hash": f"h{i}", "engine": "paddle", "file": f"d{i}.pdf",
+            "schema": 12, "voyage": {"ship": ship},
+            "rows": [{"n": 1, "name_raw": name}],
+        }), encoding="utf-8")
+    rows = load_index(tmp_path)
+    hits = search(rows, "EMILI MUESSO Valdivia")
+    assert [h["text"] for h in hits] == ["bmike Meesoo"]
+    assert search(list(rows), "EMILI MUESSO Valdivia")[0]["text"] == "bmike Meesoo"
