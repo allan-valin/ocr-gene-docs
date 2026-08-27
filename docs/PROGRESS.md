@@ -71,6 +71,15 @@ corpus has nothing to gain from being read again.
 | skipping the table search on pages after the first, using the columns carried forward | 20% faster, **a quarter of the names lost** on OL.PRJ.16326 — those pages do print their own headings, and the rules under the carried columns account for 14 rows of a page whose printing accounts for 164 | reverted; two tests now hold the order in place |
 | comparing letters over the **whole** corpus when the trigrams find nothing | 91 findable of 142 against 90 at a floor of 0.65, and 66 at 0.55 — in isolation it recovers 29 of 52, but merged with the trigram hits it displaces more than it finds | reverted; the numbers are in the comment beside `EDIT_FLOOR` |
 | keeping the loose second reading when it splits into a different number of words (1,241 rows of 30,540 carry one and lose it) | 121 findable against 122 with the crossing named, 90 against 90 without | left as it was |
+| doing something to each crop before it is recognised — autocontrast, 2× upscale, unsharp mask, and **deslanting** the writing, which every classical handwriting pipeline does and this one does not | CER 0.362 as it stands, against 0.361, 0.358, 0.360 and 0.366; findable 115 against 115, 117, 115, 117 | none of them moved it; `scripts/spike_prep.py` keeps the measurement |
+
+The last of those is the one worth writing down twice, because it looked like the
+obvious missing step: the recogniser was trained on print and this hand leans.
+Correcting the lean changes nothing measurable. The *union* of all five readings
+finds 122 of 142 against 117 for the best single one — five people — at five
+times the recogniser's time per page, which would take the corpus refresh from
+eleven hours to a day and a half. Not taken, and now measured rather than
+assumed.
 
 ### Search got four times faster, and the same answers
 
@@ -98,10 +107,13 @@ carried columns *before* it pays for the 2000 px detection.
 
 ### Next, in order
 
-1. **Handwriting recognition, still the ceiling.** 18 of the 23 remaining misses
-   are unreachable by any matcher: the row does not resemble the name. What is
-   left is a model that reads cursive Portuguese and Spanish on a CPU, a GPU, or
-   this archive's own hand-read rows as training data.
+1. **Handwriting recognition, still the ceiling, and now every cheap lever has
+   been pulled twice.** 18 of the 23 remaining misses are unreachable by any
+   matcher: the row does not resemble the name. Input width, a bigger model,
+   removing the printed rules, a pretrained handwriting model, folding
+   confusable letters, and now contrast, resolution and the lean of the writing
+   have each been measured. What is left is a model trained on this archive's
+   own hand — which means hand-read rows, of which there are 142 — or a GPU.
 2. **The letter pass wants an index at scale.** It filters by a set lookup and
    two cheap ratios, which is 20 ms of a query at 30,000 rows and a scan of
    every row at a million. An index by ship, line and year is what it wants.
