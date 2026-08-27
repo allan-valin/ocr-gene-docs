@@ -100,6 +100,8 @@
   #corpushits .hit.on{border-color:var(--accent,#456);background:rgba(120,150,200,.12)}
   #corpushits .hit span{color:var(--muted);font-size:10px}
   #corpushits .none{color:var(--muted);font-size:10.5px}
+  #corpushits .advice{border-left:2px solid var(--accent);padding:4px 6px;margin-bottom:6px;
+    line-height:1.35}
   #crumb{padding:6px 10px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line);
     word-break:break-all}
   .dir{padding:5px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--line)}
@@ -797,11 +799,21 @@ function renderHits(d){
   // The list is the point of the tool for somebody tracing an ancestor: the
   // page shows twenty-five, and what they need is all of them, on paper, with
   // the notation and the line to ask the archive for.
+  // Measured on the hand-read pages: typing only a name finds 49 of 100 on a
+  // cursive list, and naming the ship, the company or the year finds 81. When
+  // nothing convincing came back, that is the thing to say — the tool cannot
+  // read the hand any better, and the person very often knows the crossing.
+  const best = Math.max(...d.hits.map(h => h.score || 0));
+  const named = d.hits.some(h => h.matched);
+  const advice = (best < 0.5 && !named)
+    ? `<div class="none advice">Nada convincente. Se souber o navio, a companhia
+       ou o ano, acrescente à busca — é o que faz um nome mal lido aparecer.</div>`
+    : "";
   const dl = SERVED
     ? `<a class="dlhits" href="/api/export/search?q=${encodeURIComponent(d.query||"")}"
          title="Baixar todos os resultados como planilha — candidatos a conferir, não confirmações">↓ CSV</a>`
     : "";
-  el.innerHTML=`<div class="none">${d.hits.length>shown
+  el.innerHTML=advice + `<div class="none">${d.hits.length>shown
       ? `${shown} de ${d.hits.length} resultados` : `${d.hits.length} resultado${d.hits.length===1?"":"s"}`}
       · ${d.indexed} linhas indexadas ${dl}</div>`
     + d.hits.slice(0,25).map(h=>`

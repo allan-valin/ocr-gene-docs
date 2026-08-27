@@ -266,6 +266,22 @@ window.addEventListener("load",async()=>{
     ok("corpus search answers, with hits or with a plain 'nothing' line", answered);
     ok("search says how much was searched",
        /linhas indexadas/.test(document.getElementById("corpushits").textContent));
+    // Typing only a name finds 49 of 100 hand-read cursive names and naming the
+    // crossing finds 81, so a weak result list has one useful thing to say.
+    cq.value="kowalczyk"; cq.dispatchEvent(new Event("input",{bubbles:true}));
+    let advised=false;
+    for(let i=0;i<24 && !advised;i++){
+      await wait(200);
+      const box=document.getElementById("corpushits");
+      advised = !!box.querySelector(".advice")
+             || !box.querySelector(".hit");   // nothing at all is also an answer
+    }
+    ok("a weak result list says to name the ship, the company or the year", advised);
+    cq.value="amparo"; cq.dispatchEvent(new Event("input",{bubbles:true}));
+    for(let i=0;i<24;i++){
+      await wait(200);
+      if(document.querySelectorAll("#corpushits .hit").length) break;
+    }
     const hit=document.querySelector("#corpushits .hit");
     if(hit){
       const want=+hit.dataset.row;
