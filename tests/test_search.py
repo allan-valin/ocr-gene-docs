@@ -884,3 +884,18 @@ def test_two_years_that_are_not_a_range_do_not_swallow_the_name():
 def test_a_line_of_short_words_is_not_a_line():
     from desembarque.search import split_line
     assert split_line("de la e do", LINED) == ("de la e do", [])
+
+
+def test_a_poor_trigram_score_does_not_block_the_letter_comparison():
+    """`Manoel da Cruz` read as `Manvil' Dar Cuy` shares just enough trigrams to
+    score 0.15 — above the floor, so the row was already in the list and the
+    letter pass skipped it as seen. It sat at rank 40 with a 0.69 reading of
+    itself never looked at. The two measures are alternatives, and a row keeps
+    the better one."""
+    rows = voyaged(("Valdivia", 1924, ["Manvil' Dar Cuy", "Manoel Dias"]))
+    hits = search(rows, "Manoel da Cruz Valdivia")
+    assert hits[0]["text"] == "Manvil' Dar Cuy"
+    assert hits[0]["name_score"] > 0.6
+    # and it does not claim to have been found letter by letter: the trigrams
+    # had it, badly, and a hit that explains itself when it need not is noise
+    assert "matched" not in hits[0]

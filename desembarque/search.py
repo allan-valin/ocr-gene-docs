@@ -792,8 +792,12 @@ def search(rows: list[dict], query: str, limit: int = 50,
             rank = max(0.0, min(1.0, s * (1 + bonus)))
             scored.append({**r, "score": round(rank, 3), "name_score": round(s, 3)})
     if years or terms or lines:
+        # A row already scored keeps whichever measure reads it better. It is
+        # not "seen": `Manvil' Dar Cuy` shares just enough trigrams with *Manoel
+        # da Cruz* to score 0.15, which put it in the list at rank forty with a
+        # 0.69 reading of itself never looked at.
         scored.extend(_letter_by_letter(rows, name_q, years, terms, lines,
-                                        {(h["doc"], h["row"]) for h in scored}))
+                                        {(h["doc"], h["row"]): h for h in scored}))
     scored.sort(key=lambda h: (-h["score"], h.get("file") or "", h["row"] or 0))
 
     # "Show me everyone on the Itapuca" is the other half of this tool, and a
@@ -877,7 +881,7 @@ def _sailed(rows: list[dict], query: str, already: set) -> list[dict]:
 def _letter_by_letter(rows: list[dict], name_q: str,
                       years: tuple[int, int] | None, terms: list[str],
                       lines: dict[str, float] | None,
-                      already: set) -> list[dict]:
+                      already: dict) -> list[dict]:
     """Rows of the named crossing that read like the name, letter by letter.
 
     The trigram pass has already had its say; this is the second chance the
@@ -905,8 +909,6 @@ def _letter_by_letter(rows: list[dict], name_q: str,
     m.set_seq2(q)
     out = []
     for r in pool:
-        if (r["doc"], r["row"]) in already:
-            continue
         s = 0.0
         for text in (r["text"], *(r.get("alts") or ())):
             t = fold(text)
@@ -925,8 +927,16 @@ def _letter_by_letter(rows: list[dict], name_q: str,
         if s < EDIT_FLOOR:
             continue
         rank = max(0.0, min(1.0, s * (1 + voyage_bonus(r, years, terms, lines))))
-        out.append({**r, "score": round(rank, 3), "name_score": round(s, 3),
-                    # how it was found, because a row that shares no trigram
-                    # with the query looks like a broken search otherwise
-                    "matched": "letters"})
+        # how it was found, because a row that shares few trigrams with the
+        # query looks like a broken search otherwise
+        found = {"score": round(rank, 3), "name_score": round(s, 3),
+                 "matched": "letters"}
+        was = already.get((r["doc"], r["row"]))
+        if was is None:
+            out.append({**r, **found})
+        elif s > was["name_score"]:
+            # It keeps the better score and does not claim to have been found
+            # letter by letter: the trigrams had it already, and a hit that
+            # explains itself when it did not need to is noise.
+            was.update({k: v for k, v in found.items() if k != "matched"})
     return out
