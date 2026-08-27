@@ -525,7 +525,12 @@ def split_line(query: str, rows: list[dict]) -> tuple[str, list[str]]:
     surname on every page and dilutes the name it was typed to narrow.
 
     The longest run of words that names one line wins, and only if what remains
-    is still a name.
+    is still a name. One word is never taken out: `Costeira`, `Nacional` and
+    `Brasileiro` are words of the companies that carried these people and they
+    are also their surnames, and a search for a passenger called Costeira must
+    not quietly become a search for everybody else on her ship. A single word
+    still narrows — it is returned, so the crossing counts — it simply stays in
+    the name as well.
     """
     if not _vocab(rows):
         return query, []
@@ -540,6 +545,8 @@ def split_line(query: str, rows: list[dict]) -> tuple[str, list[str]]:
                 continue
             if not line_scores(rows, terms):
                 continue
+            if len(terms) == 1:
+                return query, terms
             rest = " ".join(words[:i] + words[i + size:]).strip()
             if len(fold(rest)) < MIN_QUERY:
                 continue          # what is left has to still be a name

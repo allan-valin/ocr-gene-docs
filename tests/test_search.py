@@ -711,6 +711,18 @@ def test_a_line_the_recogniser_mangled_still_matches_a_typed_one():
     assert lifted["Guudo Camtadore"] > plain["Guudo Camtadore"]
 
 
+def test_one_word_of_a_letterhead_narrows_without_being_taken_out():
+    """`Costeira`, `Nacional` and `Brasileiro` are words of the companies that
+    carried these people, and they are also their surnames. One word is not
+    enough to be sure which was meant, so it narrows the search and stays in it
+    — a passenger called Costeira is still searched for."""
+    from desembarque.search import split_line
+    assert split_line("Costeira Maria", LINED) == ("Costeira Maria", ["COSTEIRA"])
+    hits = {h["text"]: h["score"] for h in search(LINED, "Camtadore Costeira")}
+    plain = {h["text"]: h["score"] for h in search(LINED, "Camtadore")}
+    assert hits["Guudo Camtadore"] > plain["Guudo Camtadore"]
+
+
 def test_a_word_short_enough_to_be_a_surname_is_not_a_line():
     """`Lloyd` and `Nelson` are shipping lines and they are also people. A
     single short word is searched as the name it probably is."""
@@ -720,9 +732,11 @@ def test_a_word_short_enough_to_be_a_surname_is_not_a_line():
 
 
 def test_a_passenger_whose_name_is_the_whole_line_is_still_searchable():
-    """What is left after the line comes out has to still be a name."""
+    """What is left after the line comes out has to still be a name — and one
+    word is never taken out at all, so a query that is only that word is still
+    the name search it probably is, narrowed by the company it also names."""
     from desembarque.search import split_line
-    assert split_line("Hollandsche", LINED) == ("Hollandsche", [])
+    assert split_line("Hollandsche", LINED) == ("Hollandsche", ["HOLLANDSCHE"])
 
 
 def test_a_line_on_its_own_lists_everyone_who_sailed_with_it():
