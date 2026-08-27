@@ -55,7 +55,68 @@ def truths() -> list[dict]:
     return out
 
 
-def read_page(eng, pdf: Path, page: int) -> tuple[list[str], float]:
+def deslant(im):
+    """The crop sheared upright, by the average slope of its ink.
+
+    Cursive leans, and a recogniser trained on print has no reason to know it.
+    The shear is estimated the classical way — the horizontal offset between
+    the ink's centre of mass at the top of the band and at the bottom — and
+    applied to the whole crop.
+    """
+    from PIL import Image
+    import statistics
+    g = im.convert("L")
+    w, h = g.size
+    px = g.load()
+    rows = []
+    for y in range(h):
+        xs = [x for x in range(w) if px[x, y] < 128]
+        if xs:
+            rows.append((y, statistics.fmean(xs)))
+    if len(rows) < 4:
+        return im
+    ys = [y for y, _c in rows]
+    cs = [c for _y, c in rows]
+    spread = max(ys) - min(ys)
+    if spread < 4:
+        return im
+    top = statistics.fmean([c for y, c in rows if y < min(ys) + spread / 3])
+    bottom = statistics.fmean([c for y, c in rows if y > max(ys) - spread / 3])
+    shear = (top - bottom) / spread
+    if abs(shear) < 0.05 or abs(shear) > 1.0:
+        return im
+    # PIL maps output back to input: source_x = x - shear*y + offset, which is
+    # the inverse of the lean measured above. The canvas is widened by what the
+    # shear moves, and the offset keeps the ink inside it whichever way it
+    # leans.
+    offset = 0.0 if shear > 0 else shear * h
+    return im.transform((int(w + abs(shear) * h), h), Image.AFFINE,
+                        (1, -shear, offset, 0, 1, 0),
+                        resample=Image.BICUBIC, fillcolor=255)
+
+
+def prepared(recognize, how: str):
+    """The engine's recogniser with every crop put through `how` first."""
+    from PIL import Image, ImageOps
+
+    def prep(im):
+        if how == "autocontrast":
+            return ImageOps.autocontrast(im.convert("L"), cutoff=1)
+        if how == "upscale2":
+            return im.resize((im.width * 2, im.height * 2), Image.LANCZOS)
+        if how == "sharpen":
+            from PIL import ImageFilter
+            return im.filter(ImageFilter.UnsharpMask(radius=2, percent=150))
+        if how == "deslant":
+            return deslant(im)
+        return im
+
+    if how == "none":
+        return recognize
+    return lambda crops: recognize([prep(c) for c in crops])
+
+
+def read_page(eng, pdf: Path, page: int, prep: str = "none") -> tuple[list[str], float]:
     """The name column of one page, row by row, as this engine reads it."""
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = None
@@ -71,7 +132,8 @@ def read_page(eng, pdf: Path, page: int) -> tuple[list[str], float]:
         return [], time.time() - t0
     im = Image.open(img).convert("L")
     im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
-    rows = ep.rows_from_bands(geo, im.size, eng._recognize, eng._carved_crops(im, geo))
+    rows = ep.rows_from_bands(geo, im.size, prepared(eng._recognize, prep),
+                              eng._carved_crops(im, geo))
     print(f"    measured from the {source}: {len(rows)} rows")
     return [r.get("name_raw") or "" for r in rows], time.time() - t0
 
@@ -119,6 +181,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=ep.DEFAULT_REC)
     ap.add_argument("--shape", default="x".join(str(n) for n in ep.REC_INPUT_SHAPE),
                     help="recogniser input as CxHxW, e.g. 3x64x960")
+    ap.add_argument("--prep", default="none",
+                    choices=("none", "autocontrast", "upscale2", "sharpen",
+                             "deslant"),
+                    help="what to do to each crop before it is recognised")
     ap.add_argument("--out", type=Path)
     args = ap.parse_args(argv)
 
@@ -126,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     eng = ep.PaddleEngine(rec_model=args.model)
     eng._import()
 
-    print(f"{args.model}, input {ep.REC_INPUT_SHAPE}")
+    print(f"{args.model}, input {ep.REC_INPUT_SHAPE}, crops {args.prep}")
     report = []
     for t in truths():
         pdf = ROOT / "data" / "scans" / t["pdf"]
@@ -134,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {t['pdf']}: not in data/scans, skipped")
             continue
         print(f"  {t['pdf']} p{t['page']}")
-        names, secs = read_page(eng, pdf, t["page"])
+        names, secs = read_page(eng, pdf, t["page"], prep=args.prep)
         s = score(names, t["names"], t.get("first_row", 1))
         s.update(page=f"{t['pdf']}#{t['page']}", seconds=round(secs, 1))
         report.append(s)

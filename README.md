@@ -48,25 +48,37 @@ Working:
   names came out of a cursive hand through a recogniser. Someone typing "Guido Contadore"
   finds the row read as "Guudo Camtadore". Clicking a result opens the document at that row
   with the scan beside it, which is the only thing that makes a fuzzy match trustworthy.
-  A ship's name or a year on its own lists who arrived, and either alongside a name
-  reorders the thin margins a mangled surname competes in — without ever filtering,
-  since most of the corpus has no voyage indexed yet and hiding those dossiers is the
-  failure this exists to prevent.
+  A ship's name, a shipping line or a year on its own lists who arrived, and any of them
+  alongside a name reorders the thin margins a mangled surname competes in — without ever
+  filtering, since a third of the corpus has no voyage indexed and hiding those dossiers is
+  the failure this exists to prevent. Two thirds of the dossiers name the **shipping line**
+  printed on the letterhead against a third that name a ship, so for most of them the line
+  is the only crossing a person can give. A year can be a span — `1924-1926` is what
+  somebody types who knows the decade and not the date.
+* **Naming the crossing buys a second kind of matching.** Trigrams survive a letter dropped
+  or doubled and collapse when the recogniser substitutes systematically: `EMILI MUESSO`
+  read as `bmike Meesoo` shares not one trigram with what a person types, and is a 0.58
+  match letter by letter. Comparing letters across 70,000 rows is neither affordable nor
+  precise, but a searcher who names the ship, the line or the year has cut the pool to a few
+  hundred rows — and there it is both. A hit found that way says so.
 * **Export**, as a spreadsheet a registrar can read: the notation, the ship, where she
   sailed from and when she arrived, the page and line, the verbatim reading beside the
   split into surname and given name, and whether a person or an engine produced the row.
 
 Honest about the limits:
 
-* **Typescript is solved; cursive is two thirds findable.** Measured by searching each
-  hand-read name exactly as a person would type it, against the whole index: **42 of 42
-  names on the two typewritten pages** come back in the top ten, and **37 of 54 on the two
-  cursive ones**. `Ponticelli Giovanni` is read as `Pouticelli Sooai` — wrong as a
-  transcription, findable as a search. The recogniser is the ceiling: a wider input, a
-  bigger model, removing the printed rules and folding confusable letters were each
-  measured and each was worse or no better, and pretrained handwriting models lost to the
-  printed-text recogniser by a wide margin (CER 0.61 against 0.21, at 8 s a row). This
-  needs training data of its own rather than somebody else's model.
+* **Typescript is solved; cursive is four fifths findable, if you know the crossing.**
+  Measured by searching each of 142 hand-read names exactly as a person would type it,
+  against the whole index: **41 of 42 names on the typewritten pages** come back in the top
+  ten either way, and on the cursive pages **49 of 100 typing only the name, 81 of 100 when
+  the ship, the line or the year is named as well**. `Ponticelli Giovanni` is read as
+  `Pouticelli Sooai` — wrong as a transcription, findable as a search. The recogniser is
+  the ceiling and 18 of the 20 names still missing are below any matcher's floor: the row
+  simply does not resemble the name. A wider input, a bigger model, removing the printed
+  rules and folding confusable letters were each measured and each was worse or no better,
+  and pretrained handwriting models lost to the printed-text recogniser by a wide margin
+  (CER 0.61 against 0.21, at 8 s a row). This needs training data of its own rather than
+  somebody else's model.
 * **A family list is mostly repetition marks, and they are resolved.** These lists write
   the surname once and a ditto under it for every relative: forty-eight people under nine
   surnames on one page. The surname is filled in from the row the mark points at and the
@@ -80,7 +92,10 @@ Honest about the limits:
   (`data/golden.json`); all ten measure from the printing.
 * **Some documents still yield nothing.** Most are not passenger lists at all but the
   interpreter's *PARTE* form, where no rows is the right answer — and that form names the
-  ship, the port it sailed from and the arrival date, which are indexed from it.
+  ship, the port it sailed from and the arrival date, which are indexed from it. A page the
+  geometry could not measure is a different matter: it is stored with nothing on it while
+  the record stays current, so no future run looks at it again. `scripts/status.py` counts
+  those pages and `scripts/retry_unknown.py` reads them again.
 * **No engine installed is a supported state.** The application says so and writes nothing,
   rather than showing empty rows that could be mistaken for an empty page.
 
