@@ -21,6 +21,7 @@ import pytest
 
 import serve
 from desembarque import engine as engines
+from desembarque import search as searchlib
 
 
 class FakeEngine:
@@ -855,3 +856,28 @@ def test_the_index_is_built_before_anybody_types(tmp_path, monkeypatch):
     serve.warm_the_index()
     assert reads, "the index was never loaded"
     assert searchlib._POSTINGS is not None, "the postings were not built"
+
+
+def test_the_search_says_whether_the_query_named_a_crossing(server):
+    """The page needs it for two decisions and cannot work either out for
+    itself: which scale the scores are on, and whether telling this searcher to
+    name the ship would be telling them something they already did."""
+    from urllib.parse import quote
+    base, folder = server
+    cache = serve.JOBS.cache
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / "a.json").write_text(json.dumps({
+        "hash": "a", "engine": "paddle", "file": "a.pdf", "schema": 18,
+        "voyage": {"ship": "GELRIA", "year": 1924},
+        "rows": [{"n": 1, "name_raw": "MARIA SILVA MARTINEZ", "page": 2}]}),
+        encoding="utf-8")
+
+    status, alone = call(f"{base}/api/search?q={quote('Maria Silva')}")
+    assert status == 200 and alone["crossing"] is False
+    assert alone["advice_bar"] == searchlib.ADVICE_BAR
+    status, named = call(f"{base}/api/search?q={quote('Maria Silva Gelria')}")
+    assert status == 200 and named["crossing"] is True
+    # the same row, asked the two ways: everything typed is on it, and inside
+    # the crossing it is measured against everything the row holds
+    assert alone["hits"][0]["name_score"] == 1.0
+    assert named["hits"][0]["name_score"] < 1.0

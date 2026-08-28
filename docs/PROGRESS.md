@@ -162,18 +162,22 @@ only afterwards.
 
 ### Next, in order
 
-1. **The letter pass is what a keystroke now costs.** 202 ms of the 202 for a
-   query naming a year, because a year names 20,000 rows at the archive's size
-   and each is compared letter by letter. `difflib`'s cheap ratios refuse 18,000
-   of them and 3,900 reach the real comparison. The bound they apply — letters
-   in common regardless of order — is one numpy could apply to the whole pool at
-   once from a character count kept beside each reading; that is the next
-   measurable thing, and it is worth roughly half of what is left.
-2. **Handwriting recognition, still the ceiling.** Unchanged: 18 of the 23
+1. **The letter pass is what a keystroke costs now.** 173 ms of the 173 a query
+   naming a year takes over the whole archive: a year names 20,000 rows and
+   each is compared letter by letter, 3,900 of them reaching `difflib` after
+   the bulk bound has refused the rest. What is left is the comparison itself,
+   and cutting it means a cheaper measure of edit distance rather than a
+   cheaper filter.
+2. **Handwriting recognition, still the ceiling.** Unchanged: most of the
    remaining misses do not resemble the name on the page. What is left is a
    model trained on this archive's own hand, or a GPU.
-3. **Rebuild `data/names.json` after the retry finishes** (`--min 2`), and
-   `scripts/reparse_voyages.py` before it.
+3. **The forgiving scale wants watching in use.** A row is no longer charged
+   for what it holds besides the name, which is measured on 142 names and is
+   the right shape for a person who types what they know — but it also means
+   more rows come back at 1.0, and the page's advice bar was recalibrated
+   rather than re-thought. If searching in earnest turns up long rows crowding
+   the top, the lever is `SLACK` in `desembarque/search.py` and the bench that
+   settles it is `bench_search.py --matrix`.
 4. **Whether to download the other 91% of the archive** is still Allan's call,
    and the number that decides it is unchanged: ~3 hours of polite downloading
    against ~5 days of reading.
