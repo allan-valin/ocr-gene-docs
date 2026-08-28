@@ -259,6 +259,8 @@ _POSTINGS: tuple[tuple[int, int], dict] | None = None
 _VOCAB: tuple[tuple[int, int], dict[str, set[str]]] | None = None
 _TERMS: dict[tuple[int, str], dict[str, float]] = {}
 _CROSSINGS: tuple[tuple[int, int], dict[str, dict]] | None = None
+# What each reading is made of, for refusing a pool of them in bulk.
+_LETTERS: tuple[tuple[int, int], tuple] | None = None
 
 
 def _files(cache: Path) -> list[tuple[str, os.stat_result]]:
@@ -787,6 +789,61 @@ class RowIndex(list):
             _POSTINGS = (key, built)
         return built
 
+    @property
+    def letters(self) -> tuple:
+        """Every reading as the letter pass compares it, and what it is made of.
+
+        That pass refuses most of its pool on a bound — the letters two
+        spellings have in common, whatever their order — and asked one reading
+        at a time that is 18,000 calls into `difflib` for a query naming a year
+        over the whole archive, before the comparisons that matter. A count of
+        each reading's letters kept beside it lets the same bound be taken over
+        the whole pool at once.
+
+        Thirty-two buckets rather than a column per character: two letters
+        sharing a bucket can only make the bound looser, never tighter, and the
+        whole archive's counts come to 13 MB instead of 100.
+        """
+        global _LETTERS
+        key = (self.version, len(self))
+        if self.version is not None and _LETTERS and _LETTERS[0] == key:
+            return _LETTERS[1]
+        _post, owner, _size, folded = self.postings
+        flat = [t for readings in folded for t in readings]
+        lens = np.fromiter((len(t) for t in flat), dtype=np.int64,
+                           count=len(flat))
+        # one byte a character, so the counts and the lengths agree
+        blob = np.frombuffer("".join(flat).encode("ascii", "replace"),
+                             dtype=np.uint8)
+        whose = np.repeat(np.arange(len(flat), dtype=np.int64), lens)
+        counts = np.bincount(whose * 32 + (blob & 31),
+                             minlength=len(flat) * 32)
+        counts = np.minimum(counts, 255).astype(np.uint8).reshape(len(flat), 32)
+        built = (flat, lens, counts, np.frombuffer(owner, dtype=np.int32))
+        if self.version is not None:
+            _LETTERS = (key, built)
+        return built
+
+
+def _spans(first: np.ndarray, n: np.ndarray) -> np.ndarray:
+    """The ranges first[k] up to first[k] + n[k], run together."""
+    keep = n > 0
+    first, n = first[keep], n[keep]
+    total = int(n.sum())
+    if not total:
+        return np.empty(0, dtype=np.int64)
+    out = np.ones(total, dtype=np.int64)
+    out[0] = first[0]
+    ends = np.cumsum(n)[:-1]
+    out[ends] = first[1:] - (first[:-1] + n[:-1]) + 1
+    return np.cumsum(out)
+
+
+def _letter_counts(text: str) -> np.ndarray:
+    return np.bincount(
+        np.frombuffer(text.encode("ascii", "replace"), dtype=np.uint8) & 31,
+        minlength=32)
+
 
 def edit_similarity(a: str, b: str) -> float:
     """How close two spellings are letter by letter."""
@@ -925,21 +982,6 @@ def search(rows: list[dict], query: str, limit: int = 50,
             bonus = voyage_bonus(r, years, terms, lines)
             rank = max(0.0, min(1.0, s * (1 + bonus)))
             scored.append({**r, "score": round(rank, 3), "name_score": round(s, 3)})
-    WIDE = float(__import__("os").environ.get("DESEMBARQUE_WIDE", "0") or 0)
-    _gate = __import__("os").environ.get("DESEMBARQUE_GATE", "weak")
-    _fire = (not (years or terms or lines)) and (
-        _gate == "always"
-        or max((h["name_score"] for h in scored), default=0.0)
-        < float(__import__("os").environ.get("DESEMBARQUE_BAR", "0.5")))
-    if WIDE and _fire:
-        by_key = {(h["doc"], h["row"]): h for h in scored}
-        import desembarque.search as _self
-        _pool, _self.crossing_pool = _self.crossing_pool, lambda r, y, s_, l: r
-        try:
-            scored.extend(_letter_by_letter(rows, name_q, years, terms, lines,
-                                            by_key, floor=WIDE))
-        finally:
-            _self.crossing_pool = _pool
     if years or terms or lines:
         # A row already scored keeps whichever measure reads it better. It is
         # not "seen": `Manvil' Dar Cuy` shares just enough trigrams with *Manoel
@@ -1050,27 +1092,27 @@ def _letter_by_letter(rows: list[dict], name_q: str,
     ships = named_ships(rows, terms)
     pool = crossing_pool(rows, years, ships, lines)
     EDIT = floor
-    # Every reading of every row, folded once when the index was built. This
-    # pass folds each row it compares, and was folding them again on every
-    # keystroke.
-    index = getattr(rows, "postings", None)
-    folded = index[3] if index is not None else None
     # One matcher for the whole scan, with the query loaded once: it keeps the
     # index of the query's characters between comparisons, and the two cheap
-    # ratios refuse most rows before the real one is computed. The length test
-    # in front of them is cheaper still — two strings that differ enough in
-    # length cannot reach the floor whatever their letters are.
+    # ratios refuse most rows before the real one is computed.
     m = difflib.SequenceMatcher(autojunk=False)
     m.set_seq2(q)
-    out = []
-    for i in pool:
-        r = rows[i]
-        s = 0.0
-        readings = (folded[i] if folded is not None
-                    else [fold(t) for t in (r["text"], *(r.get("alts") or ()))])
-        for t in readings:
-            if not t or 2 * min(len(q), len(t)) < EDIT * (len(q) + len(t)):
-                continue
+    # Every reading of every row, folded once when the index was built, with a
+    # count of its letters beside it. The first refusal — the letters the query
+    # and the reading have in common, whatever their order — is then taken over
+    # the whole pool at once instead of a reading at a time.
+    letters = getattr(rows, "letters", None) if pool else None
+    best: dict[int, float] = {}
+    if letters is not None:
+        flat, lens, counts, owner = letters
+        wanted = np.asarray(pool, dtype=np.int64)
+        first = np.searchsorted(owner, wanted, side="left")
+        ids = _spans(first, np.searchsorted(owner, wanted, side="right") - first)
+        if ids.size:
+            common = np.minimum(counts[ids], _letter_counts(q)).sum(axis=1)
+            ids = ids[2 * common >= EDIT * (len(q) + lens[ids])]
+        for rid in ids.tolist():
+            t = flat[rid]
             m.set_seq1(t)
             # both cheap ratios are upper bounds on the real one and both are
             # symmetric — lengths, and letters in common — so they refuse rows
@@ -1079,9 +1121,26 @@ def _letter_by_letter(rows: list[dict], name_q: str,
             # the third decimal and the third decimal decides two names.
             if m.real_quick_ratio() < EDIT or m.quick_ratio() < EDIT:
                 continue
-            s = max(s, difflib.SequenceMatcher(None, q, t).ratio())
-        if s < EDIT:
-            continue
+            s = difflib.SequenceMatcher(None, q, t).ratio()
+            i = int(owner[rid])
+            if s >= EDIT and s > best.get(i, 0.0):
+                best[i] = s
+    else:
+        for i in pool:
+            r = rows[i]
+            s = 0.0
+            for t in (fold(x) for x in (r["text"], *(r.get("alts") or ()))):
+                if not t or 2 * min(len(q), len(t)) < EDIT * (len(q) + len(t)):
+                    continue
+                m.set_seq1(t)
+                if m.real_quick_ratio() < EDIT or m.quick_ratio() < EDIT:
+                    continue
+                s = max(s, difflib.SequenceMatcher(None, q, t).ratio())
+            if s >= EDIT:
+                best[i] = s
+    out = []
+    for i in sorted(best):
+        r, s = rows[i], best[i]
         rank = max(0.0, min(1.0, s * (1 + voyage_bonus(r, years, terms, lines))))
         # how it was found, because a row that shares few trigrams with the
         # query looks like a broken search otherwise

@@ -1127,3 +1127,37 @@ def test_asking_the_corpus_what_it_holds_is_the_same_answer_indexed():
               "silva gelria", "muesso koninklijke hollandsche lloyd",
               "gelria 1924", "hollandsche"):
         assert search(indexed, q) == search(rows, q), q
+
+
+def test_a_row_sharing_no_trigram_is_still_reached_letter_by_letter():
+    """The pass exists for the recogniser's systematic substitutions:
+    `Manvil' Dar Cuy` for *Manoel da Cruz* shares no trigram with it and stands
+    at 0.69 letter by letter. Refusing rows in bulk must not refuse that one."""
+    from desembarque.search import RowIndex
+    rows = [{"doc": "D", "file": "d.pdf", "page": 2, "row": 1,
+             "text": "Manvil' Dar Cuy", "ship": "GELRIA", "year": 1924},
+            {"doc": "D", "file": "d.pdf", "page": 2, "row": 2,
+             "text": "ANTONIO PEREIRA", "ship": "GELRIA", "year": 1924}]
+    from desembarque.search import similarity
+    # what the trigrams make of it on their own: the padding it shares with any
+    # name beginning the same way, and rank forty
+    assert similarity("Manoel da Cruz", rows[0]["text"]) < 0.2
+    indexed = RowIndex([dict(r) for r in rows])
+    hits = search(indexed, "Manoel da Cruz Gelria")
+    assert [h["row"] for h in hits][:1] == [1]
+    assert hits[0]["name_score"] > 0.6
+    assert search(indexed, "Manoel da Cruz Gelria") == \
+        search([dict(r) for r in rows], "Manoel da Cruz Gelria")
+
+
+def test_the_letter_pass_returns_what_it_returned_row_by_row():
+    """Every crossing query, over a corpus where the pass has real work."""
+    from desembarque.search import RowIndex
+    rows = _corpus()
+    for r in rows[::4]:                       # readings the trigrams will miss
+        r["text"] = r["text"].replace("A", "4").replace("I", "1")
+    indexed = RowIndex([dict(r) for r in rows])
+    plain = [dict(r) for r in rows]
+    for q in ("maria silva gelria", "manoel da cruz 1924", "anna gomes gelria",
+              "cezario sammamed koninklijke hollandsche lloyd", "jose 1924"):
+        assert search(indexed, q) == search(plain, q), q
