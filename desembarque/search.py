@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import difflib
 import functools
+import heapq
 import json
 import os
 from array import array
@@ -91,6 +92,7 @@ EDIT_FLOOR = 0.55
 # them by name alone against 89, and 86 in the top five against 79. Above 1 the
 # readings that hold nothing else stop being told from the ones that do.
 SLACK = 0.75
+LOOSE_FLOOR = 0.10
 #
 # Running the same comparison over the *whole* corpus, as a second attempt when
 # the trigrams found nothing, was measured and dropped. In isolation it looks
@@ -1005,6 +1007,10 @@ def search(rows: list[dict], query: str, limit: int = 50,
     terms = [ship_term] if ship_term else []
     lines = line_scores(rows, line_terms)
     scored = []
+    # Rows the search cannot show, kept as keys: the ship's own passengers are
+    # added only for rows the name search did not already return, and that has
+    # to stay true of the rows the limit cut off.
+    cut: set[tuple] = set()
     # Each candidate comes with its name score: the better of what the row was
     # read as and what the second reading said, which differ only where the
     # hand was hard — exactly where a search fails.
@@ -1012,9 +1018,20 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # An empty name query is not a query, and is not asked. Trigrams are
     # padded, so the score of nothing against a row read as `B   B` comes out
     # at 0.25 — a page of whitespace ranked above the ship somebody typed.
-    pool = (candidates(rows, name_q, floor=min_score,
-                       slack=0.0 if (years or terms or lines) else SLACK)
+    strict = bool(years or terms or lines)
+    pool = (candidates(rows, name_q,
+                       floor=min_score if strict else max(min_score, LOOSE_FLOOR),
+                       slack=0.0 if strict else SLACK)
             if len(fold(name_q)) >= MIN_QUERY else ())
+    if not strict and len(pool) > limit:
+        # Nothing was named for the voyage to multiply, so the order is the
+        # name score itself and the rows past the limit cannot appear. Building
+        # a hit dict for each of them was most of what a broad query cost:
+        # 50,000 dictionaries to show fifty.
+        cut = {(r["doc"], r["row"]) for r, s in pool if s >= min_score}
+        pool = heapq.nsmallest(limit, pool,
+                               key=lambda p: (-p[1], p[0].get("file") or "",
+                                              p[0]["row"] or 0))
     for r, s in pool:
         # the floor is applied to the name alone: the voyage orders what was
         # found, it does not decide what counts as found
@@ -1043,7 +1060,7 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # that exact name was nowhere in the results. The people aboard are added
     # after the name matches rather than instead of them: `Formosa` is a ship
     # and a surname, and somebody typing it means a person more often than not.
-    seen = {(h["doc"], h["row"]) for h in scored}
+    seen = cut | {(h["doc"], h["row"]) for h in scored}
     aboard = _aboard(rows, query, seen)
     if not aboard:
         # The line is asked the same way the ship is, and for the dossiers that
