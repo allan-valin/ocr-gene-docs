@@ -16,6 +16,7 @@ from __future__ import annotations
 import difflib
 import functools
 import json
+import os
 from array import array
 import re
 import unicodedata
@@ -222,6 +223,12 @@ _ROWS: dict[str, tuple[tuple[int, int], list[dict]]] = {}
 # the posting list can be kept across requests and rebuilt only when the corpus
 # it describes has actually changed.
 _VERSION = 0
+# The flattened rows themselves, per cache directory and per way of loading it,
+# thrown away as soon as anything under that directory has been read again. A
+# handful of entries: the application loads one directory one way, and a bench
+# beside it loads another.
+_FLAT: dict[tuple[str, int, int], tuple[int, "RowIndex"]] = {}
+_FLAT_KEPT = 4
 _POSTINGS: tuple[tuple[int, int], dict] | None = None
 # The words of the shipping lines, and what each word typed was worth against
 # them. Both are answers about the corpus rather than about a query, so they
@@ -231,22 +238,42 @@ _TERMS: dict[tuple[int, str], dict[str, float]] = {}
 _CROSSINGS: tuple[tuple[int, int], dict[str, dict]] | None = None
 
 
-def _rows_of(f: Path, engine_only: bool,
-             ships: dict[str, str] | None = None, token: int = 0) -> list[dict]:
+def _files(cache: Path) -> list[tuple[str, os.stat_result]]:
+    """The stored transcriptions, in name order, with what each one stamps.
+
+    `Path.glob` builds a `Path` per file and sorting them compares them part by
+    part: at the size of the whole archive that was 200 ms of the 260 ms a
+    keystroke spent finding out that nothing had changed. `os.scandir` hands
+    back the name and the stat together, and the sort is over strings.
+    """
     try:
-        st = f.stat()
+        with os.scandir(cache) as it:
+            found = sorted((e.name, e.path, e) for e in it
+                           if e.name.endswith(".json"))
     except OSError:
         return []
+    out: list[tuple[str, os.stat_result]] = []
+    for _, path, entry in found:
+        try:
+            st = entry.stat()
+        except OSError:
+            continue                     # deleted between the scan and the stat
+        out.append((path, st))
+    return out
+
+
+def _rows_of(path: str, st: os.stat_result, engine_only: bool,
+             ships: dict[str, str] | None = None, token: int = 0) -> list[dict]:
     # the catalogue is part of what a row says it is, so a different catalogue
     # is a different reading and must not come out of the cache. The token is
     # computed once per load rather than once per file.
     stamp = (st.st_mtime_ns, st.st_size, token)
-    key = f"{f}|{int(engine_only)}"
+    key = f"{path}|{int(engine_only)}"
     hit = _ROWS.get(key)
     if hit is not None and hit[0] == stamp:
         return hit[1]
     global _VERSION
-    rows = _parse(f, engine_only, ships)
+    rows = _parse(Path(path), engine_only, ships)
     _ROWS[key] = (stamp, rows)
     _VERSION += 1
     return rows
@@ -263,19 +290,46 @@ def load_index(cache: Path, engine_only: bool = True,
 
     Files already read are not read again unless they changed, so an index that
     grows all afternoon does not re-cost the whole afternoon on every query.
+    The flattening itself is kept too: at the size of the whole archive it is a
+    quarter of a second of copying 370,000 row references, and `/api/search`
+    loads the index on every keystroke.
     """
-    out: list[dict] = []
-    present = set()
     token = hash(frozenset((ships or {}).items()))
-    for f in sorted(Path(cache).glob("*.json")):
-        present.add(f"{f}|{int(engine_only)}")
-        out.extend(_rows_of(f, engine_only, ships, token))
+    files = _files(cache)
+    suffix = f"|{int(engine_only)}"
     global _VERSION
-    for gone in [k for k in _ROWS if k.endswith(f"|{int(engine_only)}")
+    before = _VERSION
+    present, lists = set(), []
+    for path, st in files:
+        present.add(f"{path}{suffix}")
+        lists.append(_rows_of(path, st, engine_only, ships, token))
+    # only this cache's rows: a bench pointed at a directory of its own used to
+    # evict the application's index, and the application's the bench's, so
+    # neither ever hit the cache the other had filled.
+    prefix = f"{os.fspath(cache)}{os.sep}"
+    for gone in [k for k in _ROWS
+                 if k.endswith(suffix) and k.startswith(prefix)
                  and k not in present]:
         del _ROWS[gone]        # a deleted transcription leaves the index
         _VERSION += 1
-    return RowIndex(out, version=_VERSION)
+
+    # what makes the flattening stale is this load having read something, not
+    # the global count of readings: a bench loading a directory of its own, or
+    # the same directory loaded the other way, bumps that count without
+    # touching a single row of this index.
+    key = (os.fspath(cache), int(engine_only), token)
+    stamp = (before == _VERSION, len(files))
+    flat = _FLAT.get(key)
+    if flat is not None and stamp == (True, flat[0]):
+        return flat[1]
+    out: list[dict] = []
+    for rows in lists:
+        out.extend(rows)
+    index = RowIndex(out, version=_VERSION)
+    _FLAT[key] = (len(files), index)
+    while len(_FLAT) > _FLAT_KEPT:
+        del _FLAT[next(iter(_FLAT))]
+    return index
 
 
 def _second_reading(row: dict, text: str) -> list[str]:

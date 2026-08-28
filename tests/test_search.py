@@ -940,3 +940,82 @@ def test_a_ship_name_is_compared_once_rather_than_once_per_passenger():
     info = ship_similarity.cache_info()
     assert info.misses <= 8, f"compared {info.misses} distinct pairs"
     assert info.hits > 100, f"only {info.hits} of the comparisons were reused"
+
+
+def _doc(tmp_path, name, text):
+    import json
+    (tmp_path / name).write_text(json.dumps({
+        "hash": name, "engine": "paddle",
+        "rows": [{"n": 1, "name_raw": text, "page": 2}]}), encoding="utf-8")
+
+
+def test_an_unchanged_cache_hands_back_the_index_it_already_flattened(tmp_path):
+    """At the size of the whole archive the flattening alone is a quarter of a
+    second, and `/api/search` loads the index on every keystroke."""
+    from desembarque import search as sl
+    _doc(tmp_path, "a.json", "JOSE MUESSO")
+    _doc(tmp_path, "b.json", "MARIA SILVA")
+    first = sl.load_index(tmp_path)
+    assert sl.load_index(tmp_path) is first
+
+
+def test_a_document_rewritten_in_place_is_flattened_again(tmp_path):
+    """A correction is saved over the record it corrects: same name, same
+    directory. Serving the previous flattening would lose it silently."""
+    import os
+    from desembarque import search as sl
+    _doc(tmp_path, "a.json", "JOSE MUESSO")
+    first = sl.load_index(tmp_path)
+    _doc(tmp_path, "a.json", "JOSE MUESSO DA SILVA")
+    os.utime(tmp_path / "a.json", ns=(2_000_000_000_000_000_000,) * 2)
+    again = sl.load_index(tmp_path)
+    assert again is not first
+    assert [r["text"] for r in again] == ["JOSE MUESSO DA SILVA"]
+
+
+def test_a_new_document_is_flattened_again(tmp_path):
+    from desembarque import search as sl
+    _doc(tmp_path, "a.json", "JOSE MUESSO")
+    first = sl.load_index(tmp_path)
+    _doc(tmp_path, "b.json", "MARIA SILVA")
+    again = sl.load_index(tmp_path)
+    assert again is not first and len(again) == 2
+
+
+def test_a_deleted_document_is_flattened_again(tmp_path):
+    from desembarque import search as sl
+    _doc(tmp_path, "a.json", "JOSE MUESSO")
+    _doc(tmp_path, "b.json", "MARIA SILVA")
+    first = sl.load_index(tmp_path)
+    (tmp_path / "b.json").unlink()
+    again = sl.load_index(tmp_path)
+    assert again is not first and len(again) == 1
+
+
+def test_the_manual_rows_are_not_served_to_a_measurement(tmp_path):
+    """The two ways of loading share a directory and must not share a cache:
+    the bench asks for engine rows only and the app asks for everything."""
+    import json
+    from desembarque import search as sl
+    _doc(tmp_path, "a.json", "JOSE MUESSO")
+    (tmp_path / "b.json").write_text(json.dumps({
+        "hash": "b", "source": "manual", "file": "b.pdf",
+        "rows": [{"n": 1, "surname": "SILVA", "given": "MARIA", "page": 2}]}),
+        encoding="utf-8")
+    everything = sl.load_index(tmp_path, engine_only=False)
+    engine = sl.load_index(tmp_path, engine_only=True)
+    assert len(everything) == 2 and len(engine) == 1
+    assert sl.load_index(tmp_path, engine_only=False) is everything
+
+
+def test_two_caches_do_not_hand_each_other_their_rows(tmp_path):
+    from desembarque import search as sl
+    one, two = tmp_path / "one", tmp_path / "two"
+    one.mkdir(); two.mkdir()
+    _doc(one, "a.json", "JOSE MUESSO")
+    _doc(two, "b.json", "MARIA SILVA")
+    a = sl.load_index(one)
+    b = sl.load_index(two)
+    assert [r["text"] for r in a] == ["JOSE MUESSO"]
+    assert [r["text"] for r in b] == ["MARIA SILVA"]
+    assert sl.load_index(one) is a
