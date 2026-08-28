@@ -30,7 +30,13 @@ is written down beside it, not when the code runs.
         that was right. See T8.
   - [ ] `scripts/bench_columns.py` + per-column truth for one typed and one
         cursive page (blocked on §4 having anything to score).
-- [ ] **T4 — Per-row provenance** (§2). `preserve_human_work` keeps the rows a
+- [x] **T4 — Per-row provenance** (§2), done 2026-08-28 and proved on the
+      documents it was written for: the four frozen records were read again,
+      613 rows came back on pages the old whole-record save had dropped, and
+      every row a person had typed survived verbatim. A search for
+      *Santabarbara* now reaches page 3 of BS.ENT.013947 at all, which it could
+      not before — how well it reads there is the recogniser's business and is
+      what `bench_menu.py` measures. `preserve_human_work` keeps the rows a
       person typed and lets the re-read replace the rest. Unit test first:
       one typed row + forty engine rows, re-read, typed row verbatim and the
       forty updated.
@@ -60,7 +66,34 @@ is written down beside it, not when the code runs.
       - [ ] The engine still calls `split_name`, and `surname`/`given` are
             still written and still read by search, export, the voyages report
             and the review screen. 108 test references sit on those two fields,
-            so removing them is a session of its own, and it is the next one. `name_raw` is the row's
+            so removing them is a session of its own, and it is the next one.
+            Every place that has to change, so the next session does not have
+            to find them again:
+            * `desembarque/engine_paddle.py:282` `split_name`, and its one
+              caller at :343 — the row it builds keeps `name_raw` and the
+              recogniser's score, and stops carrying `surname`/`given`.
+              `conf` is keyed `surname` too, and that key is the score of the
+              *name strip*, so it wants renaming with the field.
+            * `desembarque/ditto.py` — `inherited` is already the true output;
+              the three places that also write `surname`/`given` for
+              compatibility come out, and `ditto` names `name` rather than
+              `surname`.
+            * `desembarque/search.py:230` `row_text` — the ditto branch reads
+              `surname` + `given`; it becomes `inherited` + what the row wrote.
+              :450 carries the score into a hit.
+            * `desembarque/export.py:94` — two columns, *sobrenome* and *nome*.
+              The export should carry the name as read plus what the mark
+              repeats, and say which is which.
+            * `scripts/serve.py:84` (the check's score), :286 (the empty rows a
+              page starts with).
+            * `scripts/build_names.py:81` — the dictionary is counted off
+              `conf.surname`.
+            * `prototype/review.html` — `nameText`, `splitName` (which splits a
+              typed correction the same way and would then be pointless), and
+              the name cell.
+            * The spikes (`spike_ocr`, `spike_scale`, `spike_speed`,
+              `spike_guided`) read `given`/`surname` out of truth files; they
+              are measurements already taken and can stay as they are. `name_raw` is the row's
       name; the repetition mark inherits the tokens written above it. Nothing
       claims a name order unless a person typed it. `bench_search.py --matrix`
       must not fall.

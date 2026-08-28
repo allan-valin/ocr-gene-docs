@@ -80,9 +80,15 @@ re-read verbatim, and everything else is the engine's.
 Underneath it was a second loss. The review screen posts the page in front of
 the reader and the save wrote that list as the record's whole `rows`, so
 correcting page 2 of BS.ENT.013947 deleted pages 3 to 11. Only the saved page is
-replaced now. **BS.ENT.013947 was read again to prove it**: 406 rows came back
-on pages 3 to 11, the typed row on page 2 kept verbatim — which is also why the
-benches score 149 rows instead of 87.
+replaced now. **The four frozen records were read again to prove it**, and
+the pages the old save had dropped came back: BS.ENT.013947 406 rows on pages 3
+to 11, BS.ENT.016331 207 rows on pages 2, 3, 4, 6, 7 and 8, BS.ENT.013990 two
+more, and the typed rows kept verbatim in every one. BS.ENT.013942 came back
+with 31 rows where 33 were stored — the geometry cuts that page into two fewer
+bands than it did in August, and both rows Allan typed survived. That re-read is
+also why the benches score 149 rows instead of 87. The two hand-typed records,
+BS.ENT.017397 and BS.ENT.015368, were left alone: they have no engine rows to
+refresh.
 
 The two values Allan saw on BS.ENT.013942 — `SIRVIENTA`, `BELGA` — are not
 fossils of an early pass. Both carry `edits` stamped at the review screen on
