@@ -272,7 +272,8 @@
     prováveis do acervo</span>
   <span><b>no menu</b> — <i>≈</i> nome deste acervo parecido com a leitura,
     <i>⌇</i> outra divisão dos mesmos traços (alcança nomes que o acervo ainda
-    não leu certo), <i>≈⌇</i> as duas coisas</span>
+    não leu certo), <i>⌇·</i> outra divisão que é nome corrente em italiano,
+    espanhol ou português, <i>≈⌇</i> as duas coisas</span>
 </div>
 <!-- The one document in the demo whose other columns are filled was typed by a
      person. Every real dossier shows names and nothing else, because names are
@@ -1362,7 +1363,9 @@ function fetchGuesses(menu, word, readings){
     // this archive carries that looks like the reading, and another way of
     // dividing the same strokes — which is the only kind of guess that can
     // reach a name nobody has read correctly yet.
-    const mark = g => g.how==="arquivo" ? "≈" : (g.how==="traço" ? "⌇" : "≈⌇");
+    const MARKS = {"arquivo":"≈", "traço":"⌇", "arquivo+traço":"≈⌇",
+                   "traço+lista":"⌇·"};
+    const mark = g => MARKS[g.how] || "⌇";
     const why = g => g.score==null
       ? `${g.why} · palpite, confira no original`
       : `parecido com a leitura (${Math.round(g.score*100)}%) · ${g.seen}× neste acervo · ${g.why} · palpite, confira no original`;

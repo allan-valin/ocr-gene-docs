@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from desembarque.gazetteer import Names, menu_for  # noqa: E402
+from desembarque.gazetteer import Names, menu_for, spoken_names  # noqa: E402
 from desembarque.truthset import (fold, pairs, rank_of,  # noqa: E402
                                   word_pairs, words_from_disk)
 from desembarque import strokes                    # noqa: E402
@@ -77,7 +77,8 @@ def sources(names: Names, limit: int = 10) -> dict:
                 out.append(c)
         return out
 
-    known = {k.upper() for k in names.counts}
+    spoken = spoken_names(ROOT / "data" / "language_names.json")
+    known = {k.upper() for k in names.counts} | spoken
 
     def ink(word, row, i, rules=None):
         return [c.word for c in strokes.variants(word, known=known,
@@ -104,8 +105,9 @@ def sources(names: Names, limit: int = 10) -> dict:
     def shipped(word, row, i):
         """The menu the server actually returns, so the number measured here
         is the number a reader gets."""
-        return alts(word, row, i) + [g["name"] for g in menu_for(word, names,
-                                                                 limit=limit)]
+        return alts(word, row, i) + [g["name"] for g in
+                                     menu_for(word, names, limit=limit,
+                                              spoken=spoken)]
 
     picked = {"alts": alts, "archive": archive, "menu": both,
               "strokes": ink, "all": joined, "shipped": shipped}

@@ -85,9 +85,29 @@ is written down beside it, not when the code runs.
       the plan's own examples turn on — `Mania`/`Maria`, `Ant?`/`Antonio` — and
       those examples are on BS.ENT.013947 p3, which has no stored reading to
       score against until T4's fix is re-run over the archive.
-      Still to do: re-run once 013947 is re-read, then drop what still scores
-      nothing; and the ordering, where the archive's own first guess is still
-      the best single thing in the menu (0.241 at rank one).
+      **A second name list, 2026-08-28.** The rules that need a name to speak
+      for — trimming a neighbouring column out of the name strip, reading a
+      looped capital back, splitting two names written as one — had nothing to
+      speak for on most words, because the archive's own list is 1,081 names
+      and *Santos*, *Sorio* and *Rossendal* are not among them.
+      `data/language_names.json` is 259 names written by hand from the
+      languages these ships carried, kept apart from the archive's count
+      because it is a different claim: *these languages use this name*, never
+      *this archive has read it*. It is ranked below everything the archive has
+      read, capped at four per menu, marked `⌇·` on screen, and the names that
+      appear only on the hand-read pages were deliberately left out so the
+      bench measures the rules and not the file.
+
+      | menu | true name offered | @1 | @3 | @5 | @10 |
+      |---|---|---|---|---|---|
+      | archive names only | 77 of 217 | 0.157 | 0.309 | 0.355 | 0.355 |
+      | with the strokes | 83 of 217 | 0.161 | 0.323 | 0.378 | 0.382 |
+      | and the language list | 87 of 217 | 0.161 | 0.327 | 0.392 | 0.401 |
+
+      Still to do: drop the rules that keep scoring nothing once the pages
+      their examples live on are scorable; and the ordering, where the
+      archive's own first guess is still the best single thing in the menu
+      (0.230 at rank one against the whole menu's 0.161).
 - [x] **T8 — Ask the right question when marking** (§5, `doubtful`), measured
       by the new `scripts/bench_check.py` over 149 rows paired with a hand
       reading, 121 of them read wrong:

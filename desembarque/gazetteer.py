@@ -188,6 +188,10 @@ RULE_ORDER = {"ascender": 0, "edge": 1, "capital": 1, "round": 2,
               "space": 2, "two changes": 3, "abbreviation": 3, "minims": 4}
 
 MENU_LIMIT = 12
+# How many readings backed only by the language list may sit in one menu. They
+# are a weaker claim than a name this archive has read, and a menu that is
+# mostly them is a general name dictionary wearing the archive's clothes.
+SPOKEN_LIMIT = 4
 # How many readings that spell nothing anybody has read may sit in one menu.
 # They are the point — the archive has not read every name correctly — but a
 # person scanning twenty of them stops scanning, so they are the tail and not
@@ -195,7 +199,28 @@ MENU_LIMIT = 12
 UNKNOWN_LIMIT = 5
 
 
-def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT) -> list[dict]:
+def spoken_names(path: Path) -> set[str]:
+    """Names the languages these ships carried are known to use.
+
+    A different claim from `Names`, and kept apart from it on purpose: this
+    archive's list is a count of what it has *read*, and a name it has never
+    read correctly — Guberti, Alfieri, Ponticelli — cannot be in it. This one
+    says only that somebody in Italian, Spanish or Portuguese is called this,
+    which is enough for the rules that need a name to speak for and not enough
+    to outrank a page.
+    """
+    try:
+        d = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    out: set[str] = set()
+    for group in (d.get("names") or {}).values():
+        out |= {fold(n) for n in group if n}
+    return out
+
+
+def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
+             spoken: set[str] | None = None) -> list[dict]:
     """Everything worth offering for one word, in the order that was measured.
 
     Two sources, and they answer different questions. The archive says *this
@@ -213,17 +238,28 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT) -> list[dict]:
     what the page could say.
     """
     w = fold(word)
-    known = {fold(n) for n in names.counts}
+    read_here = {fold(n) for n in names.counts}
+    spoken = {fold(n) for n in (spoken or set())}
+    known = read_here | spoken
     near = [dict(g, how="arquivo",
                  why="parecido com a leitura, nome deste acervo")
             for g in names.suggest(word, limit=limit)]
-    ink = [{"name": c.word, "how": "traço", "rule": c.rule, "cost": c.cost,
-            "why": WHY.get(c.rule, "outra leitura do mesmo traço"),
-            "seen": names.counts.get(c.word, 0),
-            "score": None}
-           for c in strokes.variants(word, known=known, limit=limit * 3)]
-    seen_names = [g for g in ink if g["name"].replace(" ", "") in known]
-    unknown = sorted((g for g in ink if g["name"].replace(" ", "") not in known),
+    ink = []
+    for c in strokes.variants(word, known=known, limit=limit * 3):
+        plain = c.word.replace(" ", "")
+        from_list = plain not in read_here and plain in spoken
+        ink.append({"name": c.word,
+                    "how": "traço+lista" if from_list else "traço",
+                    "rule": c.rule, "cost": c.cost,
+                    "why": (WHY.get(c.rule, "outra leitura do mesmo traço")
+                            + ("; nome corrente nas línguas destas listas — "
+                               "este acervo ainda não o leu" if from_list else "")),
+                    "seen": names.counts.get(c.word, 0),
+                    "score": None})
+    seen_names = [g for g in ink if g["name"].replace(" ", "") in read_here]
+    from_list = [g for g in ink if g["how"] == "traço+lista"][:SPOKEN_LIMIT]
+    unknown = sorted((g for g in ink if g["name"].replace(" ", "") not in known
+                      and g["how"] != "traço+lista"),
                      key=lambda g: (RULE_ORDER.get(g["rule"], 9), g["cost"],
                                     g["name"]))
     if w in known:
@@ -235,7 +271,7 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT) -> list[dict]:
 
     out: list[dict] = []
     at: dict[str, dict] = {}
-    for g in near[:1] + seen_names + near[1:] + unknown[:UNKNOWN_LIMIT]:
+    for g in near[:1] + seen_names + near[1:] + from_list + unknown[:UNKNOWN_LIMIT]:
         was = at.get(g["name"])
         if was is not None:
             # Both sources arriving at the same name is the strongest thing

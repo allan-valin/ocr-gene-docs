@@ -170,3 +170,34 @@ def test_the_two_reasons_are_asked_separately():
     from desembarque.gazetteer import Names
     archive = Names({"JOSE": 90})
     assert archive.near_miss("Yose") and not archive.doubtful("Yose")
+
+
+def test_a_name_the_languages_carry_is_offered_when_this_archive_has_none():
+    """The archive's own list is what it has read; a name it has never read
+    correctly is not in it, which is the whole problem. The language list says
+    only that somebody in Italian, Spanish or Portuguese is called this — so it
+    can speak for a candidate the archive cannot, and it is always ranked below
+    what the archive has actually read."""
+    from desembarque.gazetteer import Names, menu_for
+    archive = Names({"MARIA": 40})
+    got = menu_for("SANTOSPOR", archive, spoken={"SANTOS"}, limit=10)
+    santos = [g for g in got if g["name"] == "SANTOS"]
+    assert santos and santos[0]["how"] == "traço+lista"
+    assert "lista" in santos[0]["why"] or "língua" in santos[0]["why"]
+
+
+def test_the_archive_still_outranks_the_language_list():
+    from desembarque.gazetteer import Names, menu_for
+    archive = Names({"MARQUES": 40})
+    got = menu_for("ELBARQUES", archive, spoken={"MARIA", "MARQUEZ"}, limit=10)
+    assert got[0]["name"] == "MARQUES"
+
+
+def test_the_language_list_is_not_counted_as_something_the_archive_read():
+    """A guess says where it came from, and *a name in these languages* and
+    *a name on a page of this archive* are different claims."""
+    from desembarque.gazetteer import Names, menu_for, spoken_names
+    from pathlib import Path
+    got = menu_for("SANTOSPOR", Names({"MARIA": 40}), spoken={"SANTOS"}, limit=10)
+    assert all(g["seen"] == 0 for g in got if g["how"] == "traço+lista")
+    assert len(spoken_names(Path("/nonexistent/language_names.json"))) == 0

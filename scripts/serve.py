@@ -48,7 +48,8 @@ from desembarque.export import (csv_filename, hits_to_csv,  # noqa: E402
 from desembarque.voyage import (is_complete, merge_voyages,  # noqa: E402
                                 parse_voyage)
 from desembarque import search as searchlib          # noqa: E402
-from desembarque.gazetteer import Names, menu_for     # noqa: E402
+from desembarque.gazetteer import (Names, menu_for,   # noqa: E402
+                                   spoken_names)
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
 
@@ -61,6 +62,11 @@ STATE = {"root": ROOT / "data" / "scans"}
 # Built by scripts/build_names.py out of the pages this archive typed. Absent is
 # a legitimate state: the menu then offers only what the engine read.
 NAMES = Names.load(ROOT / "data" / "names.json")
+# A different claim from the one above, and read once: `NAMES` counts what this
+# archive has read, and this says only that these languages use the name. It is
+# what the candidate rules check against when the archive has nothing to say,
+# which on most words is the case — the archive's list is 1,081 names.
+SPOKEN = spoken_names(ROOT / "data" / "language_names.json")
 
 
 # Which rows to look at first, and why. Measured against 139 hand-read rows, of
@@ -562,7 +568,8 @@ class Handler(BaseHTTPRequestHandler):
                 word = q.get("q", "")
                 return self._send(200, {
                     "word": word,
-                    "guesses": menu_for(word, current_names()),
+                    "guesses": menu_for(word, current_names(),
+                                        spoken=SPOKEN),
                     "of": len(current_names()),
                     "source": "nomes deste acervo e outras leituras do mesmo "
                               "traço — não é leitura do motor",
