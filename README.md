@@ -187,12 +187,17 @@ checked against small fixed sets, in this order, and each one runs in seconds or
 minutes:
 
 ```sh
-.venv/bin/python -m pytest tests/ -q             # 422 library and pipeline tests, ~30 s
-.venv/bin/python scripts/bench_search.py         # can these people be found?      ~10 s
+.venv/bin/python -m pytest tests/ -q             # 535 library and pipeline tests, ~40 s
+.venv/bin/python scripts/bench_search.py --matrix # can these people be found?      ~20 s
 .venv-ocr/bin/python scripts/bench_pages.py      # ten pages, is the table measured right?  ~1 min
 .venv-ocr/bin/python scripts/bench_rec.py        # three pages, how well are they read?     ~1 min
 python3 scripts/smoke_prototype.py               # drives the real UI in Chromium and Firefox
 ```
+
+`--matrix` asks the two questions a searcher asks — a name alone, and a name
+with the crossing — at three cutoffs, on one load of the index: a scoring
+change moves those six numbers in different directions, and one of them going
+up is not the same as the change being good.
 
 `data/golden.json` names the ten pages and why each is there — a typed list, a dense
 cursive family list, a continuation page that prints no headings, faint pencil, a busy
