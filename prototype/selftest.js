@@ -551,6 +551,22 @@ window.addEventListener("load",async()=>{
        && /class="ditto"/.test(nameCell({name_raw: '"Maria'}))
        && />Maria</.test(nameCell({name_raw: '"Maria'})));
 
+    // A value in one of the other columns is either somebody's typing or the
+    // engine's word, and on screen they looked identical. The engine has never
+    // written those columns — two rows of BS.ENT.013942 carry a profession and
+    // a nationality a person typed at the review screen — so a value that came
+    // from a person has to say so.
+    ok("a value a person typed says it was typed",
+       typeof cell === "function"
+       && /class="[^"]*typed/.test(cell({occupation: "SIRVIENTA",
+                                         edits: [{field: "occupation",
+                                                  to: "SIRVIENTA"}]},
+                                        "occupation", "SIRVIENTA")));
+    ok("and a value the engine read carries no such claim",
+       typeof cell === "function"
+       && !/class="[^"]*typed/.test(cell({nationality: "BELGA"},
+                                         "nationality", "BELGA")));
+
     const ex = document.getElementById("exportcsv");
     ok("an export control exists", !!ex);
     if(ex) ok("export points at the served document or is disabled",

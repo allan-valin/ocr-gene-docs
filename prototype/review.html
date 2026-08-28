@@ -88,6 +88,9 @@
   #handnote:not([hidden]){display:block}
   #handnote b{color:var(--ink);font-weight:600}
   .ditto{font-style:normal;color:var(--dim);margin-right:2px;cursor:help}
+  /* somebody's typing, not a reading: the same dotted underline the interface
+     uses for anything a person put there */
+  td .typed{border-bottom:1px dotted var(--ok);cursor:help}
   #legend b{color:var(--ink);font-weight:600}
   #legend .swatch{display:inline-block;width:3px;height:12px;background:var(--warn);
     vertical-align:-2px;margin-right:5px}
@@ -411,7 +414,13 @@ function cell(r,f,txt){
   const isNull = txt==null;
   const d = r.ditto&&r.ditto.includes(f);
   const guessed = d && r.ditto_source==="position";
-  const cls = [isNull?"null":"", d?"ditto":"", guessed?"guessed":""].filter(Boolean).join(" ");
+  // Whose word this is. The engine reads the name column and nothing else, so
+  // every value in the other columns was typed by a person — and on screen it
+  // was indistinguishable from a reading, which is how `SIRVIENTA` and `BELGA`
+  // in BS.ENT.013942 read as the tool's claim about the page.
+  const typed = (r.edits||[]).some(e=>e&&e.field===f);
+  const cls = [isNull?"null":"", d?"ditto":"", guessed?"guessed":"",
+               typed?"typed":""].filter(Boolean).join(" ");
   const val = isNull ? "ilegível" : txt;
   const DITTO_TITLE = {
     mark: 'escrito como aspas de repetição (") — resolvido a partir da linha acima',
@@ -420,6 +429,7 @@ function cell(r,f,txt){
             + "a família acima. Confira no original.",
   };
   const title = isNull ? "ilegível — registrado como nulo, nunca adivinhado"
+              : typed ? "digitado por uma pessoa — o motor lê só a coluna do nome"
               : d ? (DITTO_TITLE[r.ditto_source] || DITTO_TITLE.mark) : "";
   const mark = (r.conf && f in r.conf) ? dot(r,f) : "";
   return `<td class="cellwrap"><span contenteditable="${EDIT}" data-f="${f}" class="${cls}"

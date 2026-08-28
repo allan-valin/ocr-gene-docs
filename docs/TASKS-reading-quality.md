@@ -108,9 +108,10 @@ is written down beside it, not when the code runs.
         profession and other columns were typed by a person. It is the only
         document in the app with them filled, and without the note the next
         dossier reads as a tool that stopped working.
-      - Still open from §3: a value a *person* typed into one of those columns
-        on a real document looks exactly like a reading. Two rows of
-        BS.ENT.013942 are in that state.
+      - A value a person typed into one of the other columns now says so — a
+        dotted underline and *digitado por uma pessoa* — which is what the two
+        rows of BS.ENT.013942 needed. The engine has never written those
+        columns, so anything in them is somebody's typing.
 - [ ] **T10 — The other columns** (§4), cheapest first: age, sex, class, then
       nationality, profession, port against gazetteers.
 - [ ] **T11 — The language prior** (§7). Depends on T10.
