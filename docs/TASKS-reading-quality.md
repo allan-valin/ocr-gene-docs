@@ -235,6 +235,28 @@ is written down beside it, not when the code runs.
             is left is calling it from `transcribe_page` and deciding what a
             cell costs: a page is 40 bands × 8 columns, and the recogniser is
             twenty seconds a page for one column.
-      - [ ] `scripts/bench_columns.py` and a per-column truth page, before any
-            of it ships.
+      - [x] `scripts/bench_columns.py`, scored against BS.ENT.017397 p2 — the
+            typewritten page somebody transcribed by hand, 26 rows with a value
+            in every column. The first numbers, and they are bad, which is the
+            point of having them:
+
+            | column | rows | exact | mean CER | what it reads |
+            |---|---|---|---|---|
+            | nacionalidade | 26 | 0.000 | 0.730 | `ISPAGNIA` for *ESPANHOLA* |
+            | idade | 22 | 0.000 | 0.977 | `` and `一` for *23*, *37* |
+            | sexo | 26 | 0.000 | 1.000 | `十`, `二I` for *F*, *M* |
+            | estado | 26 | 0.077 | 0.593 | `SOLT`, `SOTC` for *SOLT* |
+            | profissao | 22 | 0.000 | 0.710 | `onncio` for *comercio* |
+            | procedencia | 26 | 0.000 | 0.974 | `POENOS AI` for *BUENOS AIRES* |
+            | classe | 26 | 0.115 | 0.885 | `1`, then nothing |
+
+            Two separate faults, and the bench separates them: the columns that
+            read *something* wrong (nacionalidade, estado, profissao) are a
+            recogniser and vocabulary problem, and the ones that read *nothing*
+            (idade, sexo, classe, procedencia) are a crop problem — a narrow
+            heading over a wide column, so halfway-to-the-next-heading puts the
+            edge in the wrong place. The crop comes first: a snapped value from
+            a closed vocabulary cannot rescue a cell that was never cut.
+            A cursive page still needs its own truth file; a number measured on
+            typescript must never be quoted as if it covered the hand.
 - [ ] **T11 — The language prior** (§7). Depends on T10.
