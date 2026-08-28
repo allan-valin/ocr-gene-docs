@@ -31,10 +31,22 @@ is written down beside it, not when the code runs.
       person typed and lets the re-read replace the rest. Unit test first:
       one typed row + forty engine rows, re-read, typed row verbatim and the
       forty updated.
-- [ ] **T5 — Clear the fossils** (§3). Nationality/profession/origin/age on
-      engine rows that no person typed, once T4 makes that distinguishable.
-      Count before and after; 27/23/26/22 today.
-- [ ] **T6 — Stop asserting surname and given** (§1). `name_raw` is the row's
+- [x] **T5 — Clear the fossils** (§3) — *measured, and there are none to clear.*
+      With T4's per-row question answerable, every non-name value in the corpus
+      turns out to have been typed by a person, not left by an engine pass:
+      26 rows of BS.ENT.017397, which is a whole page hand-transcribed (the
+      document the demo carries), and the two Allan saw on BS.ENT.013942 —
+      `occupation: SIRVIENTA` on row 1 and `nationality: BELGA` on row 5, both
+      carrying `edits` stamped 2026-08-21T18:08 and 19:28, from a session at
+      the review screen. Nothing else in 660 records has a value in those
+      columns, because the engine has never written one (§4).
+      So they are not deleted: they are somebody's typing. What was wrong is
+      that the screen shows a typed value exactly like a read one — moved to
+      T9, where the display work is.
+- [ ] **T6 — Stop asserting surname and given** (§1). *Not started: `surname`
+      is 84 references across the engine, ditto, search, export, voyages, the
+      server and the review screen, so it is a session of its own rather than
+      the tail of another.* `name_raw` is the row's
       name; the repetition mark inherits the tokens written above it. Nothing
       claims a name order unless a person typed it. `bench_search.py --matrix`
       must not fall.

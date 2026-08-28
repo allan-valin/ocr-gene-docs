@@ -100,6 +100,15 @@ ages sit on rows of six manual records.
 * Clear them where they were not typed by a person, once §2 makes that
   distinguishable. Until then they are the engine's word in the user's eyes.
 
+*Measured 2026-08-28, after §2 made the question answerable: there is nothing
+to clear.* Both values Allan saw carry `edits` of their own — `SIRVIENTA`
+stamped 18:08 and again 19:28 on 2026-08-21, `BELGA` at 19:28 — from a session
+at the review screen. The other 26 rows with such fields are BS.ENT.017397,
+the page transcribed by hand that the demo carries. The engine has written no
+value in those columns anywhere in 660 records, so no fossil of an early pass
+survives; what looked like one is a person's typing shown exactly like a
+reading. The fix is display (§6), not deletion.
+
 ## 4. Nothing outside the name column is read at all
 
 The grid is measured — `geo.normalized_cols()` gives every column rule and the
