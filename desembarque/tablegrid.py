@@ -93,7 +93,8 @@ def columns(fragments: list[dict], width: float, height: float,
     margin = 0.02 * width
     x0 = max((f["x1"] for f in left), default=head["x0"] - margin)
     x1 = min((f["x0"] for f in right), default=head["x1"] + margin)
-    others = _other_columns(right, x1, width)
+    others = _other_columns(right, x1, width,
+                            labelled if labelled is not None else fragments)
     ordinal = None
     if left:
         nearest = max(left, key=lambda f: f["x1"])
@@ -108,7 +109,9 @@ def columns(fragments: list[dict], width: float, height: float,
 # `observacoes`: the accents and the second word are the printing's business.
 FIELDS = {
     "nacionalidade": "nacionalidade", "nacionalid": "nacionalidade",
-    "idade": "idade", "estado": "estado", "profissao": "profissao",
+    # the older printings spell it *Edade*, and one prints *Sexo* where the
+    # later ones fold it into the civil state
+    "idade": "idade", "edade": "idade", "estado": "estado", "profissao": "profissao",
     "profissa": "profissao", "procedencia": "procedencia",
     "destino": "destino", "classe": "classe", "observacoes": "observacoes",
     "observacao": "observacoes", "sexo": "sexo", "numero": "numero",
@@ -123,8 +126,24 @@ def _field(text: str) -> str | None:
     return FIELDS.get(first)
 
 
-def _other_columns(right: list[dict], name_x1: float,
-                   width: float) -> list[dict]:
+def _text_of(box: dict, labelled: list[dict]) -> str:
+    """What was read off this box, which is usually not on the box itself.
+
+    Measuring the table uses the detector's output, and detection alone costs
+    three seconds against the eighty a whole page costs to read — so only the
+    heading line is recognised, and the boxes carrying the text are a separate
+    list from the boxes carrying the geometry.
+    """
+    if box.get("text"):
+        return box["text"]
+    for f in labelled or ():
+        if f.get("text") and _same_box(f, box):
+            return f["text"]
+    return ""
+
+
+def _other_columns(right: list[dict], name_x1: float, width: float,
+                   labelled: list[dict] | None = None) -> list[dict]:
     """Every column the page prints a heading for, beside the name.
 
     The engine reads the name column and nothing else, so nationality, age,
@@ -138,7 +157,7 @@ def _other_columns(right: list[dict], name_x1: float,
     """
     heads = []
     for f in sorted(right, key=lambda f: f["x0"]):
-        field = _field(f.get("text"))
+        field = _field(_text_of(f, labelled))
         if field and all(h["field"] != field for h in heads):
             heads.append({"field": field, "x0": f["x0"], "x1": f["x1"]})
     out = []

@@ -352,3 +352,19 @@ def test_the_columns_carry_to_the_pages_that_print_no_heading():
     later = table(plain, W, H, hint=hint)
     assert later is not None
     assert set(later.normalized_columns()) == set(first.normalized_columns())
+
+
+def test_the_headings_are_named_from_the_boxes_that_were_read():
+    """Measuring the table uses the detector's boxes, which mostly carry no
+    text — reading the whole page to measure it would cost eighty seconds a
+    page. Only the heading line is read, and it is that reading that says which
+    column each box is. Without this the columns were found on the fixtures,
+    where every box carries text, and never on a real page."""
+    frs, W, H = page("013947-3")
+    blind = [{k: v for k, v in f.items() if k != "text"} for f in frs]
+    labelled = [f for f in frs if f.get("text")]
+    col = columns(blind, W, H, labelled=labelled)
+    assert col is not None
+    assert {c["field"] for c in col["others"]} == {
+        "nacionalidade", "idade", "estado", "profissao", "procedencia",
+        "destino", "classe", "observacoes"}

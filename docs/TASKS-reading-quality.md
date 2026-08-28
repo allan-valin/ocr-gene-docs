@@ -200,7 +200,17 @@ is written down beside it, not when the code runs.
             `all_columns` — `columns` keeps meaning the name column, as every
             record on disk already does. A page whose heading line has nothing
             but the name stores no `all_columns` at all, which is the honest
-            answer.
+            answer, and the columns travel with the name column to the pages of
+            a dossier that print no headings.
+            Run against a real page rather than a fixture — BS.ENT.017397 p2,
+            the typewritten one — it measures eight: *nome, numero,
+            nacionalidade, estado, profissao, procedencia, classe,
+            observacoes*. **Not `idade`**, on a printing that spells it
+            *Edade*, which the field table now knows and which did not fix it,
+            so its heading is either unread or not on the heading line as the
+            detector cuts it. That is the next thing to look at, and it is why
+            the first column read will be measured on a page where the heading
+            was found.
       - [ ] Read them: crop each band × column, recognise, and store the
             reading beside the snapped value, never instead of it.
             `engine_paddle.cells_from_bands` is the cutting half, built and
