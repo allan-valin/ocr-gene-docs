@@ -156,7 +156,7 @@ Measured against the words Allan pointed at, over the 1,081-name dictionary,
 
 | reading | wanted | offered with `≈ Prováveis` on |
 |---|---|---|
-| `Yose`, `fose`, `Waria`, `Mania`, `Alonmo`, `Danchez` | JOSE, MARIA, ALONSO, SANCHEZ | yes |
+| `Yose`, `fose`, `Waria`, `Mania`, `Alonmo`, `Danchez` | JOSE, MARIA, ALONSO, SANCHEZ | yes, but only by edit distance, which is luck rather than a model |
 | `fore` | JOSE | no — `FRE`, `FORD`, `JORGE` |
 | `zabel` | IZABEL | no — not in the dictionary |
 | `Gulerti`, `Pouticelli` | GUBERTI, PONTICELLI | no — not in the dictionary |
@@ -165,40 +165,63 @@ Measured against the words Allan pointed at, over the 1,081-name dictionary,
 
 None of that was on screen for any of them.
 
-Six things to do, and only the last is about the dictionary:
+Six things to do, and only the last is about the dictionary.
 
-Five distinct causes, and each is cheap:
+### The candidates come from the strokes, not from the word
 
-* **Confusable letters.** The hand's failures are systematic and few: `M`↔`W`
-  (the third leg), `J`↔`f`↔`Y`, `I`↔`l`↔`z`, `n`↔`u`, `r`↔`i`, `c`↔`e`,
-  `o`↔`a`, `S`↔`D`, `G`↔`f`. Generate the permutations of a reading under a
-  confusion table and look each up in the dictionary, rather than trusting one
-  edit-distance number. `Sooai` → `Sooni` → `Soani`… will not reach `Giovanni`;
-  `foatz` → `Goatz` → `Goalz` will reach `Gonzalez` only with the length gate
-  lifted, so lift it for permutation candidates.
-* **Abbreviations.** `Antº`, `F'cº`, `Fco`, `Jozé`, `M.ª` are clerk shorthand
-  with a fixed expansion table: Antonio, Francisco, Maria. The superscript
-  comes back as `?`, `'` or nothing, so match on the stem plus a mark.
-* **Merged words.** `MorvettoFianciico` is two names with the space lost.
-  Split at an interior capital *as a suggestion* — it was measured and rejected
-  as a silent rewrite of the reading, which is right; as an entry in the menu it
-  costs nothing and is exactly what a person wants offered.
-* **A dropped first letter.** `zabel` is `Izabel` minus the `I` the clerk tied
-  into the `z`. Offer the dictionary names that this reading is a suffix or
-  prefix of.
-* **Candidates the dictionary cannot contain.** A permutation that spells no
-  name the archive has seen is still worth offering when the ink supports it,
-  because the archive has not read every name correctly yet — that is the whole
-  problem. Offer the letter-shape candidates on their own footing, ordered by
-  how well the confusion explains the ink, and let the archive's names raise
-  the ones it recognises rather than remove the ones it does not.
-* **And widen the dictionary anyway**, since it costs nothing: names seen once,
-  names from the catalogue's own index, names people type in the app, and the
-  given-name lists of the origin languages, which are small, free and open.
-* Acceptance: a new bench, `scripts/bench_menu.py`, that asks *of the 142
-  hand-read rows, in how many is the true name in the menu, at what rank*.
-  That number does not exist today and everything above is guesswork without
-  it. Build it first.
+Allan: *"look at the individual characters because they get confused, like
+writing `num` could be read as `uuu nnn mmm unm mun` because they look alike."*
+That is the model this has to be built on, and it is not a spelling-distance
+model.
+
+In this hand a run of **minims** — the plain vertical strokes that make `i`,
+`u`, `n`, `m`, `r`, `w` — carries a reliable *number of strokes* and an
+unreliable division into letters. `num` is seven strokes; so is `uuum`, `mnn`,
+`unm`, `mun`. The recogniser picks one division, prints it with confidence,
+and everything downstream treats that division as what the page says. The
+strokes are the evidence; the letters are already an interpretation.
+
+So the generator is: read a word as a stroke skeleton, enumerate the divisions
+the skeleton supports, and offer those. Concretely:
+
+* **Minim runs**, re-cut every way the stroke count allows: `i`,`r` one stroke,
+  `u`,`n` two, `m`,`w` three. This one rule generates `Mania`→`Maria`,
+  `Alonmo`→`Alonso` is *not* minim (see below), `Pouticelli`→`Ponticelli`,
+  `borniingo`→`Domingo`.
+* **Ascenders and descenders**, which are one stroke plus a direction: `f`↔`J`
+  ↔`Y`↔`T`, `l`↔`b`↔`k`↔`h`, `g`↔`y`↔`j`↔`q`↔`z`. This is `Yosé`→`José` and
+  `fore`→`Jose`, the two Allan pointed at first.
+* **Round letters**: `c`↔`e`↔`o`↔`a`, `s`↔`r` (the long `s`), `S`↔`D`↔`G`.
+* **A stroke lost at the start or the end**: `zabel`→`Izabel`.
+* **Marks the recogniser has no glyph for**: the superscript of `Antº` and
+  `F'cº` comes back as `?`, `'` or nothing.
+* **A space that was there**: `MorvettoFianciico` is two words.
+
+Ranked by how few stroke-level changes the candidate needs, then by whether
+anything — the archive, the origin-language given-name lists, a person's own
+typing — has ever seen that spelling. **A candidate that spells nothing known
+is still shown**, because the archive has not read every name correctly yet;
+that is the whole problem, and it is why the dictionary can never be the gate.
+
+* Acceptance: `scripts/bench_menu.py` over the 142 hand-read rows — in how many
+  is the true name among the candidates, and at what rank. Then each rule
+  measured on its own, the way the search changes were: a rule that adds noise
+  without adding names comes out again.
+
+### And the marking is asking the wrong question
+
+`doubtful` (`desembarque/gazetteer.py:115`) flags a row only when **nothing**
+in it resembles a name the archive carries. `YOSE` resembles `JOSE`, so the row
+passes as fine — and `fore Gulerti` likewise. The inference is backwards: a
+reading that is *near* a known name but is not one is the strongest evidence of
+a misread that this tool has. Not a name and not near one is a rare name; not a
+name but one stroke from one is a mistake.
+
+* Flag *near a name, not a name*, separately from *unknown to this archive*,
+  and say which in the legend.
+* Re-run the existing measurement — 139 hand-read rows of which 67 are badly
+  read, where the three current reasons catch 81%, 46% and 4% — and keep the
+  new reason only if it catches misreads the others miss.
 
 ## 6. What the page says versus what the menu shows
 
