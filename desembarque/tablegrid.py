@@ -93,13 +93,62 @@ def columns(fragments: list[dict], width: float, height: float,
     margin = 0.02 * width
     x0 = max((f["x1"] for f in left), default=head["x0"] - margin)
     x1 = min((f["x0"] for f in right), default=head["x1"] + margin)
+    others = _other_columns(right, x1, width)
     ordinal = None
     if left:
         nearest = max(left, key=lambda f: f["x1"])
         ordinal = (min(f["x0"] for f in left
                        if f["x1"] >= nearest["x1"] - 0.05 * width), x0)
-    return {"name": (x0, x1), "ordinal": ordinal, "top": head["y1"],
-            "heading": head}
+    return {"name": (x0, x1), "ordinal": ordinal, "others": others,
+            "top": head["y1"], "heading": head}
+
+
+# The headings printed to the right of the name, as the fields the rest of the
+# app already names them. `Estado civil` is stored as `estado`, `Observações` as
+# `observacoes`: the accents and the second word are the printing's business.
+FIELDS = {
+    "nacionalidade": "nacionalidade", "nacionalid": "nacionalidade",
+    "idade": "idade", "estado": "estado", "profissao": "profissao",
+    "profissa": "profissao", "procedencia": "procedencia",
+    "destino": "destino", "classe": "classe", "observacoes": "observacoes",
+    "observacao": "observacoes", "sexo": "sexo", "numero": "numero",
+}
+
+
+def _field(text: str) -> str | None:
+    """Which column a printed heading names, or None for something else."""
+    t = unicodedata.normalize("NFKD", (text or "").strip().lower())
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    first = "".join(c for c in t.split(" ")[0] if c.isalpha())
+    return FIELDS.get(first)
+
+
+def _other_columns(right: list[dict], name_x1: float,
+                   width: float) -> list[dict]:
+    """Every column the page prints a heading for, beside the name.
+
+    The engine reads the name column and nothing else, so nationality, age,
+    civil state, profession, port, class and the notes are null on every row in
+    the corpus by construction — and the heading line that gives the name its
+    edges gives theirs at the same time, read as cleanly, at no extra cost.
+
+    A heading is narrower than the column under it — `Idade` is five letters
+    over two digits — so an edge goes halfway to the next heading rather than
+    at the printing, and the last column runs to the sheet.
+    """
+    heads = []
+    for f in sorted(right, key=lambda f: f["x0"]):
+        field = _field(f.get("text"))
+        if field and all(h["field"] != field for h in heads):
+            heads.append({"field": field, "x0": f["x0"], "x1": f["x1"]})
+    out = []
+    for i, h in enumerate(heads):
+        left_edge = name_x1 if i == 0 else (heads[i - 1]["x1"] + h["x0"]) / 2
+        right_edge = (width if i == len(heads) - 1
+                      else (h["x1"] + heads[i + 1]["x0"]) / 2)
+        out.append({"field": h["field"], "box": (left_edge, right_edge),
+                    "heading": (h["x0"], h["x1"])})
+    return out
 
 
 def _pitch(centres: list[float]) -> float | None:
@@ -244,7 +293,7 @@ class TableGeometry:
 
     def __init__(self, width: float, height: float, bands: list[tuple[float, float]],
                  name: tuple[float, float], ordinal: tuple[float, float] | None = None,
-                 top: float = 0.0):
+                 top: float = 0.0, others: list[dict] | None = None):
         self.width = float(width)
         self.height = float(height)
         self.skew = 0.0
@@ -252,6 +301,10 @@ class TableGeometry:
         self.name = name
         self.ordinal = ordinal
         self.top = top
+        # Every other column the page prints a heading for. Empty is an
+        # ordinary answer — a torn top, a printing with fewer headings — and
+        # nothing downstream may assume otherwise.
+        self.others = list(others or [])
         self.heading_found = True
 
     @property
@@ -277,6 +330,17 @@ class TableGeometry:
     def name_column(self, index: int = 0):
         return tuple(self.normalized_cols())
 
+    def normalized_columns(self) -> dict[str, tuple[float, float]]:
+        """Every column this page measured, by the name the app uses for it."""
+        out = {"nome": tuple(self.normalized_cols())}
+        if self.ordinal:
+            out["numero"] = (self.ordinal[0] / self.width,
+                             self.ordinal[1] / self.width)
+        for c in self.others:
+            x0, x1 = c["box"]
+            out[c["field"]] = (x0 / self.width, x1 / self.width)
+        return out
+
 
 def table(fragments: list[dict], width: float, height: float,
           labelled: list[dict] | None = None,
@@ -301,7 +365,7 @@ def table(fragments: list[dict], width: float, height: float,
     if not bands:
         return None
     geo = TableGeometry(width, height, bands, col["name"], col["ordinal"],
-                        col["top"])
+                        col["top"], col.get("others"))
     geo.heading_found = col.get("heading") is not None
     return geo
 

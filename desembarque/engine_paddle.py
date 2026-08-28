@@ -303,6 +303,32 @@ def name_strip_box(geo, size: tuple[int, int]) -> tuple[int, int]:
     return max(0, int((nx0 - 0.004) * W)), min(W, int((nx1 + 0.004) * W))
 
 
+def stored_geometry(geo, measured_by: str, read_from: str) -> dict:
+    """What is kept about how a page was measured.
+
+    `columns` is the name column and has meant that since the first record on
+    disk, so it keeps its meaning; every column the page prints a heading for
+    goes under `all_columns`, by field. A geometry measured from the rules
+    knows only the name column and stores only that — an absent key is the
+    honest answer, and a caller that finds none has to say so rather than guess
+    a cell's edges.
+    """
+    out = {"rows": geo.normalized_rows(),
+           "columns": geo.normalized_cols(),
+           "skew": geo.skew,
+           # which measurement the rows were cut from, because the two fail in
+           # different ways and a band that disagrees with the scan has to be
+           # traceable
+           "measured_by": measured_by,
+           "read_from": read_from}
+    every = getattr(geo, "normalized_columns", None)
+    if callable(every):
+        cols = every()
+        if len(cols) > 1:
+            out["all_columns"] = cols
+    return out
+
+
 def rows_from_bands(geo, size: tuple[int, int],
                     recognize: Callable[[list], list[tuple[str, float]]],
                     crop: Callable[[int, tuple[int, int, int, int]], object],
@@ -936,16 +962,12 @@ class PaddleEngine:
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
                 **self.read_header(image, geo, text),
-                geometry={"rows": geo.normalized_rows(),
-                          "columns": geo.normalized_cols(),
-                          "skew": geo.skew,
-                          # which measurement the rows were cut from, because
-                          # the two fail in different ways and a band that
-                          # disagrees with the scan has to be traceable
-                          "measured_by": (getattr(geo, "rows_from", None) == "rules"
-                                          and "printed columns, ruled rows"
-                                          or ("printing" if printed else "rules")),
-                          "read_from": "render" if from_render else "mask"},
+                geometry=stored_geometry(
+                    geo,
+                    measured_by=(getattr(geo, "rows_from", None) == "rules"
+                                 and "printed columns, ruled rows"
+                                 or ("printing" if printed else "rules")),
+                    read_from="render" if from_render else "mask"),
             )
         except Exception as e:
             return PageResult(kind=kind, engine=self.name,

@@ -187,4 +187,22 @@ is written down beside it, not when the code runs.
         columns, so anything in them is somebody's typing.
 - [ ] **T10 — The other columns** (§4), cheapest first: age, sex, class, then
       nationality, profession, port against gazetteers.
+      - [x] **The columns are measured.** The plan said the column edges were
+            already there; they were not — `columns()` measured the name and
+            the ordinal beside it and dropped the rest of the heading line on
+            the floor. It now measures every column the page prints a heading
+            for, off the same fragments at no extra cost:
+            *Nacionalidade, Idade, Estado civil, Profissão, Procedencia,
+            Destino, Classe, Observações* on BS.ENT.013947 p3. An edge runs
+            halfway to the next heading, because a heading is narrower than its
+            column. `TableGeometry.normalized_columns()` offers them by the
+            field names the app already uses, and they are stored under
+            `all_columns` — `columns` keeps meaning the name column, as every
+            record on disk already does. A page whose heading line has nothing
+            but the name stores no `all_columns` at all, which is the honest
+            answer.
+      - [ ] Read them: crop each band × column, recognise, and store the
+            reading beside the snapped value, never instead of it.
+      - [ ] `scripts/bench_columns.py` and a per-column truth page, before any
+            of it ships.
 - [ ] **T11 — The language prior** (§7). Depends on T10.

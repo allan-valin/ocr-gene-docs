@@ -283,3 +283,56 @@ def test_the_blank_ruled_rows_are_kept_when_their_numbers_are_printed():
                for i in range(7)]
     bands = row_anchors(ordinals + written, col, 2000)
     assert len(bands) >= 28, len(bands)
+
+
+def test_every_column_the_page_prints_a_heading_for_is_measured():
+    """The name column is the one the engine reads, and it is not the only one
+    printed: `Nacionalidade`, `Idade`, `Estado civil`, `Profissão`,
+    `Procedencia`, `Destino`, `Classe` and `Observações` are on the same
+    heading line, read as cleanly, and each of them is a column nobody has
+    measured because nobody was going to read it."""
+    frs, W, H = page("013947-3")
+    col = columns(frs, W, H)
+    got = {c["field"]: c for c in col["others"]}
+    assert set(got) == {"nacionalidade", "idade", "estado", "profissao",
+                        "procedencia", "destino", "classe", "observacoes"}
+    # each one sits where its heading is printed, and they do not overlap
+    boxes = sorted((c["box"] for c in col["others"]), key=lambda b: b[0])
+    assert all(a[1] <= b[0] + 1 for a, b in zip(boxes, boxes[1:]))
+    idade = got["idade"]["box"]
+    assert 0.43 <= idade[0] / W <= 0.46 and 0.46 <= idade[1] / W <= 0.50
+
+
+def test_a_column_reaches_halfway_to_the_heading_beside_it():
+    """A heading is narrower than its column — `Idade` is five letters over a
+    column of two-digit numbers — so the edge is put between the headings and
+    not at them."""
+    frs, W, H = page("013947-3")
+    got = {c["field"]: c["box"] for c in columns(frs, W, H)["others"]}
+    assert got["nacionalidade"][0] >= columns(frs, W, H)["name"][1] - 1
+    assert got["observacoes"][1] >= 0.93 * W
+
+
+def test_the_columns_are_offered_to_whoever_reads_the_page():
+    """The geometry is what the engine, the row cutter and the review screen
+    all ask; a column nobody can ask for is a column nobody will read."""
+    frs, W, H = page("013947-3")
+    from desembarque.tablegrid import table
+    geo = table(frs, W, H)
+    cols = geo.normalized_columns()
+    assert cols["idade"][0] < cols["idade"][1] <= 1.0
+    assert cols["nome"] == tuple(geo.normalized_cols())
+
+
+def test_a_page_whose_heading_line_is_only_the_name_still_measures():
+    """Nothing downstream may assume the other columns were found: a torn top
+    or a printing with fewer headings is an ordinary page."""
+    from desembarque.tablegrid import table
+    frs = [{"text": "Nome e Cognomes", "x0": 200, "y0": 120, "x1": 350, "y1": 148},
+           {"text": "Ordem", "x0": 60, "y0": 120, "x1": 120, "y1": 148},
+           {"text": "1", "x0": 70, "y0": 200, "x1": 90, "y1": 230},
+           {"text": "2", "x0": 70, "y0": 240, "x1": 90, "y1": 270}]
+    col = columns(frs, 1000, 1400)
+    assert col["others"] == []
+    geo = table(frs, 1000, 1400)
+    assert geo is None or geo.normalized_columns()["nome"]

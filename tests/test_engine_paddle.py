@@ -642,3 +642,30 @@ def test_a_page_with_no_columns_to_carry_still_pays_for_the_search(tmp_path):
     d.eng._ruled_rows = lambda image, w, h, col: None
     d.eng._printed_table(d.page)
     assert d.sides == [None, 2000]
+
+
+def test_the_stored_geometry_carries_every_column_the_page_measured():
+    """The name column's edges have been stored since the beginning; the eight
+    beside it were measured off the same heading line and thrown away, so
+    nothing downstream could read a cell it did not have. Stored under its own
+    key, so a record written before this still loads."""
+    from desembarque.engine_paddle import stored_geometry
+
+    class Geo:
+        skew = 0.0
+        def normalized_rows(self): return [(0.1, 0.2)]
+        def normalized_cols(self): return [0.05, 0.35]
+        def normalized_columns(self):
+            return {"nome": (0.05, 0.35), "idade": (0.44, 0.49)}
+
+    got = stored_geometry(Geo(), measured_by="printing", read_from="mask")
+    assert got["columns"] == [0.05, 0.35], "the old key keeps its old meaning"
+    assert got["all_columns"]["idade"] == (0.44, 0.49)
+
+    class Older:
+        skew = 0.0
+        def normalized_rows(self): return [(0.1, 0.2)]
+        def normalized_cols(self): return [0.05, 0.35]
+
+    assert "all_columns" not in stored_geometry(Older(), measured_by="rules",
+                                                read_from="mask")
