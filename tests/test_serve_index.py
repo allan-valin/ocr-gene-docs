@@ -812,3 +812,22 @@ def test_an_older_record_is_judged_by_what_its_rows_mean(server, monkeypatch):
     st, body = call(f"{base}/api/check?hash={'o' * 8}&page=2")
     why = {r["n"]: r["why"] for r in body["rows"]}
     assert why[2] == ["inferido"], why
+
+
+def test_the_folder_is_only_walked_when_a_hit_cannot_name_its_file(tmp_path, monkeypatch):
+    """A row stores the dossier it was read from; 26 of 31,000 do not, from
+    records written before it was stored. Walking the folder for those cost
+    every keystroke the walk, and it is the largest thing a search request pays
+    for once the corpus is the whole archive."""
+    walks = []
+    monkeypatch.setattr(serve, "hash_index",
+                        lambda folder: walks.append(folder) or {"h2": "b.pdf"})
+
+    named = [{"doc": "h1", "file": "a.pdf"}, {"doc": "h1", "file": "a.pdf"}]
+    assert serve.name_the_files(named, tmp_path) == named
+    assert walks == []
+
+    mixed = [{"doc": "h1", "file": "a.pdf"}, {"doc": "h2"}, {"doc": "h3"}]
+    out = serve.name_the_files(mixed, tmp_path)
+    assert [h.get("file") for h in out] == ["a.pdf", "b.pdf", None]
+    assert walks == [tmp_path]

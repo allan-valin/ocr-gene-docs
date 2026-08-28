@@ -406,6 +406,24 @@ def hash_index(folder: Path) -> dict[str, str]:
     return out
 
 
+def name_the_files(hits: list[dict], folder: Path) -> list[dict]:
+    """Give each hit the name of the dossier it came from.
+
+    A row stores that name, so most hits answer for themselves; 26 rows of
+    31,000 do not, from records written before it was stored, and for those the
+    folder in front of the user is the only thing that can say. Asking it means
+    walking the folder, which is the largest thing a search request pays for
+    once the corpus is the whole archive — so it is asked only when a hit
+    cannot name itself.
+    """
+    if all(h.get("file") for h in hits):
+        return hits
+    names = hash_index(folder)
+    for h in hits:
+        h["file"] = h.get("file") or names.get(h.get("doc") or "")
+    return hits
+
+
 class _BatchJob:
     """What transcribe_document needs from a job, without the UI job machinery.
 
@@ -599,11 +617,10 @@ class Handler(BaseHTTPRequestHandler):
                 rows = searchlib.load_index(
                     JOBS.cache, engine_only=False,
                     ships=catalogue_ships(STATE["root"]))
-                hits = searchlib.search(rows, q.get("q", ""),
-                                        limit=int(q.get("limit", 50)))
-                names = hash_index(STATE["root"])
-                for h in hits:
-                    h["file"] = h.get("file") or names.get(h.get("doc") or "")
+                hits = name_the_files(
+                    searchlib.search(rows, q.get("q", ""),
+                                     limit=int(q.get("limit", 50))),
+                    STATE["root"])
                 return self._send(200, {"query": q.get("q", ""),
                                         "indexed": len(rows), "hits": hits})
 
@@ -631,11 +648,9 @@ class Handler(BaseHTTPRequestHandler):
                 rows = searchlib.load_index(
                     JOBS.cache, engine_only=False,
                     ships=catalogue_ships(STATE["root"]))
-                hits = searchlib.search(rows, query,
-                                        limit=int(q.get("limit", 500)))
-                names = hash_index(STATE["root"])
-                for h in hits:
-                    h["file"] = h.get("file") or names.get(h.get("doc") or "")
+                hits = name_the_files(
+                    searchlib.search(rows, query, limit=int(q.get("limit", 500))),
+                    STATE["root"])
                 return self._send(
                     200, hits_to_csv(query, hits),
                     ctype="text/csv; charset=utf-8",

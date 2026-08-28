@@ -274,3 +274,41 @@ def test_re_parsing_a_record_does_not_make_it_look_freshly_read():
     # a record from before the distinction existed is judged by what it has
     old = {"engine": "paddle", "schema": 18, "rows": [{"n": 1}], "pages": [{"n": 1}]}
     assert is_indexed(old, 18)
+
+
+def test_collect_pdfs_walks_a_tree_the_same_way_pathlib_did(tmp_path):
+    """The walk runs on every keystroke through `/api/search`, which is why it
+    is not `rglob` any more: 55 ms over 660 dossiers and ten times that over
+    the whole archive, spent listing a folder that had not changed."""
+    from desembarque.batch import collect_pdfs
+    (tmp_path / "b").mkdir()
+    (tmp_path / "b" / "deep").mkdir()
+    (tmp_path / ".git" / "objects").mkdir(parents=True)
+    for p in ["Z.pdf", "a.PDF", "b/n.pdf", "b/deep/d.pdf", ".git/objects/x.pdf",
+              "b/notes.txt", ".hidden.pdf"]:
+        (tmp_path / p).write_bytes(b"%PDF-1.4\n")
+    (tmp_path / "link.pdf").symlink_to(tmp_path / "Z.pdf")
+
+    def with_pathlib(folder, recursive=True):
+        out = []
+        for p in (folder.rglob("*") if recursive else folder.glob("*")):
+            if p.suffix.lower() != ".pdf" or not p.is_file():
+                continue
+            rel = p.relative_to(folder)
+            if any(part.startswith(".") for part in rel.parts):
+                continue
+            out.append(p)
+        return sorted(out, key=lambda q: str(q.relative_to(folder)).lower())
+
+    assert collect_pdfs(tmp_path) == with_pathlib(tmp_path)
+    assert collect_pdfs(tmp_path, recursive=False) == \
+        with_pathlib(tmp_path, recursive=False)
+
+
+def test_collect_pdfs_does_not_follow_a_link_into_a_loop(tmp_path):
+    """A folder someone points this at is theirs, and can hold anything."""
+    from desembarque.batch import collect_pdfs
+    (tmp_path / "here").mkdir()
+    (tmp_path / "here" / "a.pdf").write_bytes(b"%PDF-1.4\n")
+    (tmp_path / "here" / "loop").symlink_to(tmp_path, target_is_directory=True)
+    assert [p.name for p in collect_pdfs(tmp_path)] == ["a.pdf"]
