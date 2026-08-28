@@ -95,6 +95,39 @@ fossils of an early pass. Both carry `edits` stamped at the review screen on
 2026-08-21, and the engine has never written those columns in any of 660
 records. Nothing was deleted; a value a person typed now says so on screen.
 
+### The other columns are measured now, and one has been read once
+
+The plan said §4's column edges were already there. They were not: the
+geometry measured the name column and the ordinal beside it and dropped the
+rest of the heading line, so nationality, age, civil state, profession, port,
+class and the notes had no edges anywhere in the corpus — a cell nobody could
+crop, let alone read. They come off the same fragments the name column's edges
+come from, at no extra cost, and they travel with it to the pages of a dossier
+that print no headings. Stored under `all_columns`; `columns` keeps meaning the
+name column, which is what every record on disk means by it.
+
+Two things had to be got right for a real page rather than a fixture. The
+boxes that carry the geometry mostly carry no text — only the heading line is
+read, because detection is three seconds against eighty for a whole page — so
+the naming looks the text up in that reading. And the boxes for *Edade* and
+*Sexo* on BS.ENT.017397 come back empty, two narrow words on a printing read
+cleanly everywhere else, so an unread heading between two read ones is named
+by its place in an order these forms all print, and says it was named that way.
+BS.ENT.017397 p2 measures ten columns.
+
+`cells_from_bands` cuts a column's cells the way the name column is cut — the
+recogniser injected so it is testable without the model, a short answer padded
+with nulls, and a column the page never measured returning nothing rather than
+a guessed edge. Run once with the real recogniser on that page: nationality
+comes back `ISPAGNIA`, `ESPANOIY`, `SEANOL`, `RASIERAL` against *ESPANHOLA*
+and *BRASILEIRA*, which is the shape of a column that can be read and snapped
+to a closed vocabulary. Age comes back `_` and `1`: its heading is 2.8% of the
+sheet wide and the figures are not under it, so the edge halfway to the next
+heading is the wrong rule for a narrow heading over a wide column. **Nothing
+ships on that** until `scripts/bench_columns.py` and a per-column truth page
+exist — and for the typed half, the truth is the hand transcription of that
+same page.
+
 ### What is next, in order
 
 1. **Stop asserting surname and given** (§1), the half that is left. The
@@ -105,10 +138,11 @@ records. Nothing was deleted; a value a person typed now says so on screen.
    still written and read by search, export, the voyages report and the review
    screen. 108 test references sit on those two fields; it is a session of its
    own.
-2. **The other columns** (§4), cheapest first — age, sex, class, then
-   nationality, profession and port against gazetteers. `scripts/bench_columns.py`
-   and a per-column truth page do not exist yet, and nothing should ship without
-   them.
+2. **The other columns** (§4). The edges are measured and the cutting is
+   built; what is missing is `scripts/bench_columns.py`, a per-column truth
+   page, a column edge that does not assume the heading is as wide as its
+   column, and the decision about cost — a page is forty bands by eight
+   columns against twenty seconds a page for the one column read today.
 3. **Re-read the corpus** once §1 lands, and re-run both benches: five of the
    six truth pages are read by an engine whose rows predate every change above.
 4. The language prior (§7), which depends on 2.
