@@ -912,15 +912,19 @@ def candidates(rows: list[dict], query: str, floor: float = 0.0,
                slack: float = 0.0) -> list[tuple[dict, float]]:
     """The rows worth scoring against this query, with their name score.
 
-    Without a posting list every row is compared, the way it always was. With
-    one, the overlap is counted off the postings and the score comes out of the
-    arithmetic — the same number `similarity` returns, without rebuilding any
-    row's trigrams. A row missing from every posting of the query scores zero
-    and would be dropped by the floor anyway.
+    The overlap is counted off the postings and the score comes out of the
+    arithmetic, without rebuilding any row's trigrams. A row missing from every
+    posting of the query scores zero and would be dropped by the floor anyway.
+
+    With `slack` at 0 that number is exactly what `similarity` returns — the
+    shared trigrams over the union of the two. Above 0 the reading is forgiven
+    that fraction of the query's length in trigrams it holds beyond the query
+    before being charged for the rest, which is the question asked of a
+    searcher who cannot name the crossing; see `SLACK`.
+
+    The floor is the caller's: `search` drops a row whose name score is under
+    it before anything else is asked about the row.
     """
-    # A plain list is given the same treatment by being indexed here: the
-    # weight of a trigram is a fact about the corpus, and there is no scoring
-    # it without one.
     # A plain list is given the same treatment by being indexed here: how many
     # trigrams a reading holds is what the score is taken against, and only the
     # postings know it without rebuilding every row.
