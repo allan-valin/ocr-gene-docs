@@ -31,44 +31,53 @@ BS.ENT.013947 p2, the first twenty-four rows as they sit in
 Four separate faults are visible in that table, and only one of them is the
 recogniser.
 
-## 1. The name is split the wrong way round, and the mistake is inherited
+## 1. The name is split into surname and given name, and that is not ours to decide
 
-`split_name` (`desembarque/engine_paddle.py:282`) documents its assumption:
-these tables are written **surname first** (`ROCA REBULLIDA AMPARO`), so every
-token but the last is the surname. BS.ENT.013947 is written **given name
-first** — `Benito Mosso`, `Maria Sanchez`, `Antº Alonso Gonzalez` — so the
-stored surname is *Benito*, *Mania*, *Ant? Alonmo*.
+`split_name` (`desembarque/engine_paddle.py:282`) takes every token but the
+last as the surname, on the stated assumption that these tables are written
+surname first. Allan has said before and said again that the order cannot be
+assumed: **one document carries both** — last-first as written on leaving
+Germany, first-last as written on arrival in Brazil — and which is which is the
+reader's call, not the tool's. Detecting the order per page, which an earlier
+draft of this plan proposed, is the same mistake with more machinery.
 
-It does not stop at one row. The repetition mark inherits the surname down the
-family block, so rows 4, 5 and 6 are all filed under *Benito* and rows 16–19
-under *Pastre marco*. Allan read this as the dittos not being resolved; they
-are resolved, and they are resolving to the given name. The search indexes it
-that way too, which is why a family on a given-first page is unfindable by the
-name the family actually has.
+What the split produces today on BS.ENT.013947: surname *Yosé* for `Yosé
+Fernandes`, *Benito* for `Benito Mosso`, *Mania* for `Mania Danchez`, *Ant?
+Alonmo* for `Ant? Alonmo foatz`. Those are given names, and the repetition mark
+then carries them down the family block — four people filed under *Benito*,
+four under *Pastre marco* — which is what "the dittos were not identified"
+turned out to be.
 
-**The order is a fact about the page and can be measured from the page.** Three
-signals, none of which needs a model: the token that *repeats* down a family
-block is the surname (the dittos themselves say which end is which); the column
-heading distinguishes `NOMES E COGNOMES` from the reverse; and the gazetteer
-knows given names far better than surnames, because given names repeat across
-the whole archive and surnames do not.
-
-* Decide the order per page (fall back to per dossier, then to surname-first).
-* Re-split every stored row from `name_raw`, which is untouched and lossless —
-  no page needs re-reading for this.
-* Acceptance: on the five truth pages, the surname stored for each hand-read
-  row matches the hand-read surname; `bench_search.py --matrix` does not fall.
+* **Stop splitting.** The row's name is `name_raw`, as written. Nothing
+  downstream should need a field that claims to know which part is the family
+  name: search already indexes the whole reading and can index each token, the
+  export can carry the name as read, and the UI can show one name cell.
+* **A person may split it** if they want to, per row, and that is stored as
+  their typing — the one place the distinction is knowledge rather than a guess.
+* The repetition mark is different and stays: the mark is the clerk saying
+  *the same as above*, so what it stands for is evidence off the page, not an
+  inference about name order. It should inherit **the tokens actually written
+  above it**, marked inherited as they are now, rather than a `surname` field
+  computed by the assumption above.
+* Acceptance: no field in a stored row asserts surname or given unless a person
+  typed it; the five truth pages' rows read back exactly as written;
+  `bench_search.py --matrix` does not fall.
 
 ## 2. A person's correction freezes the whole document against improvement
 
-Both documents Allan looked at are stored `source: manual`. `is_indexed`
-(`desembarque/batch.py:21`) treats any record a person has touched as done
-forever, and `preserve_human_work` keeps **all** of its rows, not the ones that
-were typed. Six records are in that state, and every reading in them — 41 rows
-in BS.ENT.013947 — is frozen at the quality of the day it was first read.
+Both documents Allan looked at are stored `source: manual`. Precisely, because
+the mechanism matters: such a record **is** read again when the schema is
+raised — and then `preserve_human_work` (`desembarque/batch.py:65`) throws the
+fresh rows away and puts the stored ones back, because the record carries a
+mark saying a person was here. The mark is on the record, not on the rows, so
+one corrected row protects forty uncorrected ones.
 
-So the pages Allan is most likely to open are precisely the pages that never
-get better. Every improvement below is invisible on them until this is fixed.
+The rule was written to stop a re-read destroying somebody's typing, which is
+right; the cost is that six records — 41 rows in BS.ENT.013947 among them —
+are held at the quality of the day they were first read. Those are the pages
+Allan opens, because they are the ones he has been correcting. Every
+improvement in this plan is invisible on exactly those pages until this is
+fixed, which is why it comes before the improvements.
 
 * Give each row its own provenance: a row a person typed carries the mark, the
   rest do not.
@@ -116,11 +125,34 @@ means something.
   per column, reported by `scripts/bench_columns.py`. Nothing ships without a
   first measurement, however bad.
 
-## 5. The suggestion menu misses the names a person can see
+## 5. The menu shows the engine's two readings and nothing else
 
-Measured against the words Allan pointed at, over the 1,081-name dictionary:
+**The suggestions are off until somebody finds the button.**
+`prototype/review.html:1255` sets `GUESSES=false`, so the menu that opens on a
+word lists only what the recogniser decoded — `fore`, `fose` — and the archive's
+names are fetched only after `≈ Prováveis` is pressed. Allan clicked `Yosé` and
+`fore` and was offered nothing useful, which is exactly right and is not what an
+earlier draft of this plan claimed: that draft tested `Names.suggest()` as a
+function and reported the result as though it were on screen.
 
-| reading | wanted | offered today |
+So the first thing is that candidates appear at all, without a toggle, labelled
+as guesses the way they already are. Then the quality of the candidates, where
+the measurement below applies.
+
+And a limit worth stating before any of it: **the dictionary will always lack
+names.** Allan: *"the dictionary will lack names because the way some are read,
+even by a human, will not look like the correct version because of handwriting
+wildly varying between humans."* A candidate list built by matching against
+names the archive has already read cannot reach a name nobody has read
+correctly yet — Guberti, Ponticelli, Alfieri, Morvetto. The dictionary is one
+source of candidates, never the gate. What the ink could support is the
+question; the archive's names are evidence about which of those readings is
+plausible, and the person decides.
+
+Measured against the words Allan pointed at, over the 1,081-name dictionary,
+*with the toggle on*:
+
+| reading | wanted | offered with `≈ Prováveis` on |
 |---|---|---|
 | `Yose`, `fose`, `Waria`, `Mania`, `Alonmo`, `Danchez` | JOSE, MARIA, ALONSO, SANCHEZ | yes |
 | `fore` | JOSE | no — `FRE`, `FORD`, `JORGE` |
@@ -128,6 +160,10 @@ Measured against the words Allan pointed at, over the 1,081-name dictionary:
 | `Gulerti`, `Pouticelli` | GUBERTI, PONTICELLI | no — not in the dictionary |
 | `Sooai`, `foatz` | GIOVANNI, GONZALEZ | no — too far by edit distance |
 | `Ant?`, `F'co` | ANTONIO, FRANCISCO | no — abbreviations are not expanded |
+
+None of that was on screen for any of them.
+
+Six things to do, and only the last is about the dictionary:
 
 Five distinct causes, and each is cheap:
 
@@ -148,12 +184,15 @@ Five distinct causes, and each is cheap:
 * **A dropped first letter.** `zabel` is `Izabel` minus the `I` the clerk tied
   into the `z`. Offer the dictionary names that this reading is a suffix or
   prefix of.
-* **The dictionary is too small and too clean.** 1,081 names from typed pages
-  seen twice or more. Guberti, Ponticelli, Alfieri and Morvetto are simply not
-  in it. Widen it: names seen once, names from the catalogue's own index,
-  names a person has typed in the app, and — since these are immigrant
-  manifests — the given-name lists of the origin languages, which are small,
-  free and open.
+* **Candidates the dictionary cannot contain.** A permutation that spells no
+  name the archive has seen is still worth offering when the ink supports it,
+  because the archive has not read every name correctly yet — that is the whole
+  problem. Offer the letter-shape candidates on their own footing, ordered by
+  how well the confusion explains the ink, and let the archive's names raise
+  the ones it recognises rather than remove the ones it does not.
+* **And widen the dictionary anyway**, since it costs nothing: names seen once,
+  names from the catalogue's own index, names people type in the app, and the
+  given-name lists of the origin languages, which are small, free and open.
 * Acceptance: a new bench, `scripts/bench_menu.py`, that asks *of the 142
   hand-read rows, in how many is the true name in the menu, at what rank*.
   That number does not exist today and everything above is guesswork without
@@ -201,14 +240,26 @@ to fill correctly first.
 
 ## Order of work
 
-1. The dropdown toggle (§6) — ten minutes, already owed.
-2. `bench_menu.py` and the per-column truth (§5, §4) — the instruments.
-3. Per-row provenance (§2), then clear the fossils (§3).
-4. The name order and re-split from `name_raw` (§1).
-5. The suggestion work (§5), each cause measured separately.
-6. Display: glued marks, capitalisation (§6).
-7. The other columns (§4), cheapest first.
-8. The language prior (§7).
+1. ~~The dropdown toggle (§6)~~ — done 2026-08-28.
+2. **Show the candidates without a toggle** (§5). The feature exists and is
+   switched off; nothing else in this plan is visible to a reader until it is on.
+3. `bench_menu.py` and the per-column truth (§5, §4) — the instruments. Neither
+   number exists today.
+4. Per-row provenance (§2), then clear the fossils (§3). Until this lands,
+   nothing below shows up on the pages Allan actually reads.
+5. Stop asserting surname and given name; inherit the mark's tokens literally
+   (§1).
+6. The candidate work (§5), each cause measured separately: confusable letters,
+   abbreviations, merged words, dropped initials, candidates the dictionary
+   cannot contain, then the dictionary itself.
+7. Display: glued marks, capitalisation (§6), and the demo's honesty (§6b).
+8. The other columns (§4), cheapest first.
+9. The language prior (§7), which depends on §4.
+
+Almost none of this is recognition work. The recogniser is at its ceiling and
+five separate measurements say so; what is broken above it is a name split the
+tool should never have made, a freeze that keeps corrections and improvements
+apart, a menu that is switched off, and eight columns nobody reads.
 
 Every step keeps the rule this repository is built on: the reading is never
 silently rewritten, a guess is labelled a guess, and nothing ships without a
