@@ -22,6 +22,8 @@ import re
 import unicodedata
 from pathlib import Path
 
+import numpy as np
+
 # The row comb is fitted to the written lines, and the printed column heading is
 # one of them. Left alone it is indexed as a passenger and scores 1.0 against
 # anyone searching for "nome".
@@ -815,7 +817,8 @@ def crossing_pool(rows: list[dict], years: tuple[int, int] | None,
     return sorted(hit)
 
 
-def candidates(rows: list[dict], query: str) -> list[tuple[dict, float]]:
+def candidates(rows: list[dict], query: str,
+               floor: float = 0.0) -> list[tuple[dict, float]]:
     """The rows worth scoring against this query, with their name score.
 
     Without a posting list every row is compared, the way it always was. With
@@ -826,26 +829,41 @@ def candidates(rows: list[dict], query: str) -> list[tuple[dict, float]]:
     """
     index = getattr(rows, "postings", None)
     if index is None:
-        return [(r, max(similarity(query, t)
-                        for t in (r["text"], *(r.get("alts") or ()))))
-                for r in rows]
+        return [(r, s) for r, s in
+                ((r, max(similarity(query, t)
+                         for t in (r["text"], *(r.get("alts") or ()))))
+                 for r in rows) if s >= floor]
     post, owner, size, _folded = index
     grams = trigrams(query)
-    shared: dict[int, int] = {}
-    for g in grams:
-        ids = post.get(g)
-        if not ids:
-            continue
-        for rid in ids:
-            shared[rid] = shared.get(rid, 0) + 1
-    best: dict[int, float] = {}
-    n = len(grams)
-    for rid, common in shared.items():
-        s = common / (n + size[rid] - common)
-        i = owner[rid]
-        if s > best.get(i, 0.0):
-            best[i] = s
-    return [(rows[i], best[i]) for i in sorted(best)]
+    lists = [post[g] for g in grams if g in post]
+    if not lists:
+        return []
+    # Counted a posting at a time this is a Python loop over every occurrence
+    # of every trigram the query holds — five million dictionary lookups for
+    # `Maria Silva` over the whole archive, a quarter of a second on each
+    # keystroke. The postings are arrays of machine integers already, so the
+    # count, the arithmetic and the best-of-two-readings are done over the lot
+    # at once. Same numbers: the division is the same IEEE double either way.
+    ids = np.concatenate([np.frombuffer(a, dtype=np.int32) for a in lists])
+    common = np.bincount(ids)
+    seen = np.flatnonzero(common)
+    if not seen.size:
+        return []
+    shared = common[seen].astype(np.float64)
+    sizes = np.frombuffer(size, dtype=np.int32)[seen]
+    scores = shared / (len(grams) + sizes - shared)
+    own = np.frombuffer(owner, dtype=np.int32)[seen]
+    # a row's readings were appended together, so `owner` only ever climbs and
+    # the readings of one row are neighbours: the better of them is the maximum
+    # over each run.
+    starts = np.concatenate(([0], np.flatnonzero(np.diff(own)) + 1))
+    best = np.maximum.reduceat(scores, starts)
+    top = own[starts]
+    if floor > 0:
+        keep = best >= floor
+        best, top = best[keep], top[keep]
+    # tolist converts the lot in one call rather than a row at a time
+    return list(zip((rows[i] for i in top.tolist()), best.tolist()))
 
 
 def search(rows: list[dict], query: str, limit: int = 50,
@@ -866,7 +884,8 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # An empty name query is not a query, and is not asked. Trigrams are
     # padded, so the score of nothing against a row read as `B   B` comes out
     # at 0.25 — a page of whitespace ranked above the ship somebody typed.
-    pool = candidates(rows, name_q) if len(fold(name_q)) >= MIN_QUERY else ()
+    pool = (candidates(rows, name_q, floor=min_score)
+            if len(fold(name_q)) >= MIN_QUERY else ())
     for r, s in pool:
         # the floor is applied to the name alone: the voyage orders what was
         # found, it does not decide what counts as found

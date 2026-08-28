@@ -1053,3 +1053,63 @@ def test_a_word_weighed_twice_is_weighed_once(tmp_path):
         sl._is_printed_word("muesso")
     info = sl._is_printed_word.cache_info()
     assert info.currsize == 2 and info.hits >= 98
+
+
+def _corpus(n=400):
+    """A corpus big enough that the postings hold more than one reading a row."""
+    import random
+    random.seed(7)
+    given = ["MARIA", "JOSE", "MANOEL", "ANNA", "GUIDO", "EMMA", "CEZARIO"]
+    sur = ["SILVA", "CONTADORE", "MUESSO", "DA CRUZ", "GOMES", "SAMMAMED", "LOPES"]
+    rows = []
+    for i in range(n):
+        text = f"{random.choice(given)} {random.choice(sur)}"
+        r = {"doc": f"D{i % 9}", "file": "d.pdf", "page": 2, "row": i + 1,
+             "text": text}
+        if i % 3 == 0:                       # the row's second reading
+            r["alts"] = [text.replace("A", "4").replace("O", "0")]
+        if i % 5 == 0:
+            r["ship"] = "GELRIA"
+            r["year"] = 1924
+        rows.append(r)
+    return rows
+
+
+def test_counting_the_overlap_off_the_postings_scores_what_scanning_scored():
+    """The postings are an optimisation and nothing else. Counted in bulk they
+    have to return the same rows in the same order with the same scores, to the
+    last decimal — a score that moves in the third decimal reorders two names.
+    """
+    from desembarque.search import RowIndex, candidates, similarity
+    rows = _corpus()
+    indexed = RowIndex(rows)
+    for q in ("maria silva", "contadore", "manoel da cruz", "muesso",
+              "cezario sammamed", "jose", "kowalczyk", "4nn4 g0mes"):
+        got = candidates(indexed, q)
+        want = [(r, max(similarity(q, t)
+                        for t in (r["text"], *(r.get("alts") or ()))))
+                for r in rows]
+        want = [(r, s) for r, s in want if s > 0]
+        assert [id(r) for r, _ in got] == [id(r) for r, _ in want], q
+        assert [s for _, s in got] == [s for _, s in want], q
+
+
+def test_a_whole_search_over_a_corpus_is_what_scanning_it_returned():
+    from desembarque.search import RowIndex
+    rows = _corpus()
+    indexed = RowIndex(list(rows))
+    for q in ("maria silva", "manoel da cruz gelria 1924", "contadore",
+              "jose gelria", "anna 1924"):
+        assert search(indexed, q) == search(rows, q), q
+
+
+def test_a_lower_floor_still_returns_what_scanning_returned():
+    """The pool is cut at the caller's floor, so a caller that lowers it has to
+    get back the rows the higher floor was hiding."""
+    from desembarque.search import RowIndex
+    rows = _corpus()
+    indexed = RowIndex(list(rows))
+    for q in ("maria silva", "contadore", "jose"):
+        for floor in (0.01, 0.05, 0.1, 0.3):
+            assert search(indexed, q, min_score=floor) == \
+                search(rows, q, min_score=floor), (q, floor)

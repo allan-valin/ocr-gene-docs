@@ -73,7 +73,7 @@ def free_mb() -> float:
     return 0.0
 
 
-def measure(cache: Path, limit: int = 50) -> dict:
+def measure(cache: Path, limit: int = 50, repeats: int = 5) -> dict:
     """Load the index once and time a query of each shape against it."""
     base = rss_mb()
     t0 = time.perf_counter()
@@ -100,9 +100,16 @@ def measure(cache: Path, limit: int = 50) -> dict:
     timed = {}
     for q in QUERIES:
         search(rows, q, limit=limit)          # once to warm what is cached
-        t0 = time.perf_counter()
-        hits = search(rows, q, limit=limit)
-        timed[q] = {"ms": (time.perf_counter() - t0) * 1000, "hits": len(hits)}
+        runs = []
+        for _ in range(repeats):
+            t0 = time.perf_counter()
+            hits = search(rows, q, limit=limit)
+            runs.append((time.perf_counter() - t0) * 1000)
+        runs.sort()
+        # the median, because the laptop is also running a desktop: one slow
+        # run out of five said a change had cost twice what it saved
+        timed[q] = {"ms": runs[len(runs) // 2], "best": runs[0],
+                    "hits": len(hits)}
     return {"rows": len(rows), "readings": len(owner), "trigrams": len(post),
             "load_s": load, "warm_s": warm, "postings_s": postings, "crossings_s": crossings,
             "rss_rows_mb": loaded - base, "rss_postings_mb": with_postings - loaded,
@@ -117,11 +124,12 @@ def child(argv: list[str]) -> int:
     ap.add_argument("--dir", type=Path, required=True)
     ap.add_argument("--cap-mb", type=float, default=0.0)
     ap.add_argument("--limit", type=int, default=50)
+    ap.add_argument("--repeats", type=int, default=5)
     args = ap.parse_args(argv)
     if args.cap_mb:
         cap = int(args.cap_mb * 1e6)
         resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
-    print(json.dumps(measure(args.dir, limit=args.limit)))
+    print(json.dumps(measure(args.dir, limit=args.limit, repeats=args.repeats)))
     return 0
 
 
@@ -139,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cap", type=float, default=0.0,
                     help="GB of address space a child may have; default half of free")
     ap.add_argument("--limit", type=int, default=50)
+    ap.add_argument("--repeats", type=int, default=5)
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "bench_scale.json")
     args = ap.parse_args(argv)
 
@@ -155,7 +164,8 @@ def main(argv: list[str] | None = None) -> int:
         d = fanout(args.cache, args.work / f"x{times}", times)
         proc = subprocess.run(
             [sys.executable, __file__, "--child", "--dir", str(d),
-             "--cap-mb", str(cap_mb), "--limit", str(args.limit)],
+             "--cap-mb", str(cap_mb), "--limit", str(args.limit),
+             "--repeats", str(args.repeats)],
             capture_output=True, text=True)
         if proc.returncode != 0:
             tail = (proc.stderr or "").strip().splitlines()[-1:] or ["killed"]
