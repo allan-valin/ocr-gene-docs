@@ -71,10 +71,32 @@ def _first_token_is_mark(text: str | None) -> bool:
     return bool(parts) and is_mark(parts[0])
 
 
+def inherited_from(above: list[str], written: int) -> list[str]:
+    """Which words of the row above a mark stands for.
+
+    The clerk wrote *the same as above* and wrote it in a place: the words this
+    row does not write, counted from the left, which is where the column puts
+    them. A mark with nothing beside it repeats the whole name.
+
+    Deliberately not a claim about which word is the family name. `split_name`
+    made that claim — everything but the last word is the surname — and on a
+    page written given-name-first it filed four people under *Benito* and four
+    under *Pastre marco*. One document carries both orders, and which is which
+    is the reader's call.
+    """
+    if not above:
+        return []
+    keep = len(above) - written
+    if keep <= 0:
+        keep = 1 if written < len(above) else len(above)
+    return above[:keep]
+
+
 def resolve(rows: list[dict]) -> list[dict]:
-    """The same rows, with inherited surnames filled in and marked."""
+    """The same rows, with what the mark repeats filled in and marked."""
     out: list[dict] = []
     last: str | None = None
+    above: list[str] = []
     since = 0
     for row in rows:
         row = dict(row)
@@ -91,14 +113,16 @@ def resolve(rows: list[dict]) -> list[dict]:
         if indented and last and since <= MAX_GAP:
             # the mark itself did not survive the recogniser; the indent it was
             # written under did
-            row["surname"] = last
+            row["inherited"] = inherited_from(above, len(parts))
+            row["surname"] = " ".join(row["inherited"]) or last
             row["given"] = raw
             row["ditto"] = ["surname"]
             row["ditto_source"] = "indent"
         elif (_first_token_is_mark(raw) or _strip_mark(raw)) and last and since <= MAX_GAP:
             rest = (" ".join(parts[1:]).strip() if _first_token_is_mark(raw)
                     else _strip_mark(raw))
-            row["surname"] = last
+            row["inherited"] = inherited_from(above, len(rest.split()))
+            row["surname"] = " ".join(row["inherited"]) or last
             row["given"] = rest or row.get("given") or ""
             row["ditto"] = ["surname"]
             row["ditto_source"] = "mark"
@@ -106,22 +130,29 @@ def resolve(rows: list[dict]) -> list[dict]:
             # nothing but the mark: the row means the same surname and the
             # clerk wrote no given name to go with it
             if last and since <= MAX_GAP:
-                row["surname"] = last
+                row["inherited"] = inherited_from(above, 0)
+                row["surname"] = " ".join(row["inherited"]) or last
                 row["ditto"] = ["surname"]
                 row["ditto_source"] = "mark"
-        elif len(parts) >= 2 and row.get("surname") and not is_mark(row["surname"]):
+        elif len(parts) >= 2 and not is_mark(parts[0]):
             # Only a row that names two things sets the family surname. A row
             # read as one word is far more often a given name under a mark the
             # recogniser dropped than a new family — taking it made `"ose`
             # inherit `Maria`.
-            last = row["surname"]
+            # What the marks below repeat: the words of this row, as written.
+            # Read off `name_raw` rather than off a stored `surname`, because
+            # that field is the assumption this work is removing — and for a
+            # row the engine split, the two agree anyway.
+            above = parts
+            last = row.get("surname") or " ".join(parts[:-1])
         elif last and since <= MAX_GAP and len(parts) == 1:
             # A single name under a family, with no mark that survived and no
             # indent to prove one: on these forms that is a continuation, and
             # read as written the row is unfindable by the only thing a
             # searcher reliably knows. Inherited, and labelled as inferred
             # rather than read, because the difference is the whole point.
-            row["surname"] = last
+            row["inherited"] = inherited_from(above, len(parts))
+            row["surname"] = " ".join(row["inherited"]) or last
             row["given"] = raw
             row["ditto"] = ["surname"]
             row["ditto_source"] = "position"

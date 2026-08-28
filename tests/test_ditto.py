@@ -144,3 +144,45 @@ def test_every_inherited_surname_says_how_it_was_arrived_at():
 def test_a_name_the_clerk_wrote_in_full_is_never_inherited_over():
     out = resolve(rows("Martinez Francisco", "De Pedres Miguel"))
     assert "ditto" not in out[1] and out[1]["surname"] == "De Pedres"
+
+
+def test_the_mark_repeats_what_is_written_above_it_in_that_place():
+    """What a repetition mark stands for is evidence off the page: the clerk
+    wrote *the same as above*. What it is *not* is a claim about which part of
+    a name is the family name — that was `split_name`'s assumption, and on a
+    page written given-name-first it filed four people under *Benito*.
+
+    So the mark takes the words above it that its own row does not write, from
+    the left, which is where the clerk's own column puts them.
+    """
+    from desembarque.ditto import resolve
+    got = resolve([
+        {"n": 1, "name_raw": "Santabarbara Salvador"},
+        {"n": 2, "name_raw": '" Jose'},
+        {"n": 3, "name_raw": '"'},
+    ])
+    assert got[1]["inherited"] == ["Santabarbara"]
+    assert got[1]["surname"] == "Santabarbara" and got[1]["given"] == "Jose"
+    # a mark with nothing beside it repeats the whole name above
+    assert got[2]["inherited"] == ["Santabarbara", "Salvador"]
+
+
+def test_a_three_word_name_above_gives_the_mark_two_words():
+    from desembarque.ditto import resolve
+    got = resolve([
+        {"n": 1, "name_raw": "Ant Alonso Gonzalez"},
+        {"n": 2, "name_raw": '" Maria'},
+    ])
+    assert got[1]["inherited"] == ["Ant", "Alonso"]
+    assert got[1]["ditto"] == ["surname"]
+
+
+def test_the_row_a_mark_points_at_is_never_the_mark_itself():
+    """Two marks in a row both point at the name, not at each other."""
+    from desembarque.ditto import resolve
+    got = resolve([
+        {"n": 1, "name_raw": "Turino Cettore"},
+        {"n": 2, "name_raw": '" Angela'},
+        {"n": 3, "name_raw": '" Mario'},
+    ])
+    assert got[2]["inherited"] == ["Turino"]
