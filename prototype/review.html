@@ -83,6 +83,11 @@
   #legend{display:none;gap:14px;flex-wrap:wrap;align-items:center;padding:4px 10px;
     font-size:11px;color:var(--muted);border-bottom:1px solid var(--line)}
   #legend.on{display:flex}
+  #handnote{display:none;padding:6px 12px;font-size:12px;color:var(--dim);
+    border-bottom:1px solid var(--line);background:var(--bg2)}
+  #handnote:not([hidden]){display:block}
+  #handnote b{color:var(--ink);font-weight:600}
+  .ditto{font-style:normal;color:var(--dim);margin-right:2px;cursor:help}
   #legend b{color:var(--ink);font-weight:600}
   #legend .swatch{display:inline-block;width:3px;height:12px;background:var(--warn);
     vertical-align:-2px;margin-right:5px}
@@ -266,6 +271,11 @@
     <i>⌇</i> outra divisão dos mesmos traços (alcança nomes que o acervo ainda
     não leu certo), <i>≈⌇</i> as duas coisas</span>
 </div>
+<!-- The one document in the demo whose other columns are filled was typed by a
+     person. Every real dossier shows names and nothing else, because names are
+     all the engine reads, so without this a visitor meets the finished shape
+     first and reads every later page as a tool that stopped working. -->
+<div id="handnote" hidden></div>
 <main id="main">
   <div id="sidebar">
     <div class="sidehead" id="sidehead">Documentos</div>
@@ -475,6 +485,29 @@ function splitName(t){
 // Only when the cell is not being typed into: pills inside a contenteditable
 // region get torn apart by the first keystroke, and free typing already has a
 // mode of its own.
+// The particles these lists actually use, which stay lower case inside a name.
+const PARTICLES = new Set(["da","de","do","das","dos","del","della","di","van",
+                           "von","vom","der","den","y","e","la","le"]);
+// How a name is *shown*. The reading is not touched: `alfieri` is what the page
+// says and what the record keeps, and *Alfieri* is what a person reads. A word
+// the recogniser gave up on — `?`, `'`, digits — is left exactly as it came.
+function displayName(text){
+  return String(text||"").split(/(\s+)/).map(w=>{
+    if(!/^[A-Za-zÀ-ÿ'’-]+$/.test(w)) return w;
+    const low = w.toLowerCase();
+    if(PARTICLES.has(low)) return low;
+    return low.replace(/(^|[\s'’-])([a-zà-ÿ])/g, (m,a,b)=>a+b.toUpperCase());
+  }).join("");
+}
+// The repetition mark the clerk wrote, which the recogniser brings back glued
+// to the word after it: rows 19–24 of BS.ENT.013947 are stored `"Maria`. The
+// record is right — that is what the page says — so the cell shows the mark as
+// a mark and the name as a name, the way an inherited surname is already shown
+// as inherited.
+function splitDitto(word){
+  const m = String(word||"").match(/^([\"“”'’´`]+)(.+)$/);
+  return m ? [m[1], m[2]] : ["", String(word||"")];
+}
 function nameCell(r){
   const text = nameText(r);
   if(EDIT) return text;
@@ -489,8 +522,13 @@ function nameCell(r){
     const twice = a && a.length;
     const why = twice ? `o motor também leu: ${a.join(", ")}`
                       : "ver outras leituras e nomes prováveis deste acervo";
-    return `<span class="altword${twice?" twice":""}" data-w="${i}" title="${why}"
-      >${w}${twice?"<i>&#9662;</i>":""}</span>`;
+    const [mark, word] = splitDitto(w);
+    const shown = displayName(word);
+    const marked = mark
+      ? `<i class="ditto" title="marca de repetição escrita na página — repete a linha de cima">${mark}</i>`
+      : "";
+    return `${marked}<span class="altword${twice?" twice":""}" data-w="${i}" title="${why}"
+      >${shown}${twice?"<i>&#9662;</i>":""}</span>`;
   }).join(" ");
 }
 // Which rows resemble no name this archive carries, so a person checking four
@@ -690,6 +728,14 @@ function openDoc(i,page){
   $("#tbl").hidden=!showRows;
   $("#empty").hidden=showRows;
   if(!showRows) renderEmpty();
+  const note = $("#handnote");
+  if(D.transcribed_by === "pessoa"){
+    note.innerHTML = "<b>Esta página foi transcrita por uma pessoa</b> — "
+      + "nacionalidade, idade, profissão e as outras colunas foram digitadas, "
+      + "não lidas pelo motor. É a forma de um registro terminado; nos outros "
+      + "documentos o motor lê só a coluna do nome.";
+    note.hidden = false;
+  } else { note.hidden = true; note.textContent = ""; }
   renderDocList(); renderPageStrip(); render(); paintBand(0); refreshExport();
   $("#stat").textContent = showRows ? "" : "sem transcrição";
   // and again once this dossier's own measurements arrive

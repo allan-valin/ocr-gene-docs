@@ -96,9 +96,21 @@ is written down beside it, not when the code runs.
       *this is wrong*. `desconhecido` catches nothing on these pages and is
       kept: it is the reason that fires on a name the archive has never seen,
       and these six pages are ones it mostly has.
-- [ ] **T9 — Display** (§6, §6b). Glued repetition marks shown as marks,
-      capitalisation with the archive's particles, and the demo saying it is a
-      hand transcription.
+- [x] **T9 — Display** (§6, §6b), done 2026-08-28, four assertions in the
+      browser self-test (91 now pass in both browsers).
+      - The repetition mark is shown as a mark: `"Maria` is a mark and a name,
+        not a name beginning with a quote. The record is untouched — that is
+        what the page says.
+      - Names are shown capitalised, particles kept lower case (`da`, `de`,
+        `dos`, `della`, `van`, `von`, `y`…). Display only: `nameText` still
+        returns `alfieri`, and what is stored is what was read.
+      - The demo document says, in the interface, that its nationality, age,
+        profession and other columns were typed by a person. It is the only
+        document in the app with them filled, and without the note the next
+        dossier reads as a tool that stopped working.
+      - Still open from §3: a value a *person* typed into one of those columns
+        on a real document looks exactly like a reading. Two rows of
+        BS.ENT.013942 are in that state.
 - [ ] **T10 — The other columns** (§4), cheapest first: age, sex, class, then
       nationality, profession, port against gazetteers.
 - [ ] **T11 — The language prior** (§7). Depends on T10.

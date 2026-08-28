@@ -37,6 +37,13 @@ window.addEventListener("load",async()=>{
   ok("scan image loaded", q("#scan").naturalWidth>0);
   ok("band painted", !q("#bandBox").hidden && parseFloat(q("#bandBox").style.height)>0);
   ok("scope defaults to name", q("#scope").value==="name");
+  // Every other document in the app shows names and nothing else, because
+  // names are all the engine reads. Somebody who opens this one first and a
+  // real dossier second sees a tool that stopped working, unless the page says
+  // what this one is.
+  ok("the demo says its columns were typed by a person",
+     !!q("#handnote") && !q("#handnote").hidden
+     && /pessoa/i.test(q("#handnote").textContent));
 
   // The scope control was invisible on the header and its native popup could
   // only be dismissed by choosing an option.
@@ -66,7 +73,9 @@ window.addEventListener("load",async()=>{
   q("#findq").value="vasquez"; q("#findq").dispatchEvent(new Event("input")); await wait();
   ok("fuzzy: vasquez finds VAZQUEZ too", document.querySelectorAll("#rows tr.hit").length===2);
   q("#findq").value="joao"; q("#findq").dispatchEvent(new Event("input")); await wait();
-  ok("variant: joao finds SCHRADER", [...document.querySelectorAll("#rows tr.hit")].some(t=>t.textContent.includes("SCHRADER")));
+  // The cell shows *Schrader* now — the reading is unchanged, the shouting is
+  // not how a name is read — so the row is matched without regard to case.
+  ok("variant: joao finds SCHRADER", [...document.querySelectorAll("#rows tr.hit")].some(t=>/schrader/i.test(t.textContent)));
   q("#scope").value="occupation"; q("#scope").dispatchEvent(new Event("change"));
   q("#findq").value="jornaleiro"; q("#findq").dispatchEvent(new Event("input")); await wait();
   ok("column scope: occupation -> 3 rows", document.querySelectorAll("#rows tr.hit").length===3);
@@ -522,6 +531,26 @@ window.addEventListener("load",async()=>{
         ok("and closing them changes nothing", pill.textContent === before);
       }
     }
+    // A name read off a page is shown as a name. The reading is not rewritten
+    // — this is the cell, not the record — and the particles these lists
+    // actually use stay lower case.
+    ok("a name is shown capitalised, not shouted",
+       typeof displayName === "function" && displayName("ROCA REBULLIDA AMPARO")
+       === "Roca Rebullida Amparo");
+    ok("and the particles the clerks wrote stay small",
+       typeof displayName === "function"
+       && displayName("da silva DOS SANTOS") === "da Silva dos Santos");
+    ok("a reading is never rewritten by the way it is shown",
+       typeof nameText === "function"
+       && nameText({name_raw: "alfieri"}) === "alfieri");
+    // Rows 19 to 24 of BS.ENT.013947 are stored `"Maria`, `"angeta`: the mark
+    // is what the page says and belongs in the record, but on screen it is a
+    // mark and not a letter of somebody's name.
+    ok("a repetition mark is shown as a mark, not glued to the name",
+       typeof nameCell === "function"
+       && /class="ditto"/.test(nameCell({name_raw: '"Maria'}))
+       && />Maria</.test(nameCell({name_raw: '"Maria'})));
+
     const ex = document.getElementById("exportcsv");
     ok("an export control exists", !!ex);
     if(ex) ok("export points at the served document or is disabled",

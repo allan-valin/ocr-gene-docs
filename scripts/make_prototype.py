@@ -112,6 +112,10 @@ def main(argv: list[str] | None = None) -> int:
                 "meta": sample["document"] if is_sample else None,
                 # the sample transcription is of page 2
                 "transcribed_page": 2 if is_sample else None,
+                # and it was typed by a person, which the page has to say: it
+                # is the only document in the demo whose other columns are
+                # filled, and the engine reads none of them
+                "transcribed_by": "pessoa" if is_sample else None,
             })
             print(f"  {pdf.stem}: {len(pages)}/{total} pages"
                   f"{' (transcribed)' if is_sample else ''}", file=sys.stderr)
