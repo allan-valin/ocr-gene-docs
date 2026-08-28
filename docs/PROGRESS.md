@@ -212,27 +212,33 @@ read twice as slow as the truth and would have condemned a change that was fine.
 .venv/bin/python scripts/status.py                       # says how many are left
 ```
 
-### Next, in order
+### Next, in order — the reading, not the search
 
-1. **The letter pass is what a keystroke costs now.** 173 ms of the 173 a query
-   naming a year takes over the whole archive: a year names 20,000 rows and
-   each is compared letter by letter, 3,900 of them reaching `difflib` after
-   the bulk bound has refused the rest. What is left is the comparison itself,
-   and cutting it means a cheaper measure of edit distance rather than a
-   cheaper filter.
-2. **Handwriting recognition, still the ceiling.** Unchanged: most of the
-   remaining misses do not resemble the name on the page. What is left is a
-   model trained on this archive's own hand, or a GPU.
-3. **The forgiving scale wants watching in use.** A row is no longer charged
-   for what it holds besides the name, which is measured on 142 names and is
-   the right shape for a person who types what they know — but it also means
-   more rows come back at 1.0, and the page's advice bar was recalibrated
-   rather than re-thought. If searching in earnest turns up long rows crowding
-   the top, the lever is `SLACK` in `desembarque/search.py` and the bench that
-   settles it is `bench_search.py --matrix`.
-4. **Whether to download the other 91% of the archive** is still Allan's call,
-   and the number that decides it is unchanged: ~3 hours of polite downloading
-   against ~5 days of reading.
+Allan read BS.ENT.013947 and BS.ENT.013942 in the app at the end of the day and
+the verdict is that the **reading** is where the work goes now, not retrieval:
+*"don't even dare think about downloading more until what we have has a decent
+quality."* The plan is
+[docs/superpowers/plans/2026-08-28-reading-quality.md](superpowers/plans/2026-08-28-reading-quality.md),
+written against what is actually stored on disk. The four things it found that
+were not in the report:
+
+1. **The name is split the wrong way round on given-first pages**, and the
+   repetition mark inherits the mistake down the family block: BS.ENT.013947
+   files four people under *Benito* and four under *Pastre marco*, which are
+   given names. `split_name` assumes surname-first. The order can be measured
+   from the page — the token that repeats down a block is the surname.
+2. **A person's correction freezes the whole document.** Six records are
+   `source: manual`, and every row in them is held at the quality of the day it
+   was first read. The pages Allan opens are the pages that never improve.
+   Provenance has to be per row.
+3. **Two values from an old pass are still on screen** — `SIRVIENTA` and
+   `BELGA` in BS.ENT.013942 — kept alive by the same rule. Nothing writes those
+   fields today.
+4. **Nothing outside the name column is read at all.** The grid is measured and
+   the UI has the cells; the recogniser is only ever given the name column.
+
+The download question is answered for now: **no**. Not until the pages on disk
+read decently.
 
 ## 2026-08-27 — the crossing, and the pages nobody was told about
 
