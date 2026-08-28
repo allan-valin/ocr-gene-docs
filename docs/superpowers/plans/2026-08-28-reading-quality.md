@@ -135,9 +135,11 @@ names are fetched only after `≈ Prováveis` is pressed. Allan clicked `Yosé` 
 earlier draft of this plan claimed: that draft tested `Names.suggest()` as a
 function and reported the result as though it were on screen.
 
-So the first thing is that candidates appear at all, without a toggle, labelled
-as guesses the way they already are. Then the quality of the candidates, where
-the measurement below applies.
+*Done, 2026-08-28*: the archive's names are offered without hunting for a
+switch, **every word opens its readings** rather than only the ones the engine
+read two ways — `Yosé` had nothing to click at all, so no guess could ever
+reach it — and the marks on the rows have a legend. What is left is the quality
+of the candidates, which is what the measurement below is about.
 
 And a limit worth stating before any of it: **the dictionary will always lack
 names.** Allan: *"the dictionary will lack names because the way some are read,

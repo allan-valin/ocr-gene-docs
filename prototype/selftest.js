@@ -127,13 +127,14 @@ window.addEventListener("load",async()=>{
   ok("all three semaphore states present on this page",
      ["hi","mid","lo"].every(k=>document.querySelector(".dot."+k)));
   // Names the archive knows, offered for a mangled word: guesses, and shown as
-  // guesses. Off unless asked for, in their own labelled section, never mixed
-  // in among the readings unless that was asked for too.
-  ok("probable names are off until they are asked for",
-     q("#guessbtn").getAttribute("aria-pressed")==="false");
-  ok("the ordering toggle is hidden until then", q("#guessfirst").hidden);
-  q("#guessbtn").click(); await wait(60);
-  ok("asking for them shows the ordering toggle", !q("#guessfirst").hidden);
+  // guesses, in their own labelled section. They used to be off until asked
+  // for, which meant a reader clicking a word was shown the engine's own two
+  // readings and nothing else — and the button that would have helped had no
+  // visible effect until some later click on some other word. On by default,
+  // and the button must agree with the state it is actually in.
+  ok("probable names are offered without hunting for a switch",
+     q("#guessbtn").getAttribute("aria-pressed")==="true");
+  ok("the ordering toggle is available with them", !q("#guessfirst").hidden);
   if(SERVED_RUN){
     const pill=document.querySelector("#rows .altword");
     if(pill){
@@ -148,7 +149,10 @@ window.addEventListener("load",async()=>{
     }
   }
   q("#guessbtn").click(); await wait(40);
-  ok("they can be turned off again", q("#guessbtn").getAttribute("aria-pressed")==="false");
+  ok("they can be turned off", q("#guessbtn").getAttribute("aria-pressed")==="false");
+  ok("and turning them off hides the ordering toggle", q("#guessfirst").hidden);
+  q("#guessbtn").click(); await wait(40);
+  ok("and back on", q("#guessbtn").getAttribute("aria-pressed")==="true");
 
   // Which rows to look at first, when a dossier has four hundred of them.
   ok("doubtful rows are off until asked for",
@@ -408,11 +412,16 @@ window.addEventListener("load",async()=>{
           ok("the menu closes after choosing", !document.querySelector(".altmenu"));
         }
       }
-      // a word both readings agree on is not dressed up as a choice
+      // A word both readings agree on used to be left plain, which made the
+      // archive's names unreachable for it: `Yosé`, read once and wrongly, had
+      // nothing to click. Every word opens its readings now; only the ones the
+      // engine itself read two ways carry the caret.
       rows[0].name_alts = [[], []];
       render();
-      ok("a word the readings agree on is left alone",
-         !document.querySelector("#rows tr[data-i='0'] .altword"));
+      const plain = document.querySelector("#rows tr[data-i='0'] .altword");
+      ok("a word the engine read once can still be questioned", !!plain);
+      ok("but it is not dressed up as a disagreement",
+         !!plain && !plain.classList.contains("twice"));
       Object.assign(rows[0], saved); render();
     }
   }

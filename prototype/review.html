@@ -68,8 +68,9 @@
   /* A word the engine read two ways. The outline says it can be changed; the
      caret says there is something behind it. Same grammar as the other
      changeable controls on this page. */
-  .altword{border:1px solid var(--line);border-radius:3px;padding:0 3px;cursor:pointer;
-    white-space:nowrap}
+  .altword{border:1px solid transparent;border-bottom-color:var(--line);
+    border-radius:3px;padding:0 3px;cursor:pointer;white-space:nowrap}
+  .altword.twice{border-color:var(--line)}
   .altword:hover{border-color:var(--focus)}
   .altword i{font-style:normal;color:var(--muted);font-size:9px;margin-left:2px}
   .altmenu{position:absolute;z-index:20;background:var(--panel);border:1px solid var(--line);
@@ -79,6 +80,14 @@
   .altmenu button:hover{background:rgba(120,150,200,.18)}
   .altmenu button.on{font-weight:600}
   .altmenu .why{color:var(--muted);font-size:10px;padding:2px 7px 4px}
+  #legend{display:none;gap:14px;flex-wrap:wrap;align-items:center;padding:4px 10px;
+    font-size:11px;color:var(--muted);border-bottom:1px solid var(--line)}
+  #legend.on{display:flex}
+  #legend b{color:var(--ink);font-weight:600}
+  #legend .swatch{display:inline-block;width:3px;height:12px;background:var(--warn);
+    vertical-align:-2px;margin-right:5px}
+  #legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+    vertical-align:0;margin-right:5px}
   #exportcsv{display:inline-block;padding:3px 9px;font-size:11.5px;
     border:1px solid var(--line);border-radius:4px;color:var(--ink);
     text-decoration:none;cursor:pointer}
@@ -239,6 +248,19 @@
   <a id="exportcsv" class="btn" download
     title="Baixar as linhas deste documento em CSV, com a origem de cada uma">⭳ Exportar</a>
 </header>
+<!-- What the marks on the rows mean. Shown when the marking is on, because a
+     colour nobody can read is worse than no colour: the yellow bar was on most
+     of a page with nothing on screen saying why. -->
+<div id="legend" aria-live="polite">
+  <span><i class="swatch"></i><b>barra amarela</b> — vale conferir primeiro:
+    o motor decodificou com pouca firmeza, o sobrenome foi herdado da linha de
+    cima, ou nada na leitura se parece com um nome deste acervo</span>
+  <span><i class="dot" style="background:var(--ok)"></i><i class="dot"
+    style="background:var(--warn)"></i><b>ponto</b> — score do motor, não é
+    medida de acerto: leitura firme de bobagem também é firme</span>
+  <span><b>palavra sublinhada</b> — clique para ver outras leituras e nomes
+    prováveis do acervo</span>
+</div>
 <main id="main">
   <div id="sidebar">
     <div class="sidehead" id="sidehead">Documentos</div>
@@ -450,13 +472,20 @@ function splitName(t){
 // mode of its own.
 function nameCell(r){
   const text = nameText(r);
-  const alts = r.name_alts;
-  if(EDIT || !alts || !alts.some(a=>a && a.length)) return text;
+  if(EDIT) return text;
+  // Every word opens its readings, not only the words the engine happened to
+  // read twice. The guesses from the archive were reachable only through this
+  // affordance, so a word the engine was sure about — `Yosé`, read once and
+  // wrongly — could not be questioned at all. The chevron still means the
+  // engine itself disagreed here; the pill means the word can be changed.
+  const alts = r.name_alts || [];
   return text.split(/\s+/).map((w,i)=>{
     const a = alts[i];
-    if(!a || !a.length) return w;
-    return `<span class="altword" data-w="${i}" title="o motor também leu: ${a.join(", ")}"
-      >${w}<i>&#9662;</i></span>`;
+    const twice = a && a.length;
+    const why = twice ? `o motor também leu: ${a.join(", ")}`
+                      : "ver outras leituras e nomes prováveis deste acervo";
+    return `<span class="altword${twice?" twice":""}" data-w="${i}" title="${why}"
+      >${w}${twice?"<i>&#9662;</i>":""}</span>`;
   }).join(" ");
 }
 // Which rows resemble no name this archive carries, so a person checking four
@@ -490,6 +519,9 @@ $("#doubtbtn").addEventListener("click",()=>{
   DOUBTS=!DOUBTS;
   $("#doubtbtn").setAttribute("aria-pressed", DOUBTS?"true":"false");
   $("#nextdoubt").hidden=!DOUBTS;
+  $("#legend").classList.toggle("on", DOUBTS);
+  if(DOUBTS && !SERVED)
+    $("#stat").textContent="a marcação precisa do servidor; esta é a demonstração";
   markDoubtful();
 });
 // Four hundred rows, a few dozen worth a second look, and no way to walk them:
@@ -1229,9 +1261,12 @@ document.addEventListener("click",e=>{
   const words = nameText(r).split(/\s+/);
   const menu = document.createElement("div");
   menu.className = "altmenu";
-  const readings = `<div class="why">outras leituras do motor</div>`
+  const readings = `<div class="why">${alts.length ? "outras leituras do motor"
+      : "o motor leu esta palavra uma vez só"}</div>`
     + [words[w], ...alts].map(o =>
-        `<button data-o="${o}" class="${o===words[w]?"on":""}">${o}</button>`).join("");
+        `<button data-o="${o}" class="${o===words[w]?"on":""}">${o}</button>`).join("")
+    + (!alts.length && !GUESSES
+       ? `<div class="why">ative <b>≈ Prováveis</b> para ver nomes deste acervo</div>` : "");
   menu.innerHTML = readings + (GUESSES ? `<div class="why guessy">carregando…</div>` : "");
   document.body.appendChild(menu);
   // The guesses are fetched rather than baked in: they come from the archive's
@@ -1252,7 +1287,10 @@ document.addEventListener("click",e=>{
 // section, their own colour, the word "palpite", and never mixed in among the
 // readings unless the person asked for that too. Nothing is stored unless one is
 // chosen, and then it is stored as that person's typing, like any correction.
-let GUESSES=false, GUESSES_FIRST=false;
+// On by default. It was off, so the menu offered the engine's own two readings
+// and nothing else, and the archive's names — the whole point of the feature —
+// were behind a button whose effect is invisible until a word is clicked.
+let GUESSES=true, GUESSES_FIRST=false;
 function fetchGuesses(menu, word, readings){
   fetch(`/api/names?q=${encodeURIComponent(word)}`).then(r=>r.json()).then(j=>{
     if(!document.body.contains(menu)) return;
@@ -1266,6 +1304,10 @@ function fetchGuesses(menu, word, readings){
     menu.innerHTML = GUESSES_FIRST ? block + readings : readings + block;
   }).catch(()=>{ const w=menu.querySelector(".guessy"); if(w) w.textContent="palpites indisponíveis"; });
 }
+// The switch is on when the page loads, so it has to say so — a control whose
+// label disagrees with what it does is worse than no control.
+$("#guessbtn").setAttribute("aria-pressed", GUESSES?"true":"false");
+$("#guessfirst").hidden=!GUESSES;
 $("#guessbtn").addEventListener("click",()=>{
   GUESSES=!GUESSES;
   $("#guessbtn").setAttribute("aria-pressed", GUESSES?"true":"false");
