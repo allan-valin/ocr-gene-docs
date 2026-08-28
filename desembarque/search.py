@@ -131,9 +131,30 @@ PRINTED_WORDS = """consignado consignada tripulacao toneladas registro
 PRINTED_FLOOR = 0.8
 
 
+@functools.lru_cache(maxsize=100_000)
 def _is_printed_word(word: str) -> bool:
-    return max(difflib.SequenceMatcher(None, word, w).ratio()
-               for w in PRINTED_WORDS) >= PRINTED_FLOOR
+    """Whether this word is the form's own printing rather than a name.
+
+    Weighed against forty printed words, once per word of every row, this was
+    21 seconds of the 25 a cold load of 660 dossiers costs — a minute and a half
+    at the size of the whole archive, before the first search answers anything.
+
+    Two things make it cheap and neither changes the answer. A ratio is twice
+    the matching letters over the two lengths together, and the matches cannot
+    outnumber the shorter word, so a word too short against a printed one is
+    ruled out without being matched at all; `quick_ratio` bounds it again by the
+    letters the two have in common regardless of order. And the same few
+    thousand words recur across the whole corpus, so each is weighed once.
+    """
+    for w in PRINTED_WORDS:
+        if 2 * min(len(word), len(w)) < PRINTED_FLOOR * (len(word) + len(w)):
+            continue
+        m = difflib.SequenceMatcher(None, word, w)
+        if m.real_quick_ratio() < PRINTED_FLOOR or m.quick_ratio() < PRINTED_FLOOR:
+            continue
+        if m.ratio() >= PRINTED_FLOOR:
+            return True
+    return False
 
 
 def is_heading(text: str) -> bool:

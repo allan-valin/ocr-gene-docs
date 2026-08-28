@@ -1019,3 +1019,37 @@ def test_two_caches_do_not_hand_each_other_their_rows(tmp_path):
     assert [r["text"] for r in a] == ["JOSE MUESSO"]
     assert [r["text"] for r in b] == ["MARIA SILVA"]
     assert sl.load_index(one) is a
+
+
+def test_the_printing_is_told_from_a_name_exactly_as_the_plain_measure_would(tmp_path):
+    """Ruling a printed word out by length before matching it letter by letter
+    has to rule out exactly what the letter-by-letter match would have.
+
+    It is 21 seconds of the 25 a cold load costs, and at the size of the whole
+    archive that is a minute and a half before the first search answers."""
+    import difflib
+    from desembarque import search as sl
+
+    def plainly(word):
+        return max(difflib.SequenceMatcher(None, word, w).ratio()
+                   for w in sl.PRINTED_WORDS) >= sl.PRINTED_FLOOR
+
+    words = ["consignado", "consignada", "consignados", "cosignado", "registro",
+             "registo", "regstro", "passageiros", "passageros", "profissao",
+             "nacionalidade", "nacionalidad", "maria", "silva", "muesso",
+             "gomes", "romano", "cognomes", "comando", "contadore", "total",
+             "transito", "tranzito", "trancito", "policia", "policial",
+             "a", "ab", "abc", "", "MARIA", "Registro", "documentos"]
+    for w in words:
+        assert sl._is_printed_word(w) == plainly(w), w
+
+
+def test_a_word_weighed_twice_is_weighed_once(tmp_path):
+    """The same handful of words recur across the whole corpus."""
+    from desembarque import search as sl
+    sl._is_printed_word.cache_clear()
+    for _ in range(50):
+        sl._is_printed_word("consignado")
+        sl._is_printed_word("muesso")
+    info = sl._is_printed_word.cache_info()
+    assert info.currsize == 2 and info.hits >= 98
