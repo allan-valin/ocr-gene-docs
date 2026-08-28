@@ -84,6 +84,59 @@ two loads of two directories then invalidated each other on every request and
 the cache would have been dead weight. The test that caught it is two caches in
 one process, which is exactly what a bench beside the application is.
 
+### What a row holds besides the name was being held against it
+
+The open problem in this log for a week has been a common name in a large
+pool, and the lever that worked was the crossing. This is the first thing that
+moves the other case — somebody who types a name and knows nothing else.
+
+A row is not only a name. It carries a title, a class of passage, a surname
+resolved from the repetition mark above it, and whatever the recogniser made of
+the ink beside it. The score was the overlap of the query's trigrams with the
+row's over the *union* of the two, so every one of those extra words counted
+against the row — and it buried exactly the rows that hold everything somebody
+typed. `Lorenzo Maria`, read as `Maria` with the rest of the line around it,
+sat below a thousand rows that read as nothing else.
+
+A reading is now forgiven material beyond the query up to three quarters of
+what was typed, and charged for the rest:
+
+| typed by name alone, 142 hand-read names | before | now |
+|---|---|---|
+| findable in the top five | 81 | **88** |
+| findable in the top ten | 89 | **96** |
+| findable in the top twenty | 100 | 101 |
+
+The forgiveness is asked only of a searcher who cannot name the crossing.
+Inside a named ship, line or year the pool is already a few hundred rows, and
+what orders them is how much of the *row* is the name rather than how much of
+the name is in the row: forgiving the rest there promotes the long noisy rows
+of the same dossier and costs ten of the 118 that come back in the top five.
+So the strict question is asked when the crossing has narrowed the pool and the
+forgiving one when nothing has, and the crossing numbers are unchanged —
+118 / 122 / 130 at five, ten and twenty.
+
+Two consequences, both handled rather than left to be found later. The two
+questions do not put their scores on one scale, so the tests that compared a
+row's score across two queries now compare where it lands in the list, which is
+the property the product has and the person sees. And the page's *"nothing
+convincing — name the ship"* advice reads an absolute score: the server now
+says whether the query named a crossing and what the bar is for the scale it
+used, and the advice is only shown to somebody who did not name one. Below 0.7
+the search had failed 62% of the times it failed, and the bar is wrong about a
+search that worked 39% of the time, against 57% and 33% for the old bar on the
+old scale.
+
+### Measured and rejected, with the numbers
+
+| | result | verdict |
+|---|---|---|
+| **weighting a trigram by how rare it is** — `MAR` occurs in a tenth of the corpus and `LCZ` in five rows, so the surname a searcher actually knows is outvoted by the given name beside it | with the crossing named it is worth **+6** (122 → 128 in the top ten); by name alone it costs **−3** (89 → 86), at every strength from 0.25 to 3 | not taken. The rare trigrams of a badly read row are the recogniser's own mistakes, so rarity punishes the rows this tool exists to find |
+| the same, scoring only how much of the **query** is present and not charging for the rest at all | by name alone 93 in the top ten, with the crossing 124 — better than rarity, worse than the slack that replaced it | superseded |
+| **breaking the ties** the forgiveness creates by the unforgiving score, so the row that *is* the name comes before the row that merely contains it | 83 / 94 / 99 against 88 / 96 / 101 | not taken. The true row usually *does* hold more than the name — a surname resolved from a mark, a class of passage — so preferring the pure row demotes it |
+| raising the score floor's neighbours: `MIN_SCORE` at 0.05 and 0.02 under rarity weighting | 121 and 111 with the crossing named, against 128 at 0.10 | 0.10 stands |
+| `STRONG_NAME` at 0.6, 0.7 and 0.8 | no change to any of the eight numbers | the cut is not what orders these results |
+
 ### The 226 pages that still read nothing
 
 The retry pass from yesterday is running again, three workers, from where it
