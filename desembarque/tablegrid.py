@@ -365,7 +365,7 @@ def table(fragments: list[dict], width: float, height: float,
     if not bands:
         return None
     geo = TableGeometry(width, height, bands, col["name"], col["ordinal"],
-                        col["top"], col.get("others"))
+                        col["top"], col.get("others") or (hint or {}).get("others"))
     geo.heading_found = col.get("heading") is not None
     return geo
 

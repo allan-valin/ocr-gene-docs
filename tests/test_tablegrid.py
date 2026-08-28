@@ -336,3 +336,19 @@ def test_a_page_whose_heading_line_is_only_the_name_still_measures():
     assert col["others"] == []
     geo = table(frs, 1000, 1400)
     assert geo is None or geo.normalized_columns()["nome"]
+
+
+def test_the_columns_carry_to_the_pages_that_print_no_heading():
+    """A list runs to twenty pages of the same printed sheet and only the first
+    prints its headings. The name column has been carried over since that was
+    found; the eight beside it have to travel with it, or every page but the
+    first has a name column and no cells."""
+    from desembarque.tablegrid import table
+    frs, W, H = page("013947-3")
+    first = table(frs, W, H)
+    hint = {"name": first.name, "ordinal": first.ordinal, "others": first.others}
+    # a page with rows printed on it and no heading line at all
+    plain = [f for f in frs if f["y0"] > first.top + 10]
+    later = table(plain, W, H, hint=hint)
+    assert later is not None
+    assert set(later.normalized_columns()) == set(first.normalized_columns())

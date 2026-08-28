@@ -967,8 +967,13 @@ class PaddleEngine:
             if printed and geo.heading_found:
                 # the same printed sheet runs the length of a dossier, and only
                 # its first page carries the headings
-                self._last_columns[str(source)] = {"name": geo.name,
-                                                   "ordinal": geo.ordinal}
+                # every column, not only the name: a list runs to twenty pages
+                # of the same printed sheet and only the first prints the
+                # headings, so without this every page but the first has a name
+                # column and no cells
+                self._last_columns[str(source)] = {
+                    "name": geo.name, "ordinal": geo.ordinal,
+                    "others": getattr(geo, "others", [])}
             if geo is None:
                 geo = analyze(image)
             if not geo.rows or not geo.name_column(0):
