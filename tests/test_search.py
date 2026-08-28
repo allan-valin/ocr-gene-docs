@@ -1071,6 +1071,8 @@ def _corpus(n=400):
         if i % 5 == 0:
             r["ship"] = "GELRIA"
             r["year"] = 1924
+        if i % 7 == 0:
+            r["line"] = "KONINKLIJKE HOLLANDSCHE LLOYD"
         rows.append(r)
     return rows
 
@@ -1113,3 +1115,15 @@ def test_a_lower_floor_still_returns_what_scanning_returned():
         for floor in (0.01, 0.05, 0.1, 0.3):
             assert search(indexed, q, min_score=floor) == \
                 search(rows, q, min_score=floor), (q, floor)
+
+
+def test_asking_the_corpus_what_it_holds_is_the_same_answer_indexed():
+    """The ships and lines a query is measured against are a fact about the
+    corpus, and were counted by walking every row on every keystroke."""
+    from desembarque.search import RowIndex
+    rows = _corpus()
+    indexed = RowIndex(list(rows))
+    for q in ("gelria", "koninklijke hollandsche lloyd", "1924",
+              "silva gelria", "muesso koninklijke hollandsche lloyd",
+              "gelria 1924", "hollandsche"):
+        assert search(indexed, q) == search(rows, q), q

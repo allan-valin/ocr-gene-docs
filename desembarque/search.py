@@ -487,7 +487,7 @@ def split_ship(query: str, rows: list[dict]) -> tuple[str, str | None]:
     for a passenger called Baden aboard the *Baden* must not be left searching
     for nothing.
     """
-    ships = {r["ship"] for r in rows if r.get("ship")}
+    ships = _named(rows, "ship")
     if not ships:
         return query, None
     terms = query.split()
@@ -549,8 +549,34 @@ def line_scores(rows: list[dict], terms: list[str]) -> dict[str, float]:
     return {ln: sum(d[ln] for d in per_term) / len(per_term) for ln in common}
 
 
+def _named(rows: list[dict], field: str) -> set[str]:
+    """Every ship, or every line, the index names.
+
+    A fact about the corpus and not about the query, and it was counted by
+    walking every row of it — on every keystroke, three times over, before a
+    name was compared to anything. The rows carry an index by ship, line and
+    year once they come out of `load_index`; a plain list is still walked.
+    """
+    by = getattr(rows, "crossings", None)
+    if by is None:
+        return {r[field] for r in rows if r.get(field)}
+    return {v for v in by[field] if v}
+
+
+def _rows_on(rows: list[dict], field: str, values) -> list[dict]:
+    """The rows belonging to any of these ships, lines or years."""
+    by = getattr(rows, "crossings", None)
+    if by is None:
+        return [r for r in rows if r.get(field) in values]
+    hit: list[int] = []
+    for v in values:
+        hit.extend(by[field].get(v, ()))
+    hit.sort()
+    return [rows[i] for i in hit]
+
+
 def _lines(rows: list[dict]) -> set[str]:
-    return {r["line"] for r in rows if r.get("line")}
+    return _named(rows, "line")
 
 
 def _vocab(rows: list[dict]) -> dict[str, set[str]]:
@@ -775,7 +801,7 @@ def named_ships(rows: list[dict], terms: list[str]) -> set[str]:
     """
     if not terms:
         return set()
-    return {sh for sh in {r["ship"] for r in rows if r.get("ship")}
+    return {sh for sh in _named(rows, "ship")
             if max(ship_similarity(t, sh) for t in terms) >= SHIP_FLOOR}
 
 
@@ -951,16 +977,16 @@ def search(rows: list[dict], query: str, limit: int = 50,
 
 def _arrived(rows: list[dict], years: tuple[int, int], already: set) -> list[dict]:
     """Rows from every document that says it landed in these years."""
-    out = [{**r, "score": 1.0, "matched": "year"} for r in rows
-           if r.get("year") and years[0] <= int(r["year"]) <= years[1]
-           and (r["doc"], r["row"]) not in already]
+    out = [{**r, "score": 1.0, "matched": "year"}
+           for r in _rows_on(rows, "year", range(years[0], years[1] + 1))
+           if r.get("year") and (r["doc"], r["row"]) not in already]
     out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
     return out
 
 
 def _aboard(rows: list[dict], query: str, already: set) -> list[dict]:
     """Rows from every document filed under the ship that was typed."""
-    ships = {r["ship"] for r in rows if r.get("ship")}
+    ships = _named(rows, "ship")
     if not ships:
         return []
     # A hundred and twenty-eight ships against a million rows: the comparison
@@ -970,8 +996,8 @@ def _aboard(rows: list[dict], query: str, already: set) -> list[dict]:
     if not close:
         return []
     out = [{**r, "score": close[r["ship"]], "matched": "ship"}
-           for r in rows
-           if r.get("ship") in close and (r["doc"], r["row"]) not in already]
+           for r in _rows_on(rows, "ship", close)
+           if (r["doc"], r["row"]) not in already]
     out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
     return out
 
@@ -995,8 +1021,8 @@ def _sailed(rows: list[dict], query: str, already: set) -> list[dict]:
     if not close:
         return []
     out = [{**r, "score": close[r["line"]], "matched": "line"}
-           for r in rows
-           if r.get("line") in close and (r["doc"], r["row"]) not in already]
+           for r in _rows_on(rows, "line", close)
+           if (r["doc"], r["row"]) not in already]
     out.sort(key=lambda h: (h.get("file") or "", h.get("page") or 0, h["row"] or 0))
     return out
 
