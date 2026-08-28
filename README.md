@@ -70,8 +70,10 @@ Honest about the limits:
 * **Typescript is solved; cursive is four fifths findable, if you know the crossing.**
   Measured by searching each of 142 hand-read names exactly as a person would type it,
   against the whole index: **41 of 42 names on the typewritten pages** come back in the top
-  ten either way, and on the cursive pages **49 of 100 typing only the name, 84 of 100 when
-  the ship, the line or the year is named as well**. `Ponticelli Giovanni` is read as
+  ten either way, and on the cursive pages **54 of 100 typing only the name, 82 of 100 when
+  the ship, the line or the year is named as well**. A row is not charged for what it holds
+  besides the name — a title, a class of passage, a surname resolved from a repetition mark —
+  which is worth seven of those names to somebody who cannot name the crossing. `Ponticelli Giovanni` is read as
   `Pouticelli Sooai` — wrong as a transcription, findable as a search. The recogniser is
   the ceiling and most of the 17 names still missing are below any matcher's floor: the
   row simply does not resemble the name, and four of them are rows the recogniser returned
@@ -165,7 +167,8 @@ off until asked for and both labelled as what they are:
 
 Type a name. If it is a common one — Maria, José, Joaquim — it will be competing with
 thousands of equally close readings, so say what else you know: the ship, or the year.
-Measured against 142 hand-read names, that is the difference between 95 findable and 111.
+Measured against 142 hand-read names, that is the difference between 95 findable and 122 —
+and between 86 and 118 if you only look at the first five results.
 Every search result carries the ship it sailed on and offers `só <navio>` to ask again
 with it, and `↓ CSV` takes the whole list — notation, page and line — to the archive.
 

@@ -146,22 +146,71 @@ old scale.
 | raising the floor for the forgiving scale, since it lets far more rows past 0.10 | 0.25 costs one name in each of the three cutoffs, 0.35 costs two or three, 0.45 collapses it | not taken — and unnecessary once only the rows that can be shown are built |
 | widening the letter pass's bulk bound from 32 buckets to 64, which stops `P` sharing a bucket with `0` on pages full of digits | 3,888 cheap refusals against 3,960, and the same 22,896 real comparisons | not taken; it doubles the table to 25 MB to refuse 72 more rows |
 
-### The 226 pages that still read nothing
+### The 226 pages, read again: 828 names that were not there this morning
 
-The retry pass from yesterday is running again, three workers, from where it
-stopped: 226 pages in 157 records, about five minutes a record. It resumes from
-what is on disk, writes each record as its pages are read, and a page it
-repairs leaves the list.
+The retry pass finished. 157 records had unread pages; **30 of them gave up 828
+names in 1,323 rows**, and 180 pages were read again and genuinely hold nothing
+the engine can see. Those are now stamped as read-and-empty, so `status.py` no
+longer lists them and no future run spends an hour on them again — which is the
+point of the pass: a page that reads nothing must say so, or it is indexed
+forever as a page nobody has looked at.
+
+```
+660 records for 660 dossiers, schema 18
+   71,286 rows, 37,243 with a reading      (69,963 and 36,415 this morning)
+   voyage: ship 201 (30%), year 162 (25%), port 168 (25%), line 388 (59%)
+   surnames inherited: position 4,977, mark 474, indent 205
+```
+
+`scripts/reparse_voyages.py` and `scripts/build_names.py --min 2` were run
+afterwards, as they must be: the name list stands at 1,081 names from 7,300
+clean rows.
+
+The corpus grew by 1,323 rows of distractors and the search held: 86 / 95 / 99
+by name alone and 118 / 122 / 130 with the crossing named, at five, ten and
+twenty. The engine benches did not move either — CER 0.362 over the 142
+hand-read rows, and no golden page's geometry changed.
+
+Where the two kinds of page now stand, over the same 142 names in the top ten:
+
+| | typed alone | naming the crossing |
+|---|---|---|
+| the two typewritten pages, 42 names | **41** | 40 |
+| the three cursive pages, 100 names | **54** (was 49) | 82 |
+
+BS.ENT.015061 p6 — 46 Marias and Joses on a dossier that names no ship — goes
+from 20 findable by name alone to 37 when the crossing is named.
+
+### What the whole archive costs, at the end of the day
+
+Twelve times the corpus on disk, which is 7,920 dossiers and 382,332 rows:
+
+| | this morning | now |
+|---|---|---|
+| cold load | 96 s | **16 s** |
+| the keystroke's own overhead | 258 ms | **62 ms** |
+| `Contadore` | 105 ms | **7 ms** |
+| `Manoel da Cruz Valdivia` | 365 ms | **46 ms** |
+| `Maria Silva Gelria 1924` | 486 ms | **170 ms** |
+| the index in memory | 295 MB | 307 MB |
+
+Over the 660 dossiers actually on disk those three queries are 1, 3 and 12 ms.
+
+### Twice today a heavy job was started twice
+
+The second launch of the same command left six OCR workers on a fourteen-
+gigabyte laptop and took the free memory to two gigabytes. `S=... && nohup cmd
+> $S/log &` backgrounds the whole chain, so the `echo $! > $S/x.pid` that
+follows fails while the job it was meant to record is already running — and the
+error reads like a launch that did not happen. Check `ps` for the job before
+starting it, not only afterwards. To measure anything while such a run is going,
+`kill -STOP` its PIDs, measure, `kill -CONT`: under contention the scale bench
+read twice as slow as the truth and would have condemned a change that was fine.
 
 ```sh
 .venv-ocr/bin/python scripts/retry_unknown.py            # resumes; writes as it goes
 .venv/bin/python scripts/status.py                       # says how many are left
 ```
-
-Twice today a heavy background job was started twice — the second launch of the
-same command left six OCR workers on a fourteen-gigabyte laptop and took the
-free memory to two gigabytes. Check `ps` for the job before starting it, not
-only afterwards.
 
 ### Next, in order
 
