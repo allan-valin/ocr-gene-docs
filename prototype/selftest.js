@@ -567,6 +567,14 @@ window.addEventListener("load",async()=>{
        && !/class="[^"]*typed/.test(cell({nationality: "BELGA"},
                                          "nationality", "BELGA")));
 
+    // Measured: the first guess is the right name for 51 of 217 badly-read
+    // words and the engine's own second reading for 6, so the guesses are the
+    // top of the menu unless somebody says otherwise.
+    ok("the guesses are offered first", typeof GUESSES_FIRST !== "undefined"
+       && GUESSES_FIRST === true);
+    ok("and the control says so",
+       !!q("#guessfirst") && q("#guessfirst").getAttribute("aria-pressed") === "true");
+
     const ex = document.getElementById("exportcsv");
     ok("an export control exists", !!ex);
     if(ex) ok("export points at the served document or is disabled",

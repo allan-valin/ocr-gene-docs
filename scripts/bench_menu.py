@@ -109,7 +109,15 @@ def sources(names: Names, limit: int = 10) -> dict:
                                      menu_for(word, names, limit=limit,
                                               spoken=spoken)]
 
+    def guesses(word, row, i):
+        """The guesses block alone, without the engine's own readings above it:
+        the two are separate sections on screen and the reader can put either
+        first, so a rank that mixes them answers neither question."""
+        return [g["name"] for g in menu_for(word, names, limit=limit,
+                                            spoken=spoken)]
+
     picked = {"alts": alts, "archive": archive, "menu": both,
+              "guesses": guesses,
               "strokes": ink, "all": joined, "shipped": shipped}
     for rule in ("minims", "ascender", "round", "abbreviation", "edge",
                  "capital", "space", "two changes"):

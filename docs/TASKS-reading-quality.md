@@ -137,6 +137,15 @@ is written down beside it, not when the code runs.
       | with the strokes | 83 of 217 | 0.161 | 0.323 | 0.378 | 0.382 |
       | and the language list | 87 of 217 | 0.161 | 0.327 | 0.392 | 0.401 |
 
+      **The guesses are the top of the menu now.** Measured on the block
+      alone — the engine's own readings are a separate section on screen, so a
+      rank that mixes them answers neither question — the first line of the
+      guesses is the right name for 51 of 217 badly-read words (0.235 at rank
+      one, 0.355 by three, 83 found), while the engine's second reading of a
+      word is right for 6. The word the engine read is already on screen; it is
+      the cell the menu opened from. The toggle stays for a reader comparing
+      the engine's two readings.
+
       Still to do: drop the rules that keep scoring nothing once the pages
       their examples live on are scorable; and the ordering, where the
       archive's own first guess is still the best single thing in the menu
