@@ -123,10 +123,27 @@ comes back `ISPAGNIA`, `ESPANOIY`, `SEANOL`, `RASIERAL` against *ESPANHOLA*
 and *BRASILEIRA*, which is the shape of a column that can be read and snapped
 to a closed vocabulary. Age comes back `_` and `1`: its heading is 2.8% of the
 sheet wide and the figures are not under it, so the edge halfway to the next
-heading is the wrong rule for a narrow heading over a wide column. **Nothing
-ships on that** until `scripts/bench_columns.py` and a per-column truth page
-exist — and for the typed half, the truth is the hand transcription of that
-same page.
+heading is the wrong rule for a narrow heading over a wide column. `scripts/bench_columns.py` now scores exactly that,
+against the 26 rows of that page somebody typed by hand:
+
+| column | rows | exact | mean CER |
+|---|---|---|---|
+| nacionalidade | 26 | 0.000 | 0.730 |
+| idade | 22 | 0.000 | 0.977 |
+| sexo | 26 | 0.000 | 1.000 |
+| estado | 26 | 0.077 | 0.593 |
+| profissao | 22 | 0.000 | 0.710 |
+| procedencia | 26 | 0.000 | 0.974 |
+| classe | 26 | 0.115 | 0.885 |
+
+Bad, and usefully bad: it separates two faults. The columns that read
+*something* wrong — nationality, civil state, profession — are a recogniser and
+vocabulary problem, and a closed vocabulary is worth a great deal there. The
+ones that read *nothing* — age, sex, class, port — are a crop problem, their
+headings being narrow over wide columns. The crop comes first: snapping to the
+nearest allowed value cannot rescue a cell that was never cut. **No column
+reading ships until those numbers move**, and the cursive half still has no
+truth file — a number measured on typescript is not a number about the hand.
 
 ### What is next, in order
 
