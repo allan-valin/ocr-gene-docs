@@ -312,3 +312,113 @@ def test_collect_pdfs_does_not_follow_a_link_into_a_loop(tmp_path):
     (tmp_path / "here" / "a.pdf").write_bytes(b"%PDF-1.4\n")
     (tmp_path / "here" / "loop").symlink_to(tmp_path, target_is_directory=True)
     assert [p.name for p in collect_pdfs(tmp_path)] == ["a.pdf"]
+
+
+def test_one_typed_row_no_longer_freezes_the_rows_beside_it():
+    """The mark was on the record, so a person correcting row 12 held the other
+    forty at the quality of the day they were first read — and those are the
+    pages somebody actually opens, because they are the ones being corrected.
+    BS.ENT.013947 sat that way: 48 rows of page 3 never read at all."""
+    from desembarque.batch import preserve_human_work
+    existing = {"hash": "h", "source": "manual", "saved_at": "2026-08-28T12:07:57",
+                "rows": [{"n": 1, "page": 2, "name_raw": "Yosé Fernandes"},
+                         {"n": 12, "page": 2, "name_raw": "Maria",
+                          "verified": True,
+                          "edits": [{"field": "name", "to": "Maria"}]}]}
+    fresh = {"hash": "h", "schema": 19,
+             "rows": [{"n": 1, "page": 2, "name_raw": "José Fernandes"},
+                      {"n": 12, "page": 2, "name_raw": "Marra"},
+                      {"n": 1, "page": 3, "name_raw": "Santabarbara Salvador"}]}
+    out = preserve_human_work(existing, fresh)
+    assert out["rows"][0]["name_raw"] == "José Fernandes", "the engine row was frozen"
+    assert out["rows"][1] == existing["rows"][1], "the typed row was overwritten"
+    assert out["rows"][2]["name_raw"] == "Santabarbara Salvador"
+    assert out["source"] == "manual"
+
+
+def test_a_row_a_person_verified_is_kept_even_with_nothing_typed_into_it():
+    """Ticking the row is a person saying *this reading is right*, which is as
+    much their work as typing over it."""
+    from desembarque.batch import preserve_human_work
+    existing = {"hash": "h", "source": "manual",
+                "rows": [{"n": 1, "page": 2, "name_raw": "Benito Mosso",
+                          "verified": True}]}
+    fresh = {"hash": "h", "rows": [{"n": 1, "page": 2, "name_raw": "Bemto Musso"}]}
+    assert preserve_human_work(existing, fresh)["rows"][0]["name_raw"] == "Benito Mosso"
+
+
+def test_a_typed_row_the_new_reading_lost_is_kept_in_its_place():
+    """A re-read that cuts the page into fewer bands must not delete somebody's
+    typing along with the band. The row comes back in page and row order."""
+    from desembarque.batch import preserve_human_work
+    existing = {"hash": "h", "source": "manual",
+                "rows": [{"n": 5, "page": 2, "name_raw": "Izabel", "verified": True}]}
+    fresh = {"hash": "h", "rows": [{"n": 4, "page": 2, "name_raw": "Mania Danchez"},
+                                   {"n": 6, "page": 2, "name_raw": "F'co alfieri"}]}
+    out = preserve_human_work(existing, fresh)
+    assert [r["n"] for r in out["rows"]] == [4, 5, 6]
+    assert out["rows"][1]["verified"] is True
+
+
+def test_a_re_read_that_produced_nothing_keeps_every_row_there_was():
+    """A failed page reads as an empty list, and an empty list must never be
+    allowed to stand in for a document — the same silent-loss shape as the
+    empty note marking a dossier done."""
+    from desembarque.batch import preserve_human_work
+    existing = {"hash": "h", "source": "manual",
+                "rows": [{"n": 1, "page": 2, "name_raw": "Yosé Fernandes"}]}
+    assert preserve_human_work(existing, {"hash": "h", "rows": []})["rows"] == existing["rows"]
+
+
+def test_an_empty_edit_list_is_not_a_person_having_been_there():
+    from desembarque.batch import preserve_human_work
+    existing = {"hash": "h", "source": "manual",
+                "rows": [{"n": 1, "page": 2, "name_raw": "old", "edits": [],
+                          "verified": False}]}
+    fresh = {"hash": "h", "rows": [{"n": 1, "page": 2, "name_raw": "new"}]}
+    assert preserve_human_work(existing, fresh)["rows"][0]["name_raw"] == "new"
+
+
+def test_saving_one_page_does_not_delete_the_rows_of_every_other_page():
+    """The review screen posts the page in front of the reader, and the save
+    wrote that list as the record's whole `rows`. BS.ENT.013947 is eleven pages
+    and carries forty-one rows, all of page 2: correcting page 2 threw pages 3
+    to 11 away, which is why 48 hand-read rows of page 3 had no reading to
+    compare against at all."""
+    from desembarque.batch import merge_page_rows
+    existing = {"rows": [{"n": 1, "page": 2, "name_raw": "engine 2.1"},
+                         {"n": 1, "page": 3, "name_raw": "engine 3.1"},
+                         {"n": 2, "page": 3, "name_raw": "engine 3.2"}]}
+    typed = [{"n": 1, "page": 2, "name_raw": "José Fernandes", "verified": True}]
+    out = merge_page_rows(existing, typed, page=2)
+    assert [(r["page"], r["n"]) for r in out] == [(2, 1), (3, 1), (3, 2)]
+    assert out[0]["name_raw"] == "José Fernandes"
+    assert out[1]["name_raw"] == "engine 3.1"
+
+
+def test_a_saved_page_replaces_that_page_entirely_including_rows_it_dropped():
+    """A person deleting a row that was never a passenger is editing the page,
+    not losing it: what they saved is that page now."""
+    from desembarque.batch import merge_page_rows
+    existing = {"rows": [{"n": 1, "page": 2}, {"n": 2, "page": 2}, {"n": 1, "page": 3}]}
+    out = merge_page_rows(existing, [{"n": 1, "page": 2, "verified": True}], page=2)
+    assert [(r["page"], r["n"]) for r in out] == [(2, 1), (3, 1)]
+
+
+def test_a_save_that_says_nothing_about_which_page_it_is_replaces_the_rows():
+    """Older clients and the earliest records carry no page on a row. Guessing
+    would be worse than the plain behaviour they were written against."""
+    from desembarque.batch import merge_page_rows
+    existing = {"rows": [{"n": 1, "page": 2}]}
+    typed = [{"n": 1, "name_raw": "no page here"}]
+    assert merge_page_rows(existing, typed, page=None) == typed
+
+
+def test_the_page_a_save_replaces_is_the_one_its_rows_agree_on():
+    """A client that sends no page number still says which page it is, in every
+    row it posts. Two pages in one batch say nothing, and neither does none."""
+    from desembarque.batch import saved_page
+    assert saved_page([{"page": 3}, {"page": 3}], None) == 3
+    assert saved_page([{"page": 3}, {"page": 4}], None) is None
+    assert saved_page([{"n": 1}], None) is None
+    assert saved_page([{"page": 3}], 2) == 2, "what the client says wins"

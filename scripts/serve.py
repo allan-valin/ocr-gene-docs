@@ -39,7 +39,8 @@ from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import (BatchIndexer, collect_pdfs, is_indexed,  # noqa: E402
-                               preserve_human_work)
+                               merge_page_rows, preserve_human_work,
+                               saved_page)
 from desembarque.serve_shapes import (ui_geometry, ui_meta,  # noqa: E402
                                       ui_transcription)
 from desembarque.export import (csv_filename, hits_to_csv,  # noqa: E402
@@ -711,11 +712,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "rows must be a list"})
             ident = identify(pdf)
             existing = JOBS.cached(ident.doc_hash) or {}
+            # What comes up from the screen is one page. Writing it as the
+            # record's whole `rows` deleted every other page of the dossier,
+            # silently — BS.ENT.013947 kept 41 rows of page 2 and lost ten
+            # pages that way.
+            page = saved_page(rows, body.get("page"))
             existing.update({
                 "hash": ident.doc_hash,
                 "notation": ident.notation,
                 "identified_by": ident.source,
-                "rows": rows,
+                "rows": merge_page_rows(existing, rows, page),
                 "geometry": body.get("geometry") or existing.get("geometry"),
                 "transcribed_page": body.get("page") or existing.get("transcribed_page"),
                 "source": body.get("source") or "manual",

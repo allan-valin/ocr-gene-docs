@@ -62,9 +62,26 @@ def is_indexed(data: dict | None, schema: int) -> bool:
 # stays on the record too, so these are the only marks that say a human was here.
 HUMAN_MARKS = ("source", "saved_at")
 
+# And what a person leaves on the row they actually touched: text typed over the
+# reading, a candidate chosen from the menu, or the tick that says this row is
+# right. The record-level marks above say somebody opened the document; only
+# these say which rows are theirs.
+ROW_MARKS = ("edits", "verified")
+
+
+def typed_by_a_person(row: dict) -> bool:
+    """Whether this row carries a person's work, rather than the engine's."""
+    if not isinstance(row, dict):
+        return False
+    return bool(row.get("edits")) or bool(row.get("verified"))
+
+
+def _place(row: dict) -> tuple[int, int]:
+    return int(row.get("page") or 0), int(row.get("n") or 0)
+
 
 def preserve_human_work(existing: dict | None, fresh: dict) -> dict:
-    """A fresh reading of a document, with anything a person typed kept.
+    """A fresh reading of a document, with the rows a person typed kept.
 
     Correcting a row saves the whole record, engine stamp and all, so the next
     schema bump marks that record stale and the run reads the document again —
@@ -73,8 +90,21 @@ def preserve_human_work(existing: dict | None, fresh: dict) -> dict:
     nobody told. That is the same silent-loss shape as an empty note marking a
     document done, and it is worse, because the work destroyed was real.
 
-    Only the rows are the person's. Everything else the re-read brings — the
-    voyage, the geometry, the schema stamp — is why it was read again at all.
+    But the mark that says a person was here sits on the *record*, and keeping
+    every row of a record because of it froze forty untouched rows for the sake
+    of one corrected one — on exactly the documents somebody is working
+    through, since those are the ones being corrected. BS.ENT.013947 sat that
+    way: page 3 was never read at all while page 2 was being typed. So the
+    question is asked per row. A row a person typed into, chose a reading for,
+    or ticked is theirs and comes through untouched; every other row is the
+    engine's, and the re-read is what it was for.
+
+    A row of theirs that the new reading does not contain — a page cut into
+    fewer bands — is kept in page and row order rather than dropped with the
+    band.
+
+    Everything outside the rows the re-read brings: the voyage, the geometry,
+    the schema stamp — that is why it was read again at all.
 
     An empty note is still not a transcription: someone opens a dossier, types
     nothing and leaves, and treating that as a correction would freeze the
@@ -84,12 +114,66 @@ def preserve_human_work(existing: dict | None, fresh: dict) -> dict:
         return fresh
     if not any(existing.get(mark) for mark in HUMAN_MARKS):
         return fresh
+
     out = dict(fresh)
-    out["rows"] = existing["rows"]
+    theirs = [r for r in existing["rows"] if typed_by_a_person(r)]
+
+    # A re-read that produced nothing is a failure, not a document with no
+    # passengers on it, and it must never stand in for what was there.
+    if not fresh.get("rows"):
+        out["rows"] = existing["rows"]
+    else:
+        by_place = {_place(r): r for r in theirs}
+        rows, used = [], set()
+        for r in fresh["rows"]:
+            mine = by_place.get(_place(r))
+            rows.append(mine if mine is not None else r)
+            if mine is not None:
+                used.add(_place(r))
+        missing = [r for r in theirs if _place(r) not in used]
+        if missing:
+            rows = sorted(rows + missing, key=_place)
+        out["rows"] = rows
+
     for mark in HUMAN_MARKS:
         if existing.get(mark):
             out[mark] = existing[mark]
     return out
+
+
+def saved_page(rows: list[dict], stated: int | None) -> int | None:
+    """Which page a save is replacing: what the client said, or what the rows
+    themselves all agree on. A batch of rows carrying two pages says nothing,
+    and neither does one carrying none."""
+    if stated is not None:
+        return stated
+    pages = {r.get("page") for r in rows if isinstance(r, dict)}
+    if len(pages) == 1:
+        return pages.pop()
+    return None
+
+
+def merge_page_rows(existing: dict | None, rows: list[dict],
+                    page: int | None) -> list[dict]:
+    """The rows of one page, saved back into a record that holds every page.
+
+    The review screen shows one page and posts that page's rows, and the save
+    wrote them as the record's whole `rows` — so correcting page 2 of an
+    eleven-page dossier deleted pages 3 to 11. Nothing said so, and the pages
+    were only missing, never wrong, which is the hardest kind of loss to see.
+
+    What was saved is that page, entirely: a row the person deleted is gone
+    from it. Every other page stays as it was, and the result comes back in
+    page and row order.
+
+    A save that carries no page number cannot say which page it replaces, so it
+    replaces the rows, which is what the clients that do not send one expect.
+    """
+    kept = [r for r in (existing or {}).get("rows") or []
+            if isinstance(r, dict) and r.get("page") != page]
+    if page is None or not kept:
+        return list(rows)
+    return sorted(list(rows) + kept, key=_place)
 
 
 def collect_pdfs(folder: Path, recursive: bool = True) -> list[Path]:
