@@ -83,6 +83,14 @@ STRONG_NAME = 0.5
 # than being added twice; when the pass could only add rows, a floor of 0.45
 # cost 39 names by displacing them.
 EDIT_FLOOR = 0.55
+# How much of a reading may be something other than the name that was typed
+# before the reading is charged for it, as a fraction of what was typed. At 0
+# the score is the plain overlap over union this started as, and a row holding
+# anything besides the name is scored down for holding it; measured against
+# the 142 hand-read names, 0.75 finds 96 of them by name alone against 89, and
+# 88 in the top five against 81. Above 1 the readings that hold nothing else
+# stop being told from the ones that do.
+SLACK = 0.75
 #
 # Running the same comparison over the *whole* corpus, as a second attempt when
 # the trigrams found nothing, was measured and dropped. In isolation it looks
@@ -900,8 +908,8 @@ def crossing_pool(rows: list[dict], years: tuple[int, int] | None,
     return sorted(hit)
 
 
-def candidates(rows: list[dict], query: str,
-               floor: float = 0.0) -> list[tuple[dict, float]]:
+def candidates(rows: list[dict], query: str, floor: float = 0.0,
+               slack: float = 0.0) -> list[tuple[dict, float]]:
     """The rows worth scoring against this query, with their name score.
 
     Without a posting list every row is compared, the way it always was. With
@@ -910,12 +918,13 @@ def candidates(rows: list[dict], query: str,
     row's trigrams. A row missing from every posting of the query scores zero
     and would be dropped by the floor anyway.
     """
-    index = getattr(rows, "postings", None)
-    if index is None:
-        return [(r, s) for r, s in
-                ((r, max(similarity(query, t)
-                         for t in (r["text"], *(r.get("alts") or ()))))
-                 for r in rows) if s >= floor]
+    # A plain list is given the same treatment by being indexed here: the
+    # weight of a trigram is a fact about the corpus, and there is no scoring
+    # it without one.
+    # A plain list is given the same treatment by being indexed here: how many
+    # trigrams a reading holds is what the score is taken against, and only the
+    # postings know it without rebuilding every row.
+    index = rows.postings if isinstance(rows, RowIndex) else RowIndex(rows).postings
     post, owner, size, _folded = index
     grams = trigrams(query)
     lists = [post[g] for g in grams if g in post]
@@ -926,7 +935,7 @@ def candidates(rows: list[dict], query: str,
     # `Maria Silva` over the whole archive, a quarter of a second on each
     # keystroke. The postings are arrays of machine integers already, so the
     # count, the arithmetic and the best-of-two-readings are done over the lot
-    # at once. Same numbers: the division is the same IEEE double either way.
+    # at once.
     ids = np.concatenate([np.frombuffer(a, dtype=np.int32) for a in lists])
     common = np.bincount(ids)
     seen = np.flatnonzero(common)
@@ -934,7 +943,15 @@ def candidates(rows: list[dict], query: str,
         return []
     shared = common[seen].astype(np.float64)
     sizes = np.frombuffer(size, dtype=np.int32)[seen]
-    scores = shared / (len(grams) + sizes - shared)
+    asked = len(grams)
+    # What the reading holds beyond what was asked for, past a slack of what
+    # was asked for. A row is not only a name: it carries a title, a rank, a
+    # surname resolved from a repetition mark, and whatever the recogniser made
+    # of the ink beside it. Charging a reading in full for that is what buried
+    # `Lorenzo Maria`, read as `Maria` with the rest of the line around it,
+    # under a thousand rows that read as nothing else.
+    over = np.maximum(0.0, sizes - shared - slack * asked)
+    scores = shared / (asked + over)
     own = np.frombuffer(owner, dtype=np.int32)[seen]
     # a row's readings were appended together, so `owner` only ever climbs and
     # the readings of one row are neighbours: the better of them is the maximum
@@ -947,6 +964,30 @@ def candidates(rows: list[dict], query: str,
         best, top = best[keep], top[keep]
     # tolist converts the lot in one call rather than a row at a time
     return list(zip((rows[i] for i in top.tolist()), best.tolist()))
+
+
+def names_a_crossing(rows: list[dict], query: str) -> bool:
+    """Whether this query says which crossing to look on.
+
+    Two things depend on the answer and both are the reason it is asked out
+    loud rather than inferred from the hits. A searcher who has not named one
+    is scored more forgivingly — a row is not charged for everything it holds
+    besides the name — so the scores are on a different scale; and the advice
+    to name the ship is only worth showing to somebody who has not.
+    """
+    name_q, years = split_year(query)
+    name_q, ship_term = split_ship(name_q, rows)
+    _name_q, line_terms = split_line(name_q, rows)
+    return bool(years or ship_term or line_terms)
+
+
+# When nothing convincing came back and the searcher never said which crossing
+# to look on, saying so is worth more than the list. Measured over the 142
+# hand-read names searched by name alone: below this the search had failed 62%
+# of the time it failed, and the bar is wrong about a search that worked 39% of
+# the time. The number belongs to the forgiving scale above — a search that
+# named a crossing is scored the other way and is never told to name one.
+ADVICE_BAR = 0.7
 
 
 def search(rows: list[dict], query: str, limit: int = 50,
@@ -967,7 +1008,8 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # An empty name query is not a query, and is not asked. Trigrams are
     # padded, so the score of nothing against a row read as `B   B` comes out
     # at 0.25 — a page of whitespace ranked above the ship somebody typed.
-    pool = (candidates(rows, name_q, floor=min_score)
+    pool = (candidates(rows, name_q, floor=min_score,
+                       slack=0.0 if (years or terms or lines) else SLACK)
             if len(fold(name_q)) >= MIN_QUERY else ())
     for r, s in pool:
         # the floor is applied to the name alone: the voyage orders what was

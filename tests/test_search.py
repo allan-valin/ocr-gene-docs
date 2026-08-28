@@ -705,22 +705,29 @@ def test_the_line_is_taken_out_of_the_name_query():
 def test_a_line_the_recogniser_mangled_still_matches_a_typed_one():
     """The letterhead came off the page through the same recogniser as the
     surnames — `Comnpanhia Nacional de Navegação Costeira` is what it read."""
-    lifted = {h["text"]: h["score"]
-              for h in search(LINED, "Camtadore Companhia Nacional de Navegação Costeira")}
-    plain = {h["text"]: h["score"] for h in search(LINED, "Camtadore")}
-    assert lifted["Guudo Camtadore"] > plain["Guudo Camtadore"]
+    lifted = [h["text"]
+              for h in search(LINED, "Camtadore Companhia Nacional de Navegação Costeira")]
+    plain = [h["text"] for h in search(LINED, "Camtadore")]
+    assert lifted.index("Guudo Camtadore") <= plain.index("Guudo Camtadore")
 
 
 def test_one_word_of_a_letterhead_narrows_without_being_taken_out():
     """`Costeira`, `Nacional` and `Brasileiro` are words of the companies that
     carried these people, and they are also their surnames. One word is not
     enough to be sure which was meant, so it narrows the search and stays in it
-    — a passenger called Costeira is still searched for."""
+    — a passenger called Costeira is still searched for.
+
+    Ranks rather than scores, because a query that names a crossing is scored
+    on a different scale from one that does not: a searcher who cannot say
+    which crossing is not charged for everything a row holds besides the name.
+    Where the row lands in the list is the thing that is comparable, and the
+    thing the person sees."""
     from desembarque.search import split_line
     assert split_line("Costeira Maria", LINED) == ("Costeira Maria", ["COSTEIRA"])
-    hits = {h["text"]: h["score"] for h in search(LINED, "Camtadore Costeira")}
-    plain = {h["text"]: h["score"] for h in search(LINED, "Camtadore")}
-    assert hits["Guudo Camtadore"] > plain["Guudo Camtadore"]
+    ranked = [h["text"] for h in search(LINED, "Camtadore Costeira")]
+    plain = [h["text"] for h in search(LINED, "Camtadore")]
+    assert "Guudo Camtadore" in ranked
+    assert ranked.index("Guudo Camtadore") <= plain.index("Guudo Camtadore")
 
 
 def test_a_word_short_enough_to_be_a_surname_is_not_a_line():
@@ -1161,3 +1168,45 @@ def test_the_letter_pass_returns_what_it_returned_row_by_row():
     for q in ("maria silva gelria", "manoel da cruz 1924", "anna gomes gelria",
               "cezario sammamed koninklijke hollandsche lloyd", "jose 1924"):
         assert search(indexed, q) == search(plain, q), q
+
+
+def test_a_row_is_not_charged_for_what_it_holds_besides_the_name():
+    """A row is not only a name. It carries a title, a class of passage, a
+    surname resolved from a repetition mark, and whatever the recogniser made
+    of the ink beside it — and measuring the name against all of it is what
+    buried the rows that hold more than what was typed. Somebody who types
+    everything they know should see the row that holds all of it first.
+
+    Measured over the 142 hand-read names typed without a crossing: 96
+    findable in the top ten against 89, and 88 in the top five against 81."""
+    from desembarque.search import RowIndex, candidates, SLACK
+    rows = RowIndex(idx("Maria Silva Martinez", "Jose Muesso 2a classe cozinheiro"))
+    strict = dict((r["text"], round(s, 3)) for r, s in candidates(rows, "MARIA SILVA"))
+    loose = dict((r["text"], round(s, 3))
+                 for r, s in candidates(rows, "MARIA SILVA", slack=SLACK))
+    # everything that was typed is on that row, and the surname it also carries
+    # is the one the repetition mark under it resolved to
+    assert strict["Maria Silva Martinez"] == 0.632
+    assert loose["Maria Silva Martinez"] == 1.0
+
+
+def test_naming_the_crossing_asks_the_stricter_question():
+    """Inside a named crossing the pool is already a few hundred rows, and what
+    orders them is how much of the row is the name rather than how much of the
+    name is in the row: forgiving the rest of the row there promotes the long
+    noisy rows of the same dossier. Measured, 118 of 142 come back in the top
+    five when the crossing is named, against 108 if the forgiveness is applied
+    there too."""
+    from desembarque.search import names_a_crossing
+    rows = idx("Maria Silva Martinez", "Marta Silveira")
+    for r in rows:
+        r["ship"] = "GELRIA"
+    assert names_a_crossing(rows, "Maria Silva Gelria")
+    assert not names_a_crossing(rows, "Maria Silva")
+    named = {h["text"]: h["name_score"] for h in search(rows, "Maria Silva Gelria")}
+    alone = {h["text"]: h["name_score"] for h in search(rows, "Maria Silva")}
+    # 0.71 rather than the 0.632 the trigrams give it: inside a named crossing
+    # the row is also read letter by letter, and it keeps whichever measure
+    # reads it better
+    assert named["Maria Silva Martinez"] == 0.71
+    assert alone["Maria Silva Martinez"] == 1.0

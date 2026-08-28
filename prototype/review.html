@@ -804,8 +804,13 @@ function renderHits(d){
   // nothing convincing came back, that is the thing to say — the tool cannot
   // read the hand any better, and the person very often knows the crossing.
   const best = Math.max(...d.hits.map(h => h.score || 0));
-  const named = d.hits.some(h => h.matched);
-  const advice = (best < 0.5 && !named)
+  // Whether the crossing was named comes from the server, because it decides
+  // both things this needs to know: telling somebody to name the ship is only
+  // useful if they did not, and a search without one is scored on a more
+  // forgiving scale, where 0.5 is no longer the mark of a weak result.
+  const named = d.crossing != null ? d.crossing : d.hits.some(h => h.matched);
+  const bar = d.crossing != null ? (d.advice_bar || 0.7) : 0.5;
+  const advice = (best < bar && !named)
     ? `<div class="none advice">Nada convincente. Se souber o navio, a companhia
        ou o ano, acrescente à busca — é o que faz um nome mal lido aparecer.</div>`
     : "";

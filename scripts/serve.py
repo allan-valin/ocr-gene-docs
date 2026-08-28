@@ -635,8 +635,13 @@ class Handler(BaseHTTPRequestHandler):
                     searchlib.search(rows, q.get("q", ""),
                                      limit=int(q.get("limit", 50))),
                     STATE["root"])
-                return self._send(200, {"query": q.get("q", ""),
-                                        "indexed": len(rows), "hits": hits})
+                return self._send(200, {
+                    "query": q.get("q", ""), "indexed": len(rows),
+                    # the page needs both: which scale the scores are on, and
+                    # whether telling this searcher to name the ship makes
+                    # any sense
+                    "crossing": searchlib.names_a_crossing(rows, q.get("q", "")),
+                    "advice_bar": searchlib.ADVICE_BAR, "hits": hits})
 
             if u.path == "/api/index":
                 st = BATCH.state
