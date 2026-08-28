@@ -142,6 +142,9 @@ old scale.
 | **breaking the ties** the forgiveness creates by the unforgiving score, so the row that *is* the name comes before the row that merely contains it | 83 / 94 / 99 against 88 / 96 / 101 | not taken. The true row usually *does* hold more than the name — a surname resolved from a mark, a class of passage — so preferring the pure row demotes it |
 | raising the score floor's neighbours: `MIN_SCORE` at 0.05 and 0.02 under rarity weighting | 121 and 111 with the crossing named, against 128 at 0.10 | 0.10 stands |
 | `STRONG_NAME` at 0.6, 0.7 and 0.8 | no change to any of the eight numbers | the cut is not what orders these results |
+| forgiving a **fixed** number of trigrams rather than a fraction of the query, so a one-word surname is forgiven as much as a full name | 6, 10 and 14 trigrams give 79 / 93, 82 / 95 and 87 / 92 in the top five and ten by name alone, against 86 / 95 for three quarters of the query | not taken; the proportional allowance is as good at five and better at ten |
+| raising the floor for the forgiving scale, since it lets far more rows past 0.10 | 0.25 costs one name in each of the three cutoffs, 0.35 costs two or three, 0.45 collapses it | not taken — and unnecessary once only the rows that can be shown are built |
+| widening the letter pass's bulk bound from 32 buckets to 64, which stops `P` sharing a bucket with `0` on pages full of digits | 3,888 cheap refusals against 3,960, and the same 22,896 real comparisons | not taken; it doubles the table to 25 MB to refuse 72 more rows |
 
 ### The 226 pages that still read nothing
 
