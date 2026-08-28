@@ -831,3 +831,27 @@ def test_the_folder_is_only_walked_when_a_hit_cannot_name_its_file(tmp_path, mon
     out = serve.name_the_files(mixed, tmp_path)
     assert [h.get("file") for h in out] == ["a.pdf", "b.pdf", None]
     assert walks == [tmp_path]
+
+
+def test_the_index_is_built_before_anybody_types(tmp_path, monkeypatch):
+    """The first search after the server starts paid for the whole index: two
+    seconds over 660 dossiers and fifteen over the archive, with a cursor
+    blinking in an empty results list. Nobody is waiting at startup."""
+    import desembarque.search as searchlib
+    monkeypatch.setitem(serve.STATE, "root", tmp_path)
+    cache = tmp_path / "transcriptions"
+    cache.mkdir()
+    (cache / "a.json").write_text(json.dumps({
+        "hash": "a", "engine": "paddle", "file": "a.pdf",
+        "rows": [{"n": 1, "name_raw": "JOSE MUESSO", "page": 2}]}),
+        encoding="utf-8")
+    monkeypatch.setattr(serve.JOBS, "cache", cache)
+
+    searchlib._POSTINGS = None
+    reads = []
+    real = searchlib.load_index
+    monkeypatch.setattr(searchlib, "load_index",
+                        lambda *a, **k: reads.append(a) or real(*a, **k))
+    serve.warm_the_index()
+    assert reads, "the index was never loaded"
+    assert searchlib._POSTINGS is not None, "the postings were not built"

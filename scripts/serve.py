@@ -406,6 +406,20 @@ def hash_index(folder: Path) -> dict[str, str]:
     return out
 
 
+def warm_the_index(root: Path | None = None) -> None:
+    """Read the corpus and build what a search needs, before anybody types.
+
+    The first search after the server starts paid for all of it — two seconds
+    over the 660 dossiers on disk and fifteen over the whole archive — with a
+    cursor blinking in an empty list. Nobody is waiting while the browser is
+    still opening, so it is done then instead.
+    """
+    rows = searchlib.load_index(JOBS.cache, engine_only=False,
+                                ships=catalogue_ships(root or STATE["root"]))
+    getattr(rows, "postings", None)
+    getattr(rows, "crossings", None)
+
+
 def name_the_files(hits: list[dict], folder: Path) -> list[dict]:
     """Give each hit the name of the dossier it came from.
 
@@ -758,6 +772,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Desembarque serving {root}\n  {url}\nCtrl-C to stop")
     if not args.no_open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+    # in the background: the port answers immediately, and the corpus is ready
+    # by the time a name has been typed into it
+    threading.Thread(target=warm_the_index, daemon=True).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
