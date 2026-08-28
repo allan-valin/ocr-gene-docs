@@ -254,7 +254,9 @@
 <div id="legend" aria-live="polite">
   <span><i class="swatch"></i><b>barra amarela</b> — vale conferir primeiro:
     o motor decodificou com pouca firmeza, o sobrenome foi herdado da linha de
-    cima, ou nada na leitura se parece com um nome deste acervo</span>
+    cima, nada na leitura se parece com um nome deste acervo, ou a leitura está
+    a um traço de um nome que o acervo já leu — não quer dizer que esteja
+    errada</span>
   <span><i class="dot" style="background:var(--ok)"></i><i class="dot"
     style="background:var(--warn)"></i><b>ponto</b> — score do motor, não é
     medida de acerto: leitura firme de bobagem também é firme</span>
@@ -506,6 +508,8 @@ function markDoubtful(){
         score: "o motor decodificou esta linha com pouca firmeza",
         inferido: "o sobrenome foi inferido pela posição, não lido",
         desconhecido: "nenhuma palavra se parece com um nome deste acervo",
+        quase: "a leitura está a um traço de um nome que o acervo já leu — "
+               + "quase um nome não é um nome",
       };
       rows.forEach((r,i)=>{
         if(why.has(r.n)){

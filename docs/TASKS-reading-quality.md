@@ -25,6 +25,9 @@ is written down beside it, not when the code runs.
 
         So the menu reaches the right name for two badly-read words in five,
         and the engine's own alternates carry almost none of that.
+  - [x] `scripts/bench_check.py`: which reasons for a second look actually
+        find the badly-read rows, and how often each stops somebody on a row
+        that was right. See T8.
   - [ ] `scripts/bench_columns.py` + per-column truth for one typed and one
         cursive page (blocked on §4 having anything to score).
 - [ ] **T4 — Per-row provenance** (§2). `preserve_human_work` keeps the rows a
@@ -74,9 +77,25 @@ is written down beside it, not when the code runs.
       Still to do: re-run once 013947 is re-read, then drop what still scores
       nothing; and the ordering, where the archive's own first guess is still
       the best single thing in the menu (0.241 at rank one).
-- [ ] **T8 — Ask the right question when marking** (§5, `doubtful`). Flag
-      *near a name, not a name* apart from *unknown to this archive*. Keep it
-      only if it catches misreads the current three reasons miss.
+- [x] **T8 — Ask the right question when marking** (§5, `doubtful`), measured
+      by the new `scripts/bench_check.py` over 149 rows paired with a hand
+      reading, 121 of them read wrong:
+
+      | reason | catches the bad rows | stops on a good one |
+      |---|---|---|
+      | score (engine unsure) | 0.595 | 0.036 |
+      | inferido (mark inherited) | 0.314 | 0.036 |
+      | desconhecido (nothing like a name here) | 0.000 | 0.000 |
+      | **quase (one stroke from a name)** | **0.587** | **0.214** |
+      | the three there were | 0.702 | 0.071 |
+      | all four | 0.868 | 0.250 |
+
+      So the new reason is worth seventeen points of the badly-read rows and
+      costs stopping a person on one correctly-read row in five — which the
+      legend now says, because the bar means *look here first* and never
+      *this is wrong*. `desconhecido` catches nothing on these pages and is
+      kept: it is the reason that fires on a name the archive has never seen,
+      and these six pages are ones it mostly has.
 - [ ] **T9 — Display** (§6, §6b). Glued repetition marks shown as marks,
       capitalisation with the archive's particles, and the demo saying it is a
       hand transcription.

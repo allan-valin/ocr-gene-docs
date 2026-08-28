@@ -813,6 +813,7 @@ def test_a_row_is_flagged_for_the_reason_it_deserves(server, monkeypatch):
          "given": "Silva", "conf": {"surname": 0.99}, "ditto": ["surname"],
          "ditto_source": "position"},
         {"n": 4, "page": 2, "name_raw": "Xqzw Vbnm", "conf": {"surname": 0.99}},
+        {"n": 5, "page": 2, "name_raw": "Sitva", "conf": {"surname": 0.99}},
     ]})
     st, body = call(f"{base}/api/check?hash={'w' * 8}&page=2")
     why = {r["n"]: r["why"] for r in body["rows"]}
@@ -820,7 +821,10 @@ def test_a_row_is_flagged_for_the_reason_it_deserves(server, monkeypatch):
     assert why[2] == ["score"]
     assert why[3] == ["inferido"]
     assert why[4] == ["desconhecido"]
-    assert body["doubtful"] == 3
+    # And the one the flag used to let through: a reading that is not a name
+    # but is one stroke from one, read confidently, with nothing inherited.
+    assert why[5] == ["quase"]
+    assert body["doubtful"] == 4
 
 
 def test_an_older_record_is_judged_by_what_its_rows_mean(server, monkeypatch):

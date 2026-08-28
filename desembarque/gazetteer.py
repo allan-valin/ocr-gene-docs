@@ -128,6 +128,31 @@ class Names:
         return all(self.score(w) < 1.0 and not self.suggest(w, limit=1)
                    for w in words)
 
+    def near_miss(self, text: str) -> bool:
+        """Whether some word here is not a name but is one stroke from one.
+
+        `doubtful` asks the opposite question — whether *nothing* in the row
+        resembles a name — and that inference runs backwards. A reading the
+        archive has never seen is usually a rare name, and rare names are what
+        this archive is full of. A reading that is one re-cut minim or one
+        re-read ascender away from a name somebody has read ninety times is the
+        strongest evidence of a misread the tool has, and it is exactly the
+        case the old flag let through: `YOSE` resembles `JOSE`, so the row
+        passed.
+
+        Said with the stroke rules rather than with edit distance, because the
+        question is what the ink supports and not which words are spelled
+        alike.
+        """
+        known = {fold(n) for n in self.counts}
+        for w in fold(text).split():
+            if len(w) < 3 or w in known:
+                continue
+            for c in strokes.variants(w, known=known, limit=strokes.LIMIT):
+                if c.cost <= 1 and c.word.replace(" ", "") in known:
+                    return True
+        return False
+
     def rank(self, readings: list[str]) -> list[dict]:
         """The engine's own readings of one word, ordered by how name-like they are.
 
@@ -159,8 +184,8 @@ WHY = {
 # divided differently — while reading a tall stroke the other way claims the
 # recogniser mistook a direction. So the tail is ordered by how little each
 # rule assumes.
-RULE_ORDER = {"minims": 0, "abbreviation": 0, "space": 1, "edge": 1,
-              "capital": 1, "round": 2, "ascender": 3, "two changes": 4}
+RULE_ORDER = {"ascender": 0, "edge": 1, "capital": 1, "round": 2,
+              "space": 2, "two changes": 3, "abbreviation": 3, "minims": 4}
 
 MENU_LIMIT = 12
 # How many readings that spell nothing anybody has read may sit in one menu.
@@ -176,10 +201,10 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT) -> list[dict]:
     Two sources, and they answer different questions. The archive says *this
     reading is close in spelling to a name these ships carried*, which is the
     single best first guess there is — `bench_menu.py` puts its top suggestion
-    right for 24% of badly-read words, ahead of anything else at rank one. The
+    right for 23% of badly-read words, ahead of anything else at rank one. The
     strokes say *this ink also supports that reading*, which is what finds the
-    names the archive has never read correctly, and what takes the menu from 47
-    of 112 badly-read words to 58.
+    names the archive has never read correctly, and what takes the menu from 77
+    of 217 badly-read words to 83.
 
     So: the archive's first guess, then the ink's readings that are names
     somebody has read before, then the rest of the archive's, then the ink's

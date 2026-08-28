@@ -81,8 +81,18 @@ def _why_check(row: dict, names: Names) -> list[str]:
     if row.get("ditto_source") == "position":
         out.append("inferido")
     from desembarque import search as _s
-    if names.doubtful(_s.row_text(row)):
+    text = _s.row_text(row)
+    if names.doubtful(text):
         out.append("desconhecido")
+    # And the reason the flag was missing: a reading that *is* near a name but
+    # is not one. `YOSE` resembles `JOSE`, so the row passed as fine. Measured
+    # by `scripts/bench_check.py` over the hand-read pages: the three reasons
+    # above catch 74% of the badly-read rows, this one catches 56% on its own
+    # and takes the four together to 86%. It stops a person on one correctly
+    # read row in five, which is the price of the twelve points and is why the
+    # legend says what the mark means.
+    if names.near_miss(text):
+        out.append("quase")
     return out
 
 

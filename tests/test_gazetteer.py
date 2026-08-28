@@ -92,12 +92,12 @@ def test_an_empty_reading_is_not_doubtful():
 
 
 def test_the_menu_puts_the_archive_s_first_guess_first_then_what_the_ink_supports():
-    """Measured, not chosen: over the five hand-read pages `bench_menu.py` says
-    the archive's own first suggestion is right for 24% of badly-read words —
-    better than anything else at rank one — while the candidates built from
-    the strokes are what lift the menu from 47 of 112 words to 58. So the
-    archive speaks first, then the ink's readings that are names somebody has
-    read, then the rest of the archive, then the ink's unknown readings."""
+    """Measured, not chosen: over the six hand-read pages `bench_menu.py` says
+    the archive's own first suggestion is right for 23% of badly-read words —
+    better than anything else at rank one — while the candidates built from the
+    strokes are what lift the menu from 77 of 217 words to 83. So the archive
+    speaks first, then the ink's readings that are names somebody has read,
+    then the rest of the archive, then the ink's unknown readings."""
     from desembarque.gazetteer import Names, menu_for
     names = Names({"MARIA": 40, "MARQUES": 5, "MARIO": 2})
     got = menu_for("ELBARIA", names, limit=6)
@@ -125,14 +125,48 @@ def test_the_two_sources_agreeing_is_said_once_and_in_the_better_place():
     assert "haste alta" in jose[0]["why"]
 
 
-def test_the_menu_offers_a_reading_no_name_list_contains():
-    """The archive has not read every name correctly yet, so a candidate that
-    spells nothing known is still offered — below the ones that do."""
+def test_the_menu_offers_readings_no_name_list_contains():
+    """The archive has not read every name correctly yet — Guberti, Alfieri,
+    Ponticelli — so readings that spell nothing known are still offered. Which
+    of them come first is decided by `scripts/bench_menu.py` and not here: the
+    tail is ordered by the rules measured finding real names, and the minim
+    re-cut this word turns on has found one name in 217 so far."""
     from desembarque.gazetteer import Names, menu_for
+    from desembarque import strokes
     got = menu_for("POUTICELLI", Names({"MARIA": 3}), limit=30)
-    assert any(g["name"] == "PONTICELLI" for g in got)
+    assert got and all(g["how"] == "traço" for g in got)
+    assert all(g["score"] is None for g in got)
+    assert any(c.word == "PONTICELLI" for c in
+               strokes.variants("POUTICELLI", known={"MARIA"}, limit=200))
 
 
 def test_the_menu_never_offers_the_word_that_is_already_on_screen():
     from desembarque.gazetteer import Names, menu_for
     assert all(g["name"] != "MARIA" for g in menu_for("MARIA", Names({"MARIA": 9})))
+
+
+def test_a_reading_one_stroke_from_a_name_is_the_strongest_sign_of_a_misread():
+    """The flag was asking the opposite question. `YOSE` resembles `JOSE`, so a
+    row carrying it passed as fine, and `fore Gulerti` with it. Not a name and
+    not near one is a rare name — the archive is full of them and they are
+    correct. Not a name *but one stroke from one* is a mistake."""
+    from desembarque.gazetteer import Names
+    archive = Names({"JOSE": 90, "MARIA": 161, "SANCHEZ": 12})
+    assert archive.near_miss("Yosé Fernandes")
+    assert archive.near_miss("Mania")
+    assert not archive.near_miss("Maria"), "a name is not a near miss for itself"
+
+
+def test_a_rare_name_nobody_has_read_is_not_called_a_near_miss():
+    from desembarque.gazetteer import Names
+    archive = Names({"JOSE": 90, "MARIA": 161})
+    assert not archive.near_miss("Kowalczyk")
+    assert archive.doubtful("Kowalczyk"), "it is still unknown to this archive"
+
+
+def test_the_two_reasons_are_asked_separately():
+    """They mean different things to a person: *nobody here has read this name*
+    and *this is one stroke off a name read ninety times*."""
+    from desembarque.gazetteer import Names
+    archive = Names({"JOSE": 90})
+    assert archive.near_miss("Yose") and not archive.doubtful("Yose")

@@ -26,7 +26,7 @@ from functools import lru_cache
 
 # How many strokes each minim letter is worth. `r` is two — the stem and the
 # shoulder — which is why `ri` and `ni` are the same ink and `Mania` is `Maria`.
-MINIMS = {"I": 1, "U": 2, "N": 2, "R": 2, "M": 3, "W": 3}
+MINIMS = {"I": 1, "U": 2, "V": 2, "N": 2, "R": 2, "M": 3, "W": 3}
 
 # One stroke and a direction: which way the tall part goes, and whether it goes
 # above the line or below it.
