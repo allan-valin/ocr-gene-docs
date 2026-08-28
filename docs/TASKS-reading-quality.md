@@ -206,11 +206,25 @@ is written down beside it, not when the code runs.
             the typewritten one — it measures eight: *nome, numero,
             nacionalidade, estado, profissao, procedencia, classe,
             observacoes*. **Not `idade`**, on a printing that spells it
-            *Edade*, which the field table now knows and which did not fix it,
-            so its heading is either unread or not on the heading line as the
-            detector cuts it. That is the next thing to look at, and it is why
-            the first column read will be measured on a page where the heading
-            was found.
+            *Edade*. The boxes for *Edade* and *Sexo* are found and come back
+            **empty** — two narrow words on a printing the recogniser reads
+            everywhere else — so they are named by their place in the line,
+            which these forms print in one order, and marked `named_by:
+            "ordem"` against `"impresso"` for the ones that were read. Only
+            where the order leaves exactly as many names as there are unread
+            boxes: three boxes where two names fit is not a column anybody can
+            name. That page now measures ten.
+      - [x] **A first look at reading one.** `cells_from_bands` over
+            BS.ENT.017397 p2 with the real recogniser: the nationality column
+            comes back as `ISPAGNIA`, `ESPANOIY`, `SEANOL`, `RASIERAL` against
+            *ESPANHOLA*, *BRASILEIRA* — the shape of a column that can be read
+            and snapped to a closed vocabulary. The age column comes back as
+            `_`, `1`, `一`: its heading is 2.8% of the sheet wide and the
+            figures are not under it, so the edge halfway to the next heading
+            is the wrong rule for a narrow heading over a wide column. **No
+            column reading ships on this**: `scripts/bench_columns.py` and a
+            per-column truth page come first, and the hand transcription of
+            this very page is the truth for the typed half of it.
       - [ ] Read them: crop each band × column, recognise, and store the
             reading beside the snapped value, never instead of it.
             `engine_paddle.cells_from_bands` is the cutting half, built and

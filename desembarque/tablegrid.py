@@ -142,6 +142,55 @@ def _text_of(box: dict, labelled: list[dict]) -> str:
     return ""
 
 
+# The order these forms print their columns in, after the name. Every printing
+# in the corpus prints a subset of this, in this order, which is what lets an
+# unread heading be named by where it sits.
+ORDER = ["nacionalidade", "idade", "sexo", "estado", "profissao",
+         "procedencia", "destino", "classe", "observacoes"]
+
+
+def _name_the_unread(heads: list[dict]) -> list[dict]:
+    """The headings the recogniser could not read, named by their place.
+
+    On BS.ENT.017397 the boxes for *Edade* and *Sexo* are found and come back
+    empty — two narrow words on a printing read cleanly everywhere else — and
+    without them the two columns between nationality and civil state can be
+    cropped by nobody. Their place says which they are, since these forms print
+    the same columns in the same order.
+
+    An inference, so it says it is one, and it is only made where the order
+    leaves exactly as many names as there are unread boxes. Three boxes where
+    two names fit is not a column anybody can name, and a column named wrong is
+    worse than a column nobody reads.
+    """
+    out = []
+    for i, h in enumerate(heads):
+        if h["field"]:
+            out.append(h)
+            continue
+        before = [x["field"] for x in heads[:i] if x["field"]]
+        after = [x["field"] for x in heads[i + 1:] if x["field"]]
+        lo = (ORDER.index(before[-1]) + 1) if before else 0
+        hi = ORDER.index(after[0]) if after else len(ORDER)
+        span = ORDER[lo:hi]
+        unread_here = _unread_run(heads, i)
+        if len(span) == len(unread_here):
+            out.append({**h, "field": span[unread_here.index(i)],
+                        "named_by": "ordem"})
+    return out
+
+
+def _unread_run(heads: list[dict], i: int) -> list[int]:
+    """The indices of the unread headings in the same gap as this one."""
+    a = i
+    while a > 0 and not heads[a - 1]["field"]:
+        a -= 1
+    b = i
+    while b + 1 < len(heads) and not heads[b + 1]["field"]:
+        b += 1
+    return list(range(a, b + 1))
+
+
 def _other_columns(right: list[dict], name_x1: float, width: float,
                    labelled: list[dict] | None = None) -> list[dict]:
     """Every column the page prints a heading for, beside the name.
@@ -158,15 +207,19 @@ def _other_columns(right: list[dict], name_x1: float, width: float,
     heads = []
     for f in sorted(right, key=lambda f: f["x0"]):
         field = _field(_text_of(f, labelled))
-        if field and all(h["field"] != field for h in heads):
-            heads.append({"field": field, "x0": f["x0"], "x1": f["x1"]})
+        if field and any(h["field"] == field for h in heads):
+            continue
+        heads.append({"field": field, "x0": f["x0"], "x1": f["x1"],
+                      "named_by": "impresso" if field else None})
+    heads = _name_the_unread(heads)
     out = []
     for i, h in enumerate(heads):
         left_edge = name_x1 if i == 0 else (heads[i - 1]["x1"] + h["x0"]) / 2
         right_edge = (width if i == len(heads) - 1
                       else (h["x1"] + heads[i + 1]["x0"]) / 2)
         out.append({"field": h["field"], "box": (left_edge, right_edge),
-                    "heading": (h["x0"], h["x1"])})
+                    "heading": (h["x0"], h["x1"]),
+                    "named_by": h.get("named_by") or "impresso"})
     return out
 
 

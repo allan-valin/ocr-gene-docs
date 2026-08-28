@@ -368,3 +368,46 @@ def test_the_headings_are_named_from_the_boxes_that_were_read():
     assert {c["field"] for c in col["others"]} == {
         "nacionalidade", "idade", "estado", "profissao", "procedencia",
         "destino", "classe", "observacoes"}
+
+
+def test_a_heading_the_recogniser_could_not_read_is_named_by_its_place():
+    """On BS.ENT.017397 the boxes for *Edade* and *Sexo* are found and come
+    back empty — they are two narrow words in a printing the recogniser reads
+    everywhere else. Their place in the line says which they are: these forms
+    print the same columns in the same order, and two unread boxes between
+    *Nacionalidade* and *Estado* can only be those two. Named that way and
+    marked as named that way, because it is an inference and the printed ones
+    are not."""
+    from desembarque.tablegrid import columns
+    W, H = 1000, 1400
+    def box(x0, x1, text=None):
+        f = {"x0": x0 * W, "y0": 100, "x1": x1 * W, "y1": 130}
+        if text is not None:
+            f["text"] = text
+        return f
+    frs = [box(0.20, 0.35, "Nome e Cognomes"), box(0.05, 0.12, "Ordem"),
+           box(0.37, 0.44, "Nacionalidade"), box(0.46, 0.49),
+           box(0.50, 0.53), box(0.55, 0.62, "Estado civil"),
+           box(0.64, 0.70, "Profissão")]
+    got = {c["field"]: c for c in columns(frs, W, H)["others"]}
+    assert set(got) == {"nacionalidade", "idade", "sexo", "estado", "profissao"}
+    assert got["idade"]["named_by"] == "ordem"
+    assert got["nacionalidade"]["named_by"] == "impresso"
+    assert got["idade"]["box"][0] < got["sexo"]["box"][0]
+
+
+def test_an_unread_heading_with_no_place_to_put_it_is_left_out():
+    """Three unread boxes where the order allows two is not a column anybody
+    can name, and a column named wrong is worse than one nobody reads."""
+    from desembarque.tablegrid import columns
+    W, H = 1000, 1400
+    def box(x0, x1, text=None):
+        f = {"x0": x0 * W, "y0": 100, "x1": x1 * W, "y1": 130}
+        if text is not None:
+            f["text"] = text
+        return f
+    frs = [box(0.20, 0.35, "Nome e Cognomes"), box(0.05, 0.12, "Ordem"),
+           box(0.37, 0.44, "Nacionalidade"), box(0.46, 0.48), box(0.49, 0.51),
+           box(0.52, 0.54), box(0.55, 0.62, "Estado civil")]
+    got = {c["field"] for c in columns(frs, W, H)["others"]}
+    assert got == {"nacionalidade", "estado"}
