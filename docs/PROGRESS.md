@@ -6,6 +6,119 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-08-28 — the whole archive, measured instead of extrapolated
+
+Allan away until 13:00. Everything below is committed and pushed. **Start here.**
+
+### What the index costs at 7,679 dossiers, now that it has been stood up
+
+Every number this log has printed about the corpus past 660 dossiers was an
+extrapolation from an eleventh of it, and the two structures that grow worst —
+the trigram postings and the folded readings — were both written after the last
+one. `scripts/bench_scale.py` stands the transcriptions on disk up two, four
+and twelve times over as symlinks (no disk, no reading) and measures each size
+in a child process with an address-space cap, so a size the laptop cannot hold
+kills the child rather than the desktop.
+
+Twelve times is 7,920 dossiers, which is the archive with room to spare.
+
+| at 7,920 dossiers, 372,816 rows | this morning | now |
+|---|---|---|
+| cold load, one process | 96 s | **15 s** |
+| the keystroke's own overhead, before a row is scored | 258 ms | **64 ms** |
+| `Contadore` — trigrams only | 105 ms | **7 ms** |
+| `Manoel da Cruz Valdivia` — letter pass, ship named | 365 ms | **47 ms** |
+| `Maria Silva Gelria 1924` — letter pass over a year | 486 ms | **202 ms** |
+| the index in memory | 295 MB | 297 MB |
+
+**Memory is not the wall and this log can stop saying it is.** The whole
+archive's rows, postings, crossings and folded readings together are under
+300 MB — a third of what the November note assumed wanted a database. What did
+not survive the size was everything asked *per keystroke*, and four things were
+paying for it:
+
+* **The keystroke spent its time in `pathlib`.** A `Path` built per file and a
+  sort that compares them part by part: 200 ms of the 258 that `/api/search`
+  spent finding out that nothing had changed. `os.scandir` hands back the name
+  and the stat together and the sort is over strings. The flattening itself is
+  kept now too — copying 370,000 row references to discover the corpus is as it
+  was — and dropped as soon as *this* load reads something, which is not the
+  same as the global count of readings: a bench pointed at its own directory
+  bumps that without touching a row of the application's index. For the same
+  reason the eviction sweep is confined to the directory being loaded, so the
+  bench and the application stop emptying each other's caches.
+* **A cold load spent 21 of its 25 seconds on the form's own printing.** Every
+  word of every row was matched letter by letter against forty printed words.
+  A ratio is twice the matching letters over the two lengths together and the
+  matches cannot outnumber the shorter word, so a word too short against a
+  printed one is ruled out without being matched at all, and `quick_ratio`
+  bounds it again by the letters they share in any order; the answer is then
+  remembered per word, and the corpus repeats its words endlessly. A test holds
+  the fast path to what the plain measure returns on the words this corpus
+  trips on — `gomes` against `cognomes`, `romano` against `comando`.
+* **Counting the trigram overlap was a Python loop over every posting.** Five
+  million dictionary lookups for `Maria Silva` over the whole archive. The
+  postings are arrays of machine integers, so the count, the arithmetic and the
+  best-of-two-readings are done over the lot at once with numpy — a dependency
+  the page geometry has had from the start. Two thirds of what came back was
+  waste: `search` drops a row whose name score is under the floor before asking
+  it anything else, and 67,000 of the 103,000 rows that query returned were
+  under it, sharing the padding trigrams of a name and nothing else. The floor
+  is the caller's, so a caller that lowers it still gets what the higher one
+  hid.
+* **Three places asked the corpus what ships it holds by walking every row.**
+  Which ships and lines the index names is a fact about the corpus, not the
+  query, and the rows have carried an index by ship, line and year since
+  yesterday. The passengers of a named ship, line or year now come out of it by
+  row number instead of by filtering the corpus.
+
+Nothing above moves a result, and the point of the exercise was to be sure of
+that: findable is 122 of 142 with the crossing named and 89 without, the same
+as at the start of the morning, and the suite is at 527 with new tests pinning
+the bulk count to what scanning every row returns, score for score, and the
+indexed answers for ship, line and year queries to the scanned ones.
+
+The one that nearly went wrong is worth writing down. The flattened index was
+first stamped with the global count of readings, which is bumped by *any* load;
+two loads of two directories then invalidated each other on every request and
+the cache would have been dead weight. The test that caught it is two caches in
+one process, which is exactly what a bench beside the application is.
+
+### The 226 pages that still read nothing
+
+The retry pass from yesterday is running again, three workers, from where it
+stopped: 226 pages in 157 records, about five minutes a record. It resumes from
+what is on disk, writes each record as its pages are read, and a page it
+repairs leaves the list.
+
+```sh
+.venv-ocr/bin/python scripts/retry_unknown.py            # resumes; writes as it goes
+.venv/bin/python scripts/status.py                       # says how many are left
+```
+
+Twice today a heavy background job was started twice — the second launch of the
+same command left six OCR workers on a fourteen-gigabyte laptop and took the
+free memory to two gigabytes. Check `ps` for the job before starting it, not
+only afterwards.
+
+### Next, in order
+
+1. **The letter pass is what a keystroke now costs.** 202 ms of the 202 for a
+   query naming a year, because a year names 20,000 rows at the archive's size
+   and each is compared letter by letter. `difflib`'s cheap ratios refuse 18,000
+   of them and 3,900 reach the real comparison. The bound they apply — letters
+   in common regardless of order — is one numpy could apply to the whole pool at
+   once from a character count kept beside each reading; that is the next
+   measurable thing, and it is worth roughly half of what is left.
+2. **Handwriting recognition, still the ceiling.** Unchanged: 18 of the 23
+   remaining misses do not resemble the name on the page. What is left is a
+   model trained on this archive's own hand, or a GPU.
+3. **Rebuild `data/names.json` after the retry finishes** (`--min 2`), and
+   `scripts/reparse_voyages.py` before it.
+4. **Whether to download the other 91% of the archive** is still Allan's call,
+   and the number that decides it is unchanged: ~3 hours of polite downloading
+   against ~5 days of reading.
+
 ## 2026-08-27 — the crossing, and the pages nobody was told about
 
 Allan away for the day; the laptop worked through it. Everything below is
