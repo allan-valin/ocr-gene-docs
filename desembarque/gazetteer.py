@@ -128,7 +128,7 @@ class Names:
         return all(self.score(w) < 1.0 and not self.suggest(w, limit=1)
                    for w in words)
 
-    def near_miss(self, text: str) -> bool:
+    def near_miss(self, text: str, spoken: set[str] | None = None) -> bool:
         """Whether some word here is not a name but is one stroke from one.
 
         `doubtful` asks the opposite question — whether *nothing* in the row
@@ -144,7 +144,7 @@ class Names:
         question is what the ink supports and not which words are spelled
         alike.
         """
-        known = {fold(n) for n in self.counts}
+        known = {fold(n) for n in self.counts} | {fold(n) for n in (spoken or ())}
         for w in fold(text).split():
             if len(w) < 3 or w in known:
                 continue
@@ -256,7 +256,11 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
                                "este acervo ainda não o leu" if from_list else "")),
                     "seen": names.counts.get(c.word, 0),
                     "score": None})
-    seen_names = [g for g in ink if g["name"].replace(" ", "") in read_here]
+    # Among the ink's readings that are names this archive has read, the one it
+    # has read most often goes first: same candidates, and 0.359 of badly-read
+    # words answered by rank three against 0.327 in alphabetical order.
+    seen_names = sorted((g for g in ink if g["name"].replace(" ", "") in read_here),
+                        key=lambda g: (g["cost"], -g["seen"]))
     from_list = [g for g in ink if g["how"] == "traço+lista"][:SPOKEN_LIMIT]
     unknown = sorted((g for g in ink if g["name"].replace(" ", "") not in known
                       and g["how"] != "traço+lista"),

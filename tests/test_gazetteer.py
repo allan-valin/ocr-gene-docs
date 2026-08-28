@@ -201,3 +201,13 @@ def test_the_language_list_is_not_counted_as_something_the_archive_read():
     got = menu_for("SANTOSPOR", Names({"MARIA": 40}), spoken={"SANTOS"}, limit=10)
     assert all(g["seen"] == 0 for g in got if g["how"] == "traço+lista")
     assert len(spoken_names(Path("/nonexistent/language_names.json"))) == 0
+
+
+def test_the_language_list_can_be_asked_about_a_near_miss_too():
+    """Measured and reported rather than shipped: over the hand-read pages the
+    list adds one badly-read row to what the flag catches — 0.008 — so the
+    marking asks the archive and the menu asks both."""
+    from desembarque.gazetteer import Names
+    archive = Names({"MARIA": 40})
+    assert not archive.near_miss("Santosa")
+    assert archive.near_miss("Santosa", spoken={"SANTOS"})

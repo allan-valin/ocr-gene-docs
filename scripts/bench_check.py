@@ -25,13 +25,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from desembarque import search as searchlib          # noqa: E402
-from desembarque.gazetteer import Names              # noqa: E402
+from desembarque.gazetteer import Names, spoken_names  # noqa: E402
 from desembarque.truthset import fold, rows_from_disk  # noqa: E402
 
 CHECK_SCORE = 0.85
 
 
-def reasons(row: dict, names: Names) -> list[str]:
+def reasons(row: dict, names: Names, spoken: set[str] | None = None) -> list[str]:
     """Every reason this row is worth a second look — the three the server
     gives today, and the one the plan argues for."""
     out = []
@@ -45,6 +45,8 @@ def reasons(row: dict, names: Names) -> list[str]:
         out.append("desconhecido")
     if names.near_miss(text):
         out.append("quase")
+    if spoken and names.near_miss(text, spoken=spoken) and "quase" not in out:
+        out.append("quase-lista")
     return out
 
 
@@ -54,15 +56,16 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     names = Names.load(ROOT / "data" / "names.json")
+    spoken = spoken_names(ROOT / "data" / "language_names.json")
     rows, seen = rows_from_disk()
     scored = []
     for p in rows:
         scored.append({"bad": fold(p["truth"]) != fold(p["read"]),
-                       "why": reasons(p["row"], names)})
+                       "why": reasons(p["row"], names, spoken)})
     bad = [r for r in scored if r["bad"]]
     good = [r for r in scored if not r["bad"]]
 
-    every = ["score", "inferido", "desconhecido", "quase"]
+    every = ["score", "inferido", "desconhecido", "quase", "quase-lista"]
     report = {"rows": len(scored), "bad": len(bad), "good": len(good),
               "dictionary": len(names), "reasons": {}}
     for why in every + ["hoje", "todas"]:

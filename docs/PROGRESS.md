@@ -6,6 +6,107 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-08-28, evening — the reading, not the retrieval
+
+Allan away 21:00–23:00. Everything below is committed and pushed, tests green
+(591 Python assertions, 93 in each of Chromium and Firefox). Work order and the
+measurement beside each step: `docs/TASKS-reading-quality.md`; the argument is
+in `docs/superpowers/plans/2026-08-28-reading-quality.md`.
+
+**Two instruments exist that did not, and every claim below is one of their
+numbers.** `scripts/bench_menu.py` asks whether the name a page carries is in
+the menu a person opens on a badly-read word, and at what rank; it pairs the
+hand-read pages in `data/truth` against the readings already stored, so no
+recogniser runs. `scripts/bench_check.py` asks which reasons for a second look
+actually find the badly-read rows, and how often each stops somebody on a row
+that was right. The pairing both share is `desembarque/truthset.py`.
+
+### The menu now reaches the right name twice as often as the archive alone
+
+| the menu the server returns | true name offered | @1 | @3 | @5 | @10 |
+|---|---|---|---|---|---|
+| the archive's names, as it shipped this morning | 77 of 217 | 0.157 | 0.309 | 0.355 | 0.355 |
+| + candidates built from the strokes | 83 of 217 | 0.161 | 0.323 | 0.378 | 0.382 |
+| + a hand-written list of names these languages use | 87 of 217 | 0.161 | 0.359 | 0.392 | 0.401 |
+
+`desembarque/strokes.py` generates what else the same ink supports: minim runs
+re-cut every way the stroke count allows, a tall stroke read the other way, a
+round letter read as its neighbour, the clerks' abbreviations, ink trimmed at an
+edge — which on these pages is mostly the next column bleeding into the name
+strip, `SANTOSPOR` for *Santos* — a looped capital read back from the two or
+three letters it was cut into, and a word the clerk wrote as two. Per rule,
+alone, over 217 badly-read words: ascender 21, edge 9, two changes 9, round 8,
+capital 7, space 5, minims 1, abbreviation 0. The minim re-cut is the model the
+plan is built on and has found one name so far; it is ranked last among the
+readings nothing backs, and it stays until the pages its examples live on are
+scorable.
+
+`data/language_names.json` is 259 names written by hand from the languages these
+ships carried. It is a different claim from `data/names.json` and kept apart
+from it: *these languages use this name*, never *this archive has read it*. It
+ranks below everything the archive has read, is capped at four per menu, and the
+names that appear only on the hand-read pages were left out so the bench
+measures the rules and not the file. A twelve-name menu is what ships; sixteen
+buys 0.005 and costs a person the scan.
+
+### The marking was asking the opposite question
+
+`doubtful` flagged a row when *nothing* in it resembled a name this archive
+carries. A reading nobody here has read is usually a rare name — this archive is
+full of them and they are correct. A reading one re-cut minim from a name read
+ninety times is the strongest evidence of a misread the tool has, and it was
+the case the flag let straight through: `YOSE` resembles `JOSE`, so the row
+passed.
+
+| reason | catches the badly-read rows | stops on a good one |
+|---|---|---|
+| score (engine unsure) | 0.595 | 0.036 |
+| inferido (the mark's words inherited) | 0.314 | 0.036 |
+| desconhecido (nothing here is like a name) | 0.000 | 0.000 |
+| **quase (one stroke from a name)** | **0.587** | **0.214** |
+| the three there were | 0.702 | 0.071 |
+| all four | 0.868 | 0.250 |
+
+The language list adds 0.008 to that and is not used for the flag.
+
+### A correction no longer freezes the rows beside it
+
+The mark saying a person was here sat on the *record*, so one corrected row
+held forty untouched ones at the quality of the day they were first read — on
+exactly the documents being worked through. It is asked per row now: a row
+somebody typed into, chose a reading for, or ticked is theirs and survives a
+re-read verbatim, and everything else is the engine's.
+
+Underneath it was a second loss. The review screen posts the page in front of
+the reader and the save wrote that list as the record's whole `rows`, so
+correcting page 2 of BS.ENT.013947 deleted pages 3 to 11. Only the saved page is
+replaced now. **BS.ENT.013947 was read again to prove it**: 406 rows came back
+on pages 3 to 11, the typed row on page 2 kept verbatim — which is also why the
+benches score 149 rows instead of 87.
+
+The two values Allan saw on BS.ENT.013942 — `SIRVIENTA`, `BELGA` — are not
+fossils of an early pass. Both carry `edits` stamped at the review screen on
+2026-08-21, and the engine has never written those columns in any of 660
+records. Nothing was deleted; a value a person typed now says so on screen.
+
+### What is next, in order
+
+1. **Stop asserting surname and given** (§1), the half that is left. The
+   repetition mark now inherits the words written above it, from the left,
+   counting only the words its own row does not write — no claim about which
+   word is the family name, and `bench_search.py --matrix` unmoved at 86/95/99
+   of 142. But the engine still calls `split_name`, and `surname`/`given` are
+   still written and read by search, export, the voyages report and the review
+   screen. 108 test references sit on those two fields; it is a session of its
+   own.
+2. **The other columns** (§4), cheapest first — age, sex, class, then
+   nationality, profession and port against gazetteers. `scripts/bench_columns.py`
+   and a per-column truth page do not exist yet, and nothing should ship without
+   them.
+3. **Re-read the corpus** once §1 lands, and re-run both benches: five of the
+   six truth pages are read by an engine whose rows predate every change above.
+4. The language prior (§7), which depends on 2.
+
 ## 2026-08-28 — the whole archive, measured instead of extrapolated
 
 Allan away until 13:00. Everything below is committed and pushed. **Start here.**
