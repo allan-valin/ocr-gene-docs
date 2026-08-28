@@ -303,6 +303,52 @@ def name_strip_box(geo, size: tuple[int, int]) -> tuple[int, int]:
     return max(0, int((nx0 - 0.004) * W)), min(W, int((nx1 + 0.004) * W))
 
 
+def cells_from_bands(geo, size: tuple[int, int], field: str,
+                     recognize: Callable[[list], list[tuple[str, float]]],
+                     crop: Callable[[int, tuple[int, int, int, int]], object],
+                     ) -> list[dict]:
+    """One cell of one column per band, in page order.
+
+    The same shape as `rows_from_bands`, deliberately: the row number means the
+    same thing in both, so a cell can be put beside the name it belongs to, and
+    a short answer from the recogniser pads with nulls rather than shifting
+    every later row up one.
+
+    A column the page never measured returns nothing at all. The engine has
+    written null in these fields on every row in the corpus by construction,
+    and a guessed edge would turn that into a wrong reading, which is worse.
+    """
+    W, H = size
+    cols = getattr(geo, "normalized_columns", lambda: {})()
+    box = cols.get(field)
+    if not box:
+        return []
+    x0 = max(0, int(box[0] * W))
+    x1 = min(W, int(box[1] * W))
+
+    bands = geo.normalized_rows()
+    boxes, keep = [], []
+    for i, (bt, bb) in enumerate(bands):
+        a = max(0, int(bt * H) - PAD_PX)
+        b = min(H, int(bb * H) + PAD_PX)
+        if b - a < MIN_ROW_PX:
+            continue
+        boxes.append((x0, a, x1, b))
+        keep.append(i)
+
+    crops = [crop(i, bx) for i, bx in zip(keep, boxes)]
+    said = list(recognize(crops)) if crops else []
+    said += [("", 0.0)] * (len(crops) - len(said))
+    by_band = dict(zip(keep, said))
+
+    out = []
+    for i in range(len(bands)):
+        text, score = by_band.get(i, ("", 0.0))
+        out.append({"n": i + 1, "text": text or "",
+                    "conf": round(float(score), 3)})
+    return out
+
+
 def stored_geometry(geo, measured_by: str, read_from: str) -> dict:
     """What is kept about how a page was measured.
 

@@ -203,6 +203,14 @@ is written down beside it, not when the code runs.
             answer.
       - [ ] Read them: crop each band × column, recognise, and store the
             reading beside the snapped value, never instead of it.
+            `engine_paddle.cells_from_bands` is the cutting half, built and
+            tested the way `rows_from_bands` was — the recogniser injected, so
+            it is testable without the model, a short answer padded with nulls
+            rather than shifting later rows up one, and a column the page never
+            measured returning nothing at all rather than a guessed edge. What
+            is left is calling it from `transcribe_page` and deciding what a
+            cell costs: a page is 40 bands × 8 columns, and the recogniser is
+            twenty seconds a page for one column.
       - [ ] `scripts/bench_columns.py` and a per-column truth page, before any
             of it ships.
 - [ ] **T11 — The language prior** (§7). Depends on T10.

@@ -669,3 +669,55 @@ def test_the_stored_geometry_carries_every_column_the_page_measured():
 
     assert "all_columns" not in stored_geometry(Older(), measured_by="rules",
                                                 read_from="mask")
+
+
+def test_a_column_is_read_band_by_band_like_the_name_is():
+    """The same shape as `rows_from_bands`, and for the same reason: a short
+    result from the recogniser pads with nulls rather than shifting every later
+    row up one, which is a silent corruption nobody would see."""
+    from desembarque.engine_paddle import cells_from_bands
+
+    class Geo:
+        def normalized_rows(self): return [(0.10, 0.14), (0.15, 0.19), (0.20, 0.24)]
+        def normalized_columns(self): return {"nome": (0.05, 0.35), "idade": (0.44, 0.49)}
+
+    seen = []
+    def crop(i, box):
+        seen.append((i, box))
+        return f"crop{i}"
+    got = cells_from_bands(Geo(), (1000, 2000), "idade",
+                           lambda crops: [("23", 0.9), ("37", 0.8)], crop)
+    assert got == [{"n": 1, "text": "23", "conf": 0.9},
+                   {"n": 2, "text": "37", "conf": 0.8},
+                   {"n": 3, "text": "", "conf": 0.0}]
+    # cropped inside the column the page measured, not the whole width
+    assert all(430 <= box[0] and box[2] <= 500 for _i, box in seen)
+
+
+def test_a_column_the_page_never_measured_is_not_invented():
+    from desembarque.engine_paddle import cells_from_bands
+
+    class Geo:
+        def normalized_rows(self): return [(0.1, 0.2)]
+        def normalized_columns(self): return {"nome": (0.05, 0.35)}
+
+    assert cells_from_bands(Geo(), (1000, 2000), "idade",
+                            lambda crops: [("23", 0.9)], lambda i, b: b) == []
+
+
+def test_a_band_too_short_to_hold_writing_is_skipped_and_still_numbered():
+    """The same rule the name column follows, so a row number means the same
+    thing in both and a cell can be put beside the name it belongs to."""
+    from desembarque.engine_paddle import cells_from_bands
+
+    class Geo:
+        # a band at the very top of the sheet, too shallow to hold writing
+        # even with the padding the crops carry
+        def normalized_rows(self): return [(0.0, 0.0), (0.15, 0.19)]
+        def normalized_columns(self): return {"nome": (0.05, 0.35), "idade": (0.44, 0.49)}
+
+    got = cells_from_bands(Geo(), (1000, 2000), "idade",
+                           lambda crops: [("37", 0.8)], lambda i, b: f"c{i}")
+    assert [c["n"] for c in got] == [1, 2]
+    assert got[0] == {"n": 1, "text": "", "conf": 0.0}
+    assert got[1]["text"] == "37"
