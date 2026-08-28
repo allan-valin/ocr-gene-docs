@@ -1211,3 +1211,19 @@ def test_naming_the_crossing_asks_the_stricter_question():
     # reads it better
     assert named["Maria Silva Martinez"] == 0.71
     assert alone["Maria Silva Martinez"] == 1.0
+
+
+def test_a_row_the_limit_cut_off_is_not_offered_again_as_a_passenger():
+    """`Formosa` is a ship and a surname, so the ship's own passengers are
+    added below the name matches — and must not include rows the name search
+    already found and the limit merely cut off."""
+    rows = [{"doc": "D", "file": "d.pdf", "page": 2, "row": i + 1,
+             "text": f"FORMOSA {'ABCDEFGHIJ'[i % 10]}", "ship": "FORMOSA"}
+            for i in range(40)]
+    hits = search(rows, "Formosa", limit=5)
+    keys = [(h["doc"], h["row"]) for h in hits]
+    assert len(hits) == 5
+    assert len(set(keys)) == 5, "a row was offered twice"
+    named = {k for k, h in zip(keys, hits) if h.get("matched") != "ship"}
+    aboard = {k for k, h in zip(keys, hits) if h.get("matched") == "ship"}
+    assert not (named & aboard)

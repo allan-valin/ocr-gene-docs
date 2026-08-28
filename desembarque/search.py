@@ -1007,10 +1007,11 @@ def search(rows: list[dict], query: str, limit: int = 50,
     terms = [ship_term] if ship_term else []
     lines = line_scores(rows, line_terms)
     scored = []
-    # Rows the search cannot show, kept as keys: the ship's own passengers are
-    # added only for rows the name search did not already return, and that has
-    # to stay true of the rows the limit cut off.
-    cut: set[tuple] = set()
+    # The rows the limit cut off, kept until it is known whether anything will
+    # be added below the name matches — the ship's own passengers are added
+    # only for rows the name search did not already return, and that has to
+    # stay true of the rows nobody will see.
+    dropped: list | None = None
     # Each candidate comes with its name score: the better of what the row was
     # read as and what the second reading said, which differ only where the
     # hand was hard — exactly where a search fails.
@@ -1028,7 +1029,7 @@ def search(rows: list[dict], query: str, limit: int = 50,
         # name score itself and the rows past the limit cannot appear. Building
         # a hit dict for each of them was most of what a broad query cost:
         # 50,000 dictionaries to show fifty.
-        cut = {(r["doc"], r["row"]) for r, s in pool if s >= min_score}
+        dropped = pool
         pool = heapq.nsmallest(limit, pool,
                                key=lambda p: (-p[1], p[0].get("file") or "",
                                               p[0]["row"] or 0))
@@ -1060,13 +1061,18 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # that exact name was nowhere in the results. The people aboard are added
     # after the name matches rather than instead of them: `Formosa` is a ship
     # and a surname, and somebody typing it means a person more often than not.
-    seen = cut | {(h["doc"], h["row"]) for h in scored}
+    seen = {(h["doc"], h["row"]) for h in scored}
     aboard = _aboard(rows, query, seen)
     if not aboard:
         # The line is asked the same way the ship is, and for the dossiers that
         # name no ship it is the only way to ask: two thirds of the corpus
         # states a line, a third a ship.
         aboard = _sailed(rows, query, seen)
+    if aboard and dropped is not None:
+        # Only now is it worth walking the rows the limit cut off: this fires
+        # for a query that is somebody's surname and a ship's name at once.
+        cut = {(r["doc"], r["row"]) for r, s in dropped if s >= min_score}
+        aboard = [h for h in aboard if (h["doc"], h["row"]) not in cut]
     if not aboard and years and len(fold(name_q)) < MIN_QUERY:
         # A year typed on its own is the same question as a ship typed on its
         # own, and it was stripped out of the query as a year should be —
