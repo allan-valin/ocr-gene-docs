@@ -89,3 +89,50 @@ def test_an_empty_reading_is_not_doubtful():
     """A blank row is a fact about the page, not a suspect one."""
     assert not ARCHIVE.doubtful("")
     assert not ARCHIVE.doubtful("  ")
+
+
+def test_the_menu_puts_the_archive_s_first_guess_first_then_what_the_ink_supports():
+    """Measured, not chosen: over the five hand-read pages `bench_menu.py` says
+    the archive's own first suggestion is right for 24% of badly-read words —
+    better than anything else at rank one — while the candidates built from
+    the strokes are what lift the menu from 47 of 112 words to 58. So the
+    archive speaks first, then the ink's readings that are names somebody has
+    read, then the rest of the archive, then the ink's unknown readings."""
+    from desembarque.gazetteer import Names, menu_for
+    names = Names({"MARIA": 40, "MARQUES": 5, "MARIO": 2})
+    got = menu_for("ELBARIA", names, limit=6)
+    assert got[0]["name"] == "MARIA"
+    assert {g["how"] for g in got} <= {"arquivo", "traço", "arquivo+traço"}
+
+
+def test_a_candidate_from_the_ink_says_which_stroke_it_re_read():
+    from desembarque.gazetteer import Names, menu_for
+    got = menu_for("YOSE", Names({"JOSE": 10}), limit=10)
+    ink = [g for g in got if g["how"] == "traço"]
+    assert ink and all(g["why"] for g in ink), "a guess from the ink has to say why"
+
+
+def test_the_two_sources_agreeing_is_said_once_and_in_the_better_place():
+    """The archive says *José is a name these ships carried and this is close
+    to it*; the strokes say *this ink supports José*. Both at once is the
+    strongest thing the tool can say, and showing it twice would read as two
+    guesses instead of one."""
+    from desembarque.gazetteer import Names, menu_for
+    got = menu_for("YOSE", Names({"JOSE": 10}), limit=10)
+    jose = [g for g in got if g["name"] == "JOSE"]
+    assert len(jose) == 1
+    assert jose[0]["how"] == "arquivo+traço"
+    assert "haste alta" in jose[0]["why"]
+
+
+def test_the_menu_offers_a_reading_no_name_list_contains():
+    """The archive has not read every name correctly yet, so a candidate that
+    spells nothing known is still offered — below the ones that do."""
+    from desembarque.gazetteer import Names, menu_for
+    got = menu_for("POUTICELLI", Names({"MARIA": 3}), limit=30)
+    assert any(g["name"] == "PONTICELLI" for g in got)
+
+
+def test_the_menu_never_offers_the_word_that_is_already_on_screen():
+    from desembarque.gazetteer import Names, menu_for
+    assert all(g["name"] != "MARIA" for g in menu_for("MARIA", Names({"MARIA": 9})))

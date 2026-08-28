@@ -48,7 +48,7 @@ from desembarque.export import (csv_filename, hits_to_csv,  # noqa: E402
 from desembarque.voyage import (is_complete, merge_voyages,  # noqa: E402
                                 parse_voyage)
 from desembarque import search as searchlib          # noqa: E402
-from desembarque.gazetteer import Names               # noqa: E402
+from desembarque.gazetteer import Names, menu_for     # noqa: E402
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
 
@@ -552,10 +552,10 @@ class Handler(BaseHTTPRequestHandler):
                 word = q.get("q", "")
                 return self._send(200, {
                     "word": word,
-                    "guesses": current_names().suggest(word),
+                    "guesses": menu_for(word, current_names()),
                     "of": len(current_names()),
-                    "source": "páginas datilografadas deste acervo e linhas "
-                              "digitadas por pessoas — não é leitura do motor",
+                    "source": "nomes deste acervo e outras leituras do mesmo "
+                              "traço — não é leitura do motor",
                 })
 
             if u.path == "/api/check":

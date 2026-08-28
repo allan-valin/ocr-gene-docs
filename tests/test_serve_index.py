@@ -703,16 +703,41 @@ def test_the_archive_offers_names_it_knows_for_a_mangled_word(server, monkeypatc
     monkeypatch.setattr(serve, "NAMES", Names({"SALVADOR": 30, "MARIA": 161}))
     st, body = call(f"{base}/api/names?q=Saliador")
     assert st == 200
-    assert [g["name"] for g in body["guesses"]] == ["SALVADOR"]
+    assert body["guesses"][0]["name"] == "SALVADOR"
+    assert body["guesses"][0]["how"] in ("arquivo", "arquivo+traço")
+    assert all(g["why"] for g in body["guesses"]), "every guess says where it came from"
     assert "não é leitura do motor" in body["source"]
 
 
-def test_a_word_with_no_likely_name_gets_an_empty_list(server, monkeypatch):
+def test_a_word_no_name_list_can_reach_is_still_offered_other_readings(server,
+                                                                       monkeypatch):
+    """The archive has not read every name correctly yet — Guberti, Alfieri,
+    Ponticelli — so a menu that can only offer names it already knows can never
+    reach them. What is left when the list has nothing is the ink: the other
+    ways the same strokes divide, each saying which stroke it re-read."""
     base, folder = server
     from desembarque.gazetteer import Names
     monkeypatch.setattr(serve, "NAMES", Names({"SALVADOR": 30}))
     st, body = call(f"{base}/api/names?q=Kowalczyk")
-    assert st == 200 and body["guesses"] == []
+    assert st == 200
+    assert body["guesses"], "a word the list cannot reach got nothing at all"
+    assert {g["how"] for g in body["guesses"]} == {"traço"}
+    assert all(g["score"] is None for g in body["guesses"])
+
+
+def test_a_word_that_is_already_a_name_is_not_buried_in_spellings_of_itself(
+        server, monkeypatch):
+    """Every word opens its menu, including the ones read correctly. Five
+    spellings nobody has ever read, under a word that is right, is how a person
+    learns to stop reading the menu."""
+    base, folder = server
+    from desembarque.gazetteer import Names
+    monkeypatch.setattr(serve, "NAMES", Names({"SALVADOR": 30, "MARIA": 161}))
+    st, body = call(f"{base}/api/names?q=Maria")
+    assert st == 200
+    assert all(g["name"] != "MARIA" for g in body["guesses"])
+    assert all(g["how"] != "traço" or g["name"] in ("SALVADOR",)
+               for g in body["guesses"])
 
 
 def test_a_page_says_which_rows_a_person_should_look_at(server, monkeypatch):

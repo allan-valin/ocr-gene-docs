@@ -50,10 +50,30 @@ is written down beside it, not when the code runs.
       name; the repetition mark inherits the tokens written above it. Nothing
       claims a name order unless a person typed it. `bench_search.py --matrix`
       must not fall.
-- [ ] **T7 — Candidates from the strokes** (§5). `desembarque/strokes.py`:
-      minim re-cuts, ascender/descender swaps, round letters, a stroke lost at
-      an edge, unrecognised marks, a missing space. Each rule measured on its
-      own with T3's bench; a rule that adds noise without adding names comes out.
+- [x] **T7 — Candidates from the strokes** (§5), first pass, measured. `desembarque/strokes.py`:
+      `desembarque/strokes.py` re-cuts minim runs, reads a tall stroke the
+      other way, swaps round letters, expands the clerks' abbreviations, trims
+      ink at an edge, reads a looped capital as the two or three letters it was
+      cut into, and splits a word the clerk wrote as two. `gazetteer.menu_for`
+      puts them in the order that measured best and `/api/names` serves it, so
+      the number below is what a reader gets — the menu is 12 long, of which at
+      most 5 are readings nobody has read before, and none of those when the
+      word is already a name.
+
+      | menu | true name offered | @1 | @3 | @5 | @10 |
+      |---|---|---|---|---|---|
+      | before (archive names only) | 47 of 112 | 0.170 | 0.330 | 0.420 | 0.420 |
+      | with the strokes | 51 of 112 | 0.179 | 0.375 | 0.455 | 0.455 |
+
+      Per rule, alone, over the same 112 words: ascender 12, edge 8, capital 7,
+      two changes 5, space 4, round 3, minims 0, abbreviation 0. The last two
+      score nothing *on these four pages* and stay for now: they are the rules
+      the plan's own examples turn on — `Mania`/`Maria`, `Ant?`/`Antonio` — and
+      those examples are on BS.ENT.013947 p3, which has no stored reading to
+      score against until T4's fix is re-run over the archive.
+      Still to do: re-run once 013947 is re-read, then drop what still scores
+      nothing; and the ordering, where the archive's own first guess is still
+      the best single thing in the menu (0.241 at rank one).
 - [ ] **T8 — Ask the right question when marking** (§5, `doubtful`). Flag
       *near a name, not a name* apart from *unknown to this archive*. Keep it
       only if it catches misreads the current three reasons miss.

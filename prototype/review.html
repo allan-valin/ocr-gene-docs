@@ -260,6 +260,9 @@
     medida de acerto: leitura firme de bobagem também é firme</span>
   <span><b>palavra sublinhada</b> — clique para ver outras leituras e nomes
     prováveis do acervo</span>
+  <span><b>no menu</b> — <i>≈</i> nome deste acervo parecido com a leitura,
+    <i>⌇</i> outra divisão dos mesmos traços (alcança nomes que o acervo ainda
+    não leu certo), <i>≈⌇</i> as duas coisas</span>
 </div>
 <main id="main">
   <div id="sidebar">
@@ -1295,12 +1298,21 @@ function fetchGuesses(menu, word, readings){
   fetch(`/api/names?q=${encodeURIComponent(word)}`).then(r=>r.json()).then(j=>{
     if(!document.body.contains(menu)) return;
     const gs=(j.guesses||[]);
+    // Two sources, and the person has to be able to tell them apart: a name
+    // this archive carries that looks like the reading, and another way of
+    // dividing the same strokes — which is the only kind of guess that can
+    // reach a name nobody has read correctly yet.
+    const mark = g => g.how==="arquivo" ? "≈" : (g.how==="traço" ? "⌇" : "≈⌇");
+    const why = g => g.score==null
+      ? `${g.why} · palpite, confira no original`
+      : `parecido com a leitura (${Math.round(g.score*100)}%) · ${g.seen}× neste acervo · ${g.why} · palpite, confira no original`;
     const block = gs.length
-      ? `<div class="why guessy">palpites do acervo — <b>não lidos da página</b></div>`
+      ? `<div class="why guessy">palpites — <b>não lidos da página</b>:
+           <i>≈</i> nome deste acervo, <i>⌇</i> outra leitura do mesmo traço</div>`
         + gs.map(g=>`<button data-o="${g.name}" class="guess"
-             title="parecido com a leitura (${Math.round(g.score*100)}%) · ${g.seen}× neste acervo · palpite, confira no original"
-             >${g.name}<i>≈</i></button>`).join("")
-      : `<div class="why guessy">nenhum nome parecido no acervo</div>`;
+             title="${why(g)}"
+             >${g.name}<i>${mark(g)}</i></button>`).join("")
+      : `<div class="why guessy">nenhum palpite para esta palavra</div>`;
     menu.innerHTML = GUESSES_FIRST ? block + readings : readings + block;
   }).catch(()=>{ const w=menu.querySelector(".guessy"); if(w) w.textContent="palpites indisponíveis"; });
 }

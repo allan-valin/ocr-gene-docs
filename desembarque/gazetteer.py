@@ -26,6 +26,8 @@ import json
 import unicodedata
 from pathlib import Path
 
+from desembarque import strokes
+
 # How close a dictionary name has to be to a reading before it is worth showing.
 # Measured against the hand-read pages: below this the list fills with names
 # that share three letters and nothing else.
@@ -136,3 +138,94 @@ class Names:
         scored = [{"word": r, "score": round(self.score(r), 3)} for r in readings if r]
         scored.sort(key=lambda c: -c["score"])
         return scored
+
+
+# What each stroke rule means, said the way the person reading it would say it.
+# The menu shows a guess and has to say where the guess came from, or it is
+# indistinguishable from a reading.
+WHY = {
+    "minims": "os mesmos traços, divididos de outro modo",
+    "ascender": "haste alta lida ao contrário",
+    "round": "letra redonda parecida",
+    "capital": "maiúscula de laço lida como duas ou três letras",
+    "edge": "traço a mais ou a menos na ponta",
+    "space": "duas palavras coladas",
+    "abbreviation": "abreviatura do escrivão",
+    "two changes": "duas trocas de traço",
+}
+
+# Which rules are worth reading first when nothing in the name list backs any
+# of them. A minim re-cut changes no strokes at all — it is the same ink,
+# divided differently — while reading a tall stroke the other way claims the
+# recogniser mistook a direction. So the tail is ordered by how little each
+# rule assumes.
+RULE_ORDER = {"minims": 0, "abbreviation": 0, "space": 1, "edge": 1,
+              "capital": 1, "round": 2, "ascender": 3, "two changes": 4}
+
+MENU_LIMIT = 12
+# How many readings that spell nothing anybody has read may sit in one menu.
+# They are the point — the archive has not read every name correctly — but a
+# person scanning twenty of them stops scanning, so they are the tail and not
+# the list.
+UNKNOWN_LIMIT = 5
+
+
+def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT) -> list[dict]:
+    """Everything worth offering for one word, in the order that was measured.
+
+    Two sources, and they answer different questions. The archive says *this
+    reading is close in spelling to a name these ships carried*, which is the
+    single best first guess there is — `bench_menu.py` puts its top suggestion
+    right for 24% of badly-read words, ahead of anything else at rank one. The
+    strokes say *this ink also supports that reading*, which is what finds the
+    names the archive has never read correctly, and what takes the menu from 47
+    of 112 badly-read words to 58.
+
+    So: the archive's first guess, then the ink's readings that are names
+    somebody has read before, then the rest of the archive's, then the ink's
+    readings that spell nothing anyone has read yet — because the archive has
+    not read every name correctly, and a dictionary can never be the gate on
+    what the page could say.
+    """
+    w = fold(word)
+    known = {fold(n) for n in names.counts}
+    near = [dict(g, how="arquivo",
+                 why="parecido com a leitura, nome deste acervo")
+            for g in names.suggest(word, limit=limit)]
+    ink = [{"name": c.word, "how": "traço", "rule": c.rule, "cost": c.cost,
+            "why": WHY.get(c.rule, "outra leitura do mesmo traço"),
+            "seen": names.counts.get(c.word, 0),
+            "score": None}
+           for c in strokes.variants(word, known=known, limit=limit * 3)]
+    seen_names = [g for g in ink if g["name"].replace(" ", "") in known]
+    unknown = sorted((g for g in ink if g["name"].replace(" ", "") not in known),
+                     key=lambda g: (RULE_ORDER.get(g["rule"], 9), g["cost"],
+                                    g["name"]))
+    if w in known:
+        # The reading is already a name this archive carries. Other divisions of
+        # the same strokes exist, but offering five spellings nobody has ever
+        # read under a word that is right is noise, and noise is what makes a
+        # person stop reading the menu.
+        unknown = []
+
+    out: list[dict] = []
+    at: dict[str, dict] = {}
+    for g in near[:1] + seen_names + near[1:] + unknown[:UNKNOWN_LIMIT]:
+        was = at.get(g["name"])
+        if was is not None:
+            # Both sources arriving at the same name is the strongest thing
+            # this tool can say about a reading, so it is said, in the place
+            # the first of them earned.
+            if g["how"] == "traço" and was["how"] == "arquivo":
+                was["why"] = f"{was['why']}; {g['why']}"
+                was["rule"] = g["rule"]
+                was["cost"] = g["cost"]
+                was["how"] = "arquivo+traço"
+            continue
+        if g["name"] == w:
+            continue
+        at[g["name"]] = g
+        out.append(g)
+        if len(out) >= limit:
+            break
+    return out
