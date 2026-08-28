@@ -190,12 +190,22 @@ checked against small fixed sets, in this order, and each one runs in seconds or
 minutes:
 
 ```sh
-.venv/bin/python -m pytest tests/ -q             # 535 library and pipeline tests, ~40 s
+.venv/bin/python -m pytest tests/ -q             # 591 library and pipeline tests, ~40 s
 .venv/bin/python scripts/bench_search.py --matrix # can these people be found?      ~20 s
+.venv/bin/python scripts/bench_menu.py           # when a word is read wrong, is the right
+                                                 # name in the menu, and at what rank?  ~10 s
+.venv/bin/python scripts/bench_check.py          # do the marked rows turn out to be the
+                                                 # badly-read ones?                      ~5 s
 .venv-ocr/bin/python scripts/bench_pages.py      # ten pages, is the table measured right?  ~1 min
 .venv-ocr/bin/python scripts/bench_rec.py        # three pages, how well are they read?     ~1 min
 python3 scripts/smoke_prototype.py               # drives the real UI in Chromium and Firefox
 ```
+
+`bench_menu.py` and `bench_check.py` need no recogniser: they score the readings
+already on disk against the pages in `data/truth` that somebody read by eye, so
+they answer in seconds and they answer about the menu and the marking a person
+actually sees. Both print one row per source or reason, alone and together,
+because a source that only adds noise still raises a total.
 
 `--matrix` asks the two questions a searcher asks — a name alone, and a name
 with the crossing — at three cutoffs, on one load of the index: a scoring
