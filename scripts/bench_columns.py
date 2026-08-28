@@ -69,8 +69,32 @@ def hand_transcription(cache: Path) -> tuple[dict, list[dict]]:
     raise SystemExit(f"no hand transcription of {TRUTH['notation']} on disk")
 
 
+def prepared(recognize, how: str):
+    """The recogniser with every cell put through `how` first.
+
+    A cell is a tenth the width of a name and holds two digits or one letter,
+    which is a different picture from the one the recogniser was measured on.
+    `upscale2` is the cheap thing to try — it is what moved nothing on the name
+    column and might move this one, which is the point of asking separately.
+    """
+    from PIL import Image, ImageOps
+    if how == "none":
+        return recognize
+
+    def prep(im):
+        if how == "upscale2":
+            return im.resize((im.width * 2, im.height * 2), Image.LANCZOS)
+        if how == "upscale4":
+            return im.resize((im.width * 4, im.height * 4), Image.LANCZOS)
+        if how == "autocontrast":
+            return ImageOps.autocontrast(im.convert("L"), cutoff=1)
+        return im
+
+    return lambda crops: recognize([prep(c) for c in crops])
+
+
 def read_columns(pdf: Path, page: int, pagecache: Path,
-                 wanted: list[str]) -> tuple[dict, dict]:
+                 wanted: list[str], how: str = "none") -> tuple[dict, dict]:
     """Each wanted column of one page, as the engine reads it today."""
     from PIL import Image
     img = page_image(pdf, page, pagecache)
@@ -86,7 +110,8 @@ def read_columns(pdf: Path, page: int, pagecache: Path,
     for field in wanted:
         if field not in measured:
             continue
-        out[field] = cells_from_bands(geo, im.size, field, eng._recognize,
+        out[field] = cells_from_bands(geo, im.size, field,
+                                      prepared(eng._recognize, how),
                                       lambda i, box: im.crop(box))
     return measured, out
 
@@ -97,6 +122,9 @@ def main(argv=None) -> int:
     ap.add_argument("--cache", type=Path, default=ROOT / "data" / "transcriptions")
     ap.add_argument("--scans", type=Path, default=ROOT / "data" / "scans")
     ap.add_argument("--pagecache", type=Path, default=ROOT / "data" / "pagecache")
+    ap.add_argument("--prep", default="none",
+                    choices=["none", "upscale2", "upscale4", "autocontrast"],
+                    help="what to do to a cell before reading it")
     ap.add_argument("--json", type=Path, default=None)
     a = ap.parse_args(argv)
 
@@ -109,7 +137,8 @@ def main(argv=None) -> int:
         raise SystemExit(f"the scan of {TRUTH['notation']} is not in {a.scans}")
 
     wanted = [a.column] if a.column else list(SCORED)
-    measured, read = read_columns(pdf, TRUTH["page"], a.pagecache, wanted)
+    measured, read = read_columns(pdf, TRUTH["page"], a.pagecache, wanted,
+                                  a.prep)
 
     print(f"{TRUTH['notation']} p{TRUTH['page']}, {len(rows)} rows typed by hand")
     print("columns measured:", ", ".join(sorted(measured)))

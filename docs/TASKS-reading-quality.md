@@ -257,6 +257,11 @@ is written down beside it, not when the code runs.
             heading over a wide column, so halfway-to-the-next-heading puts the
             edge in the wrong place. The crop comes first: a snapped value from
             a closed vocabulary cannot rescue a cell that was never cut.
+            Tried and rejected, so nobody tries it twice: `--prep upscale2`,
+            doubling every cell before reading it. Nationality 0.730 → 0.723,
+            civil state 0.593 → 0.569, profession 0.710 → 0.691, age and sex
+            unmoved, class slightly worse. The same answer the name column gave
+            to the same idea — the picture is not what is wrong.
             A cursive page still needs its own truth file; a number measured on
             typescript must never be quoted as if it covered the hand.
 - [ ] **T11 — The language prior** (§7). Depends on T10.
