@@ -813,7 +813,9 @@ def test_a_row_is_flagged_for_the_reason_it_deserves(server, monkeypatch):
          "given": "Silva", "conf": {"surname": 0.99}, "ditto": ["surname"],
          "ditto_source": "position"},
         {"n": 4, "page": 2, "name_raw": "Xqzw Vbnm", "conf": {"surname": 0.99}},
-        {"n": 5, "page": 2, "name_raw": "Sitva", "conf": {"surname": 0.99}},
+        # two words, so it inherits nothing from the row above: the only thing
+        # to say about it is that it is one stroke from a name
+        {"n": 5, "page": 2, "name_raw": "Sitva Maria", "conf": {"surname": 0.99}},
     ]})
     st, body = call(f"{base}/api/check?hash={'w' * 8}&page=2")
     why = {r["n"]: r["why"] for r in body["rows"]}

@@ -46,10 +46,21 @@ is written down beside it, not when the code runs.
       So they are not deleted: they are somebody's typing. What was wrong is
       that the screen shows a typed value exactly like a read one — moved to
       T9, where the display work is.
-- [ ] **T6 — Stop asserting surname and given** (§1). *Not started: `surname`
-      is 84 references across the engine, ditto, search, export, voyages, the
-      server and the review screen, so it is a session of its own rather than
-      the tail of another.* `name_raw` is the row's
+- [ ] **T6 — Stop asserting surname and given** (§1). *Half done.*
+      - [x] The repetition mark now inherits **the words written above it**,
+            from the left, counting only the words its own row does not write:
+            `Ant Alonso Gonzalez` above `" Maria` gives *Ant Alonso*, and a
+            mark with nothing beside it repeats the whole name. It is no longer
+            read off a stored `surname`, which was `split_name`'s assumption
+            wearing another hat. `resolve` also no longer needs the engine to
+            have split a row to know what a mark below it repeats.
+            `bench_search.py --matrix` is unmoved — 86/95/99 of 142 by name
+            alone, before and after — which is what was wanted: the same
+            findability without the claim.
+      - [ ] The engine still calls `split_name`, and `surname`/`given` are
+            still written and still read by search, export, the voyages report
+            and the review screen. 108 test references sit on those two fields,
+            so removing them is a session of its own, and it is the next one. `name_raw` is the row's
       name; the repetition mark inherits the tokens written above it. Nothing
       claims a name order unless a person typed it. `bench_search.py --matrix`
       must not fall.
