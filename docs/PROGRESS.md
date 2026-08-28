@@ -103,9 +103,15 @@ what was typed, and charged for the rest:
 
 | typed by name alone, 142 hand-read names | before | now |
 |---|---|---|
-| findable in the top five | 81 | **88** |
-| findable in the top ten | 89 | **96** |
-| findable in the top twenty | 100 | 101 |
+| findable in the top five | 79 | **86** |
+| findable in the top ten | 89 | **95** |
+| findable in the top twenty | 99 | 100 |
+
+Measured the way the application searches — with the archive's own catalogue of
+ships indexed, which is what `scripts/bench_search.py --matrix` now does in one
+load of the index rather than six. Without the catalogue the same change reads
+81 → 88 and 89 → 96, and it was worth finding out that the two configurations
+do not agree to the name.
 
 The forgiveness is asked only of a searcher who cannot name the crossing.
 Inside a named ship, line or year the pool is already a few hundred rows, and

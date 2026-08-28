@@ -87,9 +87,9 @@ EDIT_FLOOR = 0.55
 # before the reading is charged for it, as a fraction of what was typed. At 0
 # the score is the plain overlap over union this started as, and a row holding
 # anything besides the name is scored down for holding it; measured against
-# the 142 hand-read names, 0.75 finds 96 of them by name alone against 89, and
-# 88 in the top five against 81. Above 1 the readings that hold nothing else
-# stop being told from the ones that do.
+# the 142 hand-read names as the application searches them, 0.75 finds 95 of
+# them by name alone against 89, and 86 in the top five against 79. Above 1 the
+# readings that hold nothing else stop being told from the ones that do.
 SLACK = 0.75
 #
 # Running the same comparison over the *whole* corpus, as a second attempt when

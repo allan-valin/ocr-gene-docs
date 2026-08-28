@@ -1177,8 +1177,9 @@ def test_a_row_is_not_charged_for_what_it_holds_besides_the_name():
     buried the rows that hold more than what was typed. Somebody who types
     everything they know should see the row that holds all of it first.
 
-    Measured over the 142 hand-read names typed without a crossing: 96
-    findable in the top ten against 89, and 88 in the top five against 81."""
+    Measured over the 142 hand-read names typed without a crossing, the way
+    the application searches: 95 findable in the top ten against 89, and 86 in
+    the top five against 79."""
     from desembarque.search import RowIndex, candidates, SLACK
     rows = RowIndex(idx("Maria Silva Martinez", "Jose Muesso 2a classe cozinheiro"))
     strict = dict((r["text"], round(s, 3)) for r, s in candidates(rows, "MARIA SILVA"))

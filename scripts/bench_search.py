@@ -93,6 +93,40 @@ def truth_rows(cache: Path, scans: Path, with_line: bool = False,
     return out
 
 
+def rank_of(rows, w: dict, query: str, limit: int) -> int | None:
+    hits = search(rows, query, limit=limit)
+    return next((i + 1 for i, h in enumerate(hits)
+                 if h.get("doc") == w["doc"] and h.get("page") == w["page"]
+                 and h.get("row") == w["row"]), None)
+
+
+def matrix(args) -> int:
+    """The two questions a searcher asks, at three cutoffs, on one index.
+
+    A scoring change moves these six numbers in different directions — the
+    forgiveness that found seven more names typed alone cost ten when the
+    crossing was named — and running the bench six times over paid the cold
+    load six times to find that out.
+    """
+    ships = catalogue_ships(args.scans)
+    rows = load_index(args.cache, engine_only=False, ships=ships or None)
+    asked = {
+        "by name alone": [(w, w["name"]) for w in
+                          truth_rows(args.cache, args.scans, ships=ships)],
+        "naming the crossing": [
+            (w, f"{w['name']} {w['voyage']}".strip() if w.get("voyage") else w["name"])
+            for w in truth_rows(args.cache, args.scans, with_line=True, ships=ships)],
+    }
+    total = len(next(iter(asked.values())))
+    print(f"{total} hand-read names against {len(rows)} indexed rows\n")
+    print(f"{'':22}{'top 5':>8}{'top 10':>8}{'top 20':>8}")
+    for label, queries in asked.items():
+        ranks = [rank_of(rows, w, q, 50) for w, q in queries]
+        got = [sum(1 for r in ranks if r and r <= at) for at in (5, 10, 20)]
+        print(f"{label:22}" + "".join(f"{n:>8}" for n in got))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--cache", type=Path, default=ROOT / "data" / "transcriptions")
@@ -109,9 +143,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="where the dossier names no ship, hint with the "
                          "shipping line on its letterhead instead of the year")
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--matrix", action="store_true",
+                    help="both questions at three cutoffs, on one load of the "
+                         "index — what a scoring change has to be judged by")
     args = ap.parse_args(argv)
     sys.path.insert(0, str(ROOT / "scripts"))
 
+    if args.matrix:
+        return matrix(args)
     ships = catalogue_ships(args.scans) if args.catalogue else {}
     rows = load_index(args.cache, engine_only=False, ships=ships or None)
     wanted = truth_rows(args.cache, args.scans, with_line=args.with_line,
