@@ -169,11 +169,26 @@ Five distinct causes, and each is cheap:
   name, leaving the particles the archive actually uses lower case — `da`,
   `de`, `do`, `dos`, `del`, `della`, `di`, `van`, `von`, `vom`, `der`, `y`.
   Display only: the reading is not rewritten.
-* **The dropdown does not close.** Clicking the same word twice reopens the
-  menu instead of closing it (`prototype/review.html:1215` closes and rebuilds
-  unconditionally). It must toggle: same word, no selection, menu closes and
-  nothing changes. **This was asked for before and not done — do it first, it
-  is ten minutes.**
+* **The dropdown does not close.** *Done, 2026-08-28.* Clicking the same word
+  twice rebuilt the menu under the cursor instead of putting it away; it now
+  toggles and changes nothing on the way out (`prototype/review.html`, and the
+  browser self-test covers it). The static demo cannot exercise it — see below
+  — so that coverage only runs against the served app.
+
+## 6b. The demo shows columns the engine cannot fill
+
+`prototype/sample_rows.json` is the one document the static demo carries, and
+it is a **hand transcription**: nationality, age, sex, marital state,
+profession, port, class and notes, all filled, with a confidence per field.
+Every other document in the app shows names and nothing else, because names are
+all the engine reads (§4). Somebody opening the demo and then a real dossier
+sees a tool that stopped working.
+
+Until §4 lands, the sample has to say what it is — a page typed by a person,
+shown to demonstrate the shape of a finished record — in the interface and not
+only in a file nobody opens. It is also why the browser self-test cannot cover
+the readings menu: a hand transcription has no engine alternates, so the pill
+that opens the menu never exists in the demo.
 
 ## 7. The language of the hand
 

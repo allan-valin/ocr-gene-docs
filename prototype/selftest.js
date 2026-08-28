@@ -493,6 +493,26 @@ window.addEventListener("load",async()=>{
       ok("turning it off puts the page back to read-only",
          !document.querySelector('#rows span[contenteditable="true"]'));
     }
+    // Somebody opens the other readings of a word, looks, and wants none of
+    // them. Clicking the word again rebuilt the menu under the cursor instead
+    // of putting it away, so the only way out was to click elsewhere and hope
+    // nothing else took the click.
+    {
+      // The demo document is a hand transcription, so it carries no engine
+      // alternates and no pill: this covers the served app, where they exist.
+      const pill = document.querySelector("#rows .altword");
+      if(pill){
+        const before = pill.textContent;
+        pill.click();
+        await wait(120);
+        ok("clicking a word opens its readings", !!document.querySelector(".altmenu"));
+        pill.click();
+        await wait(120);
+        ok("clicking the same word again closes them",
+           !document.querySelector(".altmenu"));
+        ok("and closing them changes nothing", pill.textContent === before);
+      }
+    }
     const ex = document.getElementById("exportcsv");
     ok("an export control exists", !!ex);
     if(ex) ok("export points at the served document or is disabled",

@@ -1209,11 +1209,21 @@ function refreshExport(){
   else { a.removeAttribute("href"); a.setAttribute("aria-disabled","true"); }
 }
 // ---- other readings of a word ----------------------------------------------
-function closeAltMenu(){ const m=document.querySelector(".altmenu"); if(m) m.remove(); }
+// Which word the open menu belongs to, so that clicking that word again
+// closes it. Reopening it under the cursor is not a way out: somebody who
+// looked at the readings and wants none of them has to be able to put the menu
+// away without changing the row.
+let altOwner = null;
+function closeAltMenu(){
+  const m=document.querySelector(".altmenu"); if(m) m.remove();
+  altOwner = null;
+}
 document.addEventListener("click",e=>{
   const pill = e.target.closest(".altword");
   if(!pill){ closeAltMenu(); return; }
+  if(pill === altOwner){ closeAltMenu(); return; }   // same word, no choice made
   closeAltMenu();
+  altOwner = pill;
   const tr = pill.closest("tr"), i = +tr.dataset.i, w = +pill.dataset.w;
   const r = rows[i], alts = (r.name_alts||[])[w] || [];
   const words = nameText(r).split(/\s+/);
