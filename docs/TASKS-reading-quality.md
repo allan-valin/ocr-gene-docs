@@ -499,7 +499,32 @@ what fails:
   Juan, `Gerolano` for Gerolamo, `Garpar` for Gaspar. One word of the whole
   page is a name this archive has read before.
 
-- [ ] **T13 — Findability on the pages that read as noise.** The candidate
+- [~] **T13 — Findability on the pages that read as noise.** *Started
+      2026-08-29; the glue is done and measured, the faint hand is not.*
+      - [x] **Two names run into one word.** Cut where a capital stands inside
+            a word — the recogniser dropped the space the clerk wrote and kept
+            the capital after it — and index the split beside the reading, in
+            `alts`, where a row's second reading already goes and is already
+            scored. `bench_search.py --matrix` moves for the first time this
+            session: 86→87 of 142 in the top five by name alone, 99→100 in the
+            top twenty, 122→123 with the crossing named, nothing lost. The
+            hand-read pages are not the pages this was written for and carry
+            little glue; across the corpus **1,361 of 37,617 stored readings**
+            carry a word a capital cuts in two.
+            Tried and rejected: cutting where both halves are names the archive
+            has read. On the page it was written for it splits nothing — the
+            glue and the misreading come together, and `Suireppe` is no more in
+            the dictionary than `MattenceSuireppe` is.
+      - [ ] **The faint hand.** OL.PRJ.16030 p3 reads 36 of 37 rows one or two
+            letters from a name — `Nose` for José, `Tuan` for Juan, `Gerolano`
+            for Gerolamo. Search will not reach those: a four-letter word
+            shares almost no trigram with another, and the edit-distance pass
+            that would catch it runs only inside a crossing somebody named —
+            running it over the whole corpus was measured in July and is worth
+            nothing (91 findable against 90). So this one is not a search fix,
+            and what is left of it is the recogniser.
+
+      **The original note, kept:** The candidate
       rules already know how to unglue a word (`strokes`, the *space* rule) and
       how to reach a name one stroke away, and all of that is offered to a
       person who opens the menu on a word. None of it reaches **search**, which
