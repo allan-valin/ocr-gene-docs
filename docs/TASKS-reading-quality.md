@@ -52,7 +52,7 @@ is written down beside it, not when the code runs.
       So they are not deleted: they are somebody's typing. What was wrong is
       that the screen shows a typed value exactly like a read one — moved to
       T9, where the display work is.
-- [ ] **T6 — Stop asserting surname and given** (§1). *Half done.*
+- [x] **T6 — Stop asserting surname and given** (§1). *Done.*
       - [x] The repetition mark now inherits **the words written above it**,
             from the left, counting only the words its own row does not write:
             `Ant Alonso Gonzalez` above `" Maria` gives *Ant Alonso*, and a
@@ -63,10 +63,28 @@ is written down beside it, not when the code runs.
             `bench_search.py --matrix` is unmoved — 86/95/99 of 142 by name
             alone, before and after — which is what was wanted: the same
             findability without the claim.
-      - [ ] The engine still calls `split_name`, and `surname`/`given` are
-            still written and still read by search, export, the voyages report
-            and the review screen. 108 test references sit on those two fields,
-            so removing them is a session of its own, and it is the next one.
+      - [x] **Done 2026-08-29 evening.** `split_name` is gone, and so is the
+            review screen's `splitName`, which split a person's correction the
+            same way on the way in. The engine writes `name_raw` and the score;
+            `ditto.resolve` writes `inherited` and marks the field `name`;
+            `ditto.written` is the row's own words with the mark dropped, and a
+            row means the first followed by the second.
+            `conf` is keyed `name`, because that number was always the score of
+            the name strip and never the surname's.
+            The spreadsheet carries `repete_de_cima` and `nome_completo` where
+            it carried *sobrenome* and *nome*, and `repeticao_origem` says
+            whether the repetition came from the clerk's mark, the indent under
+            it, or the row's position.
+            **Nothing on disk was rewritten and the corpus was not re-read.**
+            660 records carry the old fields; `desembarque/rowfields.py` and
+            `search.row_text` understand both shapes and only the new one is
+            written — re-reading 700 pages to pick up a rename produces data,
+            not knowledge (see PROGRESS, the reference-set methodology).
+            `bench_search.py --matrix` measured before and after each of the
+            three commits and unmoved every time: 86/95/99 of 142 by name
+            alone, 118/122/129 with the crossing named.
+            Left deliberately: the spikes read `given`/`surname` out of truth
+            files, and those are measurements already taken.
             Every place that has to change, so the next session does not have
             to find them again:
             * `desembarque/engine_paddle.py:282` `split_name`, and its one
