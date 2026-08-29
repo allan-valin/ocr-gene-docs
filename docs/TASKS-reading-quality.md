@@ -383,13 +383,22 @@ is written down beside it, not when the code runs.
             The stroke rules stay where they belong, in the menu a person opens
             on a word, where a wrong guess costs a line of a list and not a
             value on a record.
-      - [ ] **The wiring, which is what is left.** `transcribe_page` does not
-            call `cells_from_bands` yet, and what a cell costs is the decision
-            to take with it: 31 bands × 8 columns is 216 crops against the 31
-            of the name column, and the recogniser is about twenty seconds a
-            column. Reading only the three columns that read something —
-            nacionalidade, estado, profissao — is 90 crops and about a minute
-            a page against the eighty seconds a page costs now.
+      - [x] **The wiring**, done 2026-08-29 evening. `transcribe_page` called
+            `cells_from_bands` behind `self.columns`, which defaults to none,
+            and nothing ever passed a column: the measurement existed and no
+            page the app read came back with a cell. `serve.columns_wanted`
+            asks for `READABLE_COLUMNS` and refuses idade and sexo rather than
+            paying for them; `DESEMBARQUE_COLUMNS=none` turns it off.
+            **What a cell costs, measured end to end** on BS.ENT.017397 p2
+            rather than estimated from the crop count: 16.9 s a page becomes
+            22.9 s, a third more and not the double 216 crops suggested,
+            because a blank cell is not read. 59 cells read on 31 rows, 26
+            snapped: `SEAGNOLA` → ESPANHOLA, `conercio` → COMERCIO, `cau` →
+            CASADO.
+      - [x] **On screen** (§6b, and what Allan asked for). A cell the engine
+            read is shown as read and never as somebody's typing; a reading
+            carried to a printed word is tinted, marked `⌇`, and says on hover
+            what was read and how close. Four browser assertions.
 - [x] **T12 — Contrast on a faint page** (asked 2026-08-29). *Measured, and
       not wired.* `scripts/spike_faint.py` puts four liftings in front of the
       detector on the pages that read nothing. Autocontrast and a 2nd/98th
@@ -406,4 +415,5 @@ is written down beside it, not when the code runs.
       page stored as a `list` with no rows now counts as wanting a reading.
       Separately, and already known: contrast does nothing for *reading* a crop
       once it is cut — `data/spike_prep.json`, 0.362 against 0.361.
-- [ ] **T11 — The language prior** (§7). Depends on T10.
+- [ ] **T11 — The language prior** (§7). No longer blocked: T10 is wired and
+      the three columns come back on every page the app reads.

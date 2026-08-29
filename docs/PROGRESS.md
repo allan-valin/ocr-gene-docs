@@ -6,6 +6,64 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-08-29, evening — the columns are read, and three things were writing into the demo record
+
+Tests green: **651 Python assertions, 9 skipped; 126 browser assertions passing
+in both Chromium and Firefox.** The six browser failures the last checkpoint
+listed are gone, and four of the assertions are new.
+
+**The column reading is reachable.** `cells_from_bands` and the closed
+vocabularies have been built, tested and benchmarked since August, and no page
+the app read ever came back with a cell: `PaddleEngine.columns` defaults to
+none and `register_engines` never passed anything. `serve.columns_wanted` now
+asks for `READABLE_COLUMNS` — nationality, civil state, profession — and
+refuses idade and sexo rather than paying for them, since they measured 0 of 22
+and 0 of 26. `DESEMBARQUE_COLUMNS=none` turns it off; a named list is taken as
+written.
+
+Measured through `transcribe_page` on BS.ENT.017397 p2, the typewritten page
+transcribed by hand: **16.9 s a page becomes 22.9 s** — a third more, not the
+double the crop count suggested, because a blank cell is no longer read at all.
+59 cells read across 31 rows, 26 of them snapped to a printed word:
+`SEAGNOLA` → ESPANHOLA, `conercio` and `OWEFCIC` → COMERCIO, `cau` → CASADO.
+
+**And it is on screen.** A cell the engine read is shown as read and never as
+somebody's typing; where the vocabulary carried the reading to a printed word
+the cell is tinted, marked `⌇`, and says on hover what was read and how close
+it was. The reading is never replaced by the guess, which is the gazetteer's
+rule about names applied to a column.
+
+**Three faults, all the same shape: something automatic writing into a record
+that says a person was here.**
+
+* The dedup that followed the duplication bug was incomplete. It collapsed rows
+  that were *equal*, and a row saved twice carries a different `edits` list each
+  time — so fourteen copies of row 1 survived as distinct rows and the demo
+  document showed 41 rows for 26 passengers. `batch.dedupe_rows` uses the
+  identity that holds: two rows of one page cannot both be row 1. It keeps the
+  fullest copy and merges every copy's edits.
+  **`scripts/dedupe_corpus.py --dry-run` checks the whole corpus** — one record
+  was affected, and it is repaired.
+* The browser self-test was writing an edit into that record on every run: it
+  types `SIRVIENTA` into a cell that already says SIRVIENTA, and each run
+  recorded another act by a person. Sixty-six entries, four acts.
+  `batch.tidy_edits` collapses a run of the same word into the same field,
+  applied where the rows are stored rather than trusted to the client.
+* A save was moving `transcribed_page`. It is how a record whose rows carry no
+  page number finds its scan, so a save posted while the demo sat on page 1
+  showed the 26 typed rows beside the wrong page. What the client is looking at
+  is not a claim about where the transcription is.
+
+`transcribed_by` is now derived from the rows rather than stored, because the
+stored flag was lost by exactly such a save: a record holding a value in a
+column the engine has never written was typed by a person.
+
+**Next, in order.** T6's second half — `surname`/`given` come out, 108 test
+references and a session of its own, and it is what the plan says is next. Then
+T11, the language prior, which T10 no longer blocks. The cursive per-column
+truth page (T3) still needs a hand reading before any column number can be
+quoted for handwriting.
+
 ## 2026-08-29, afternoon — the name column was measured wrong on half the corpus
 
 Tests green: 630 Python assertions, 9 skipped (the nine are one parametrised
