@@ -88,6 +88,48 @@ def with_page(record: dict, page_n: int, page: dict,
     return out
 
 
+def with_page_remeasured(record: dict, page_n: int, page: dict,
+                         rows: list[dict]) -> dict | None:
+    """The record with `page_n` read again over rows it already had, or None.
+
+    `with_page` refuses a page that already has rows, and it is right to: it
+    exists so a second reading never draws two names against one line of the
+    scan. This is the other case. A page whose name column was measured wrong
+    has rows, and they are the ordinal strip read as a name — `ete do Coeto`
+    for *Julio Augusto da Costa*. Those rows are the engine's own and the point
+    of reading again is to replace them.
+
+    What a person typed is never replaced. The mark is the row's, not the
+    record's — `typed_by_a_person` — so a corrected row survives at its own
+    place and everything the engine wrote goes.
+
+    None when the re-read produced nothing: an empty page is a failure, not a
+    page with nobody on it, and it must not stand in for what was there.
+    """
+    from desembarque.batch import typed_by_a_person
+    if not rows:
+        return None
+    if not any(isinstance(p, dict) and p.get("n") == page_n
+               for p in record.get("pages") or []):
+        return None
+    theirs = {r.get("n"): r for r in record.get("rows") or []
+              if isinstance(r, dict) and r.get("page") == page_n
+              and typed_by_a_person(r)}
+    fresh = [dict(theirs.get(r.get("n"), r), page=page_n) for r in rows]
+    # a row somebody typed that the new reading has no band for is kept
+    kept = [r for n, r in theirs.items()
+            if not any(f.get("n") == n for f in fresh)]
+    others = [r for r in record.get("rows") or []
+              if isinstance(r, dict) and r.get("page") != page_n]
+    pages = [page if isinstance(p, dict) and p.get("n") == page_n else p
+             for p in record.get("pages") or []]
+    out = dict(record)
+    out["pages"] = pages
+    out["rows"] = sorted([*others, *fresh, *kept],
+                         key=lambda r: (r.get("page") or 0, r.get("n") or 0))
+    return out
+
+
 def with_nothing_found(record: dict, page_n: int, schema: int) -> dict | None:
     """The record with `page_n` marked as read again and still empty.
 

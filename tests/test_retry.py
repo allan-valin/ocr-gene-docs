@@ -137,3 +137,37 @@ def test_a_list_with_no_rows_that_this_engine_already_retried_is_left_alone():
     r = record(pages=[{"n": 2, "kind": "list", "retried": 4}], rows=[])
     assert pages_wanting_a_reading(r, schema=4) == []
     assert pages_wanting_a_reading(r, schema=5) == [2]
+
+
+def test_a_page_measured_wrong_can_be_read_again_over_its_own_rows():
+    """Half the pages on disk carry a name column measured before the table was
+    measured from the printing: 946 of 2,543 are narrower than a name, which is
+    the ordinal strip, and the crops behind them held the page number and two
+    letters. Those pages have rows — bad ones — so `with_page` refuses them,
+    and it is right to: it exists so a second reading never draws two names
+    against one line. Re-measuring is the other case, and it replaces the
+    engine's rows on that page while every row a person typed stays."""
+    from desembarque.retry import with_page_remeasured
+    r = record(pages=[{"n": 2, "kind": "list"}],
+               rows=[{"page": 2, "n": 1, "name_raw": "lio da C"},
+                     {"page": 2, "n": 2, "name_raw": "MARIA CORRECTED",
+                      "edits": {"name_raw": "2026-08-01T10:00"}},
+                     {"page": 3, "n": 1, "name_raw": "OTHER PAGE"}])
+    fresh = [{"n": 1, "name_raw": "JULIO DA COSTA"},
+             {"n": 2, "name_raw": "maria something"},
+             {"n": 3, "name_raw": "NEW ROW"}]
+    out = with_page_remeasured(r, 2, {"n": 2, "kind": "list"}, fresh)
+    got = {(x.get("page"), x.get("n")): x.get("name_raw") for x in out["rows"]}
+    assert got[(2, 1)] == "JULIO DA COSTA", "the engine's own row is replaced"
+    assert got[(2, 2)] == "MARIA CORRECTED", "what a person typed is untouched"
+    assert got[(2, 3)] == "NEW ROW"
+    assert got[(3, 1)] == "OTHER PAGE", "another page is not touched"
+
+
+def test_a_re_measure_that_reads_nothing_is_refused():
+    """A page that comes back empty is a failure, not a page with nobody on it,
+    and it must never stand in for what was there."""
+    from desembarque.retry import with_page_remeasured
+    r = record(pages=[{"n": 2, "kind": "list"}],
+               rows=[{"page": 2, "n": 1, "name_raw": "lio da C"}])
+    assert with_page_remeasured(r, 2, {"n": 2, "kind": "list"}, []) is None
