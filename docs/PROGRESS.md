@@ -26,6 +26,13 @@ beside the reading, where a row's second reading already goes and is already
 scored — a new candidate, not a new mechanism — and what is stored is
 untouched.
 
+**One thing this leaves undone, and it is a rule of the house.** A hit carries
+`matched`, which names the *kind* of match — year, ship, line, letters — and
+not which of the row's spellings won. So a search for *Giuseppe* can now land
+on a row whose stored reading holds no such word, and the hit list shows the
+reading with nothing to explain the hit. A guess has to be labelled a guess;
+this one is not yet, and it is the first thing to fix on top of this.
+
 Tried first and rejected, so nobody tries it twice: cut where **both halves are
 names the archive has read**. On the page it was written for it splits nothing,
 because the glue and the misreading come together and `Suireppe` is no more in

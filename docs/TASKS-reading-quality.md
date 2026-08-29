@@ -523,6 +523,14 @@ what fails:
             has read. On the page it was written for it splits nothing — the
             glue and the misreading come together, and `Suireppe` is no more in
             the dictionary than `MattenceSuireppe` is.
+      - [ ] **A hit does not say which spelling it matched.** It carries
+            `matched`, and that names the *kind* of match — year, ship, line,
+            letters — not which of the row's spellings won. With a split now
+            indexed beside the reading, a search for *Giuseppe* can land on a
+            row whose stored reading contains no such word, and the hit list
+            shows the reading with nothing to explain the hit. The rule this
+            repository runs on says a guess is labelled a guess, and this one
+            currently is not.
       - [ ] **The faint hand.** OL.PRJ.16030 p3 reads 36 of 37 rows one or two
             letters from a name — `Nose` for José, `Tuan` for Juan, `Gerolano`
             for Gerolamo. Search will not reach those: a four-letter word
