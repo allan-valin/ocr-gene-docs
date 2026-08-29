@@ -327,13 +327,21 @@ is written down beside it, not when the code runs.
             gazetteer's rule about suggestions applied to a column.
             Measured on BS.ENT.017397 p2, against the 26 rows read by hand:
 
-            | column | rows | right as read | snapped | of those, right |
-            |---|---|---|---|---|
-            | estado | 26 | 1 | 13 | **12** |
-            | profissao | 22 | 0 | 8 | **7** |
-            | nacionalidade | 26 | 0 | 5 | **3** |
-            | procedencia | 26 | 0 | 1 | 1 |
-            | classe | 26 | 2 | 6 | 2 |
+            | column | rows | with ink | right as read | snapped | of those, right |
+            |---|---|---|---|---|---|
+            | estado | 26 | 25 | 1 | 13 | **12** |
+            | profissao | 22 | 15 | 0 | 8 | **7** |
+            | nacionalidade | 26 | 19 | 0 | 5 | **3** |
+            | procedencia | 26 | **3** | 0 | 1 | 1 |
+            | classe | 26 | 18 | 2 | 6 | 2 |
+
+            *With ink* is the column the bench gained today, and it is the one
+            that stops a number being misread: the clerk wrote the port on
+            three rows of twenty-six and the hand transcription writes it on
+            all of them, so *procedencia 0.969* is a fact about the
+            transcriber's expansion. Blank is not a repetition on these forms —
+            blank means unknown and a ditto mark means the value above — so
+            nothing is inherited down a column.
 
             So the civil state goes from one row right in twenty-six to twelve,
             and the profession from none in twenty-two to seven. Nothing is

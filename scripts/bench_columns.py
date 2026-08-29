@@ -170,30 +170,40 @@ def main(argv=None) -> int:
     # `snapped` is of the rows a value was snapped on: how often it is the word
     # the clerk typed. `offered` is how many rows were snapped at all, because a
     # column that snaps three rows of twenty-six is not a column that reads.
-    print("column         rows  exact  mean CER  offered  snapped right")
+    # `written` is how many of those rows the page actually has ink in. A blank
+    # cell is not a repetition on these forms — blank means unknown and a ditto
+    # mark means the value above — so a column the clerk filled once at the top
+    # of the sheet scores near 1.0 against a hand transcription that expands it,
+    # and that number is about the transcriber, not the engine.
+    print("column         rows  written  exact  mean CER  offered  snapped right")
     for field in wanted:
         cells = read.get(field)
         if not cells:
             continue
         by_n = {c["n"]: c["text"] for c in cells}
+        written_n = {c["n"] for c in cells if (c.get("text") or "").strip()}
         pairs = [(r.get(SCORED[field]), by_n.get(int(TRUTH["first_row"]) + k, ""))
                  for k, r in enumerate(rows)]
         pairs = [(t, g) for t, g in pairs if t not in (None, "")]
         if not pairs:
             continue
+        written = sum(1 for k, r in enumerate(rows)
+                      if r.get(SCORED[field]) not in (None, "")
+                      and int(TRUTH["first_row"]) + k in written_n)
         exact = sum(1 for t, g in pairs if fold(t) == fold(g)) / len(pairs)
         mean = sum(cer(t, g) for t, g in pairs) / len(pairs)
         snaps = [(t, (voc.snap(field, g) or {}).get("value")) for t, g in pairs]
         offered = [(t, v) for t, v in snaps if v]
         right = sum(1 for t, v in offered if fold(t) == fold(v))
         report["columns"][field] = {
-            "rows": len(pairs), "exact": round(exact, 3), "cer": round(mean, 3),
+            "rows": len(pairs), "written": written,
+            "exact": round(exact, 3), "cer": round(mean, 3),
             "offered": len(offered), "snapped_right": right,
             "snapped_exact": round(right / len(pairs), 3),
             "sample": [[str(t), g, (voc.snap(field, g) or {}).get("value")]
                        for t, g in pairs[:5]]}
-        print(f"{field:<13}  {len(pairs):<4}  {exact:<5.3f}  {mean:<8.3f}  "
-              f"{len(offered):<7}  {right}")
+        print(f"{field:<13}  {len(pairs):<4}  {written:<7}  {exact:<5.3f}  "
+              f"{mean:<8.3f}  {len(offered):<7}  {right}")
     if a.json:
         a.json.write_text(json.dumps(report, indent=2, ensure_ascii=False),
                           encoding="utf-8")
