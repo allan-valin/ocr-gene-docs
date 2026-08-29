@@ -222,6 +222,12 @@
               cursor:help}
   td .snapped::after{content:"⌇";font-size:9px;vertical-align:2px;opacity:.7;
                      margin-left:2px;color:var(--accent)}
+  /* A row is indexed under its reading and under the other spellings of it —
+     the second reading, and a pair of names a capital says were run together.
+     A hit found by one of those has to say so, or the tool answers with a word
+     no page contains. */
+  .hit .spelling{display:block;font-style:normal;font-size:11px;
+                 color:var(--muted);cursor:help}
   .hw{border-left:2px solid var(--warn);padding-left:4px}
   mark{background:var(--focus);color:#fff;border-radius:2px;padding:0 1px}
   tr.hit{box-shadow:inset 3px 0 0 var(--focus)}
@@ -984,7 +990,7 @@ function renderHits(d){
     + d.hits.slice(0,25).map(h=>`
     <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
          data-row="${h.row||0}" title="Abrir o documento nesta linha">
-      <b>${h.text}</b>${h.ship?`<button class="narrow" data-ship="${h.ship}"
+      <b>${h.text}</b>${h.spelling?`<i class="spelling" title="A página foi lida assim; o nome foi encontrado por esta outra grafia da mesma leitura — não é o que está escrito no registro.">encontrado como “${h.spelling}”</i>`:""}${h.ship?`<button class="narrow" data-ship="${h.ship}"
         title="Buscar o mesmo nome só neste navio — dizer o navio é o que faz um nome comum aparecer">só ${h.ship}</button>`
         :h.line?`<button class="narrow" data-ship="${h.line}"
         title="Buscar o mesmo nome só nesta companhia — dois terços dos documentos dizem a companhia e só um terço diz o navio">só ${h.line}</button>`:""}

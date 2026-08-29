@@ -1326,3 +1326,25 @@ def test_the_glued_pair_reaches_the_index_as_another_spelling():
     row = {"n": 1, "page": 2, "name_raw": "Palai MarcelloNittoms"}
     assert "Palai Marcello Nittoms" in s.searchable_alts(
         row, "Palai MarcelloNittoms")
+
+
+def test_a_hit_names_the_spelling_that_found_it():
+    """A split is indexed beside the reading, so a search can land on a row
+    whose stored reading holds no such word — and the hit list shows the
+    reading. A guess has to be labelled a guess: the hit says which of its
+    spellings the query actually matched, and says nothing when it was the
+    reading itself."""
+    from desembarque.search import name_the_spelling
+
+    hit = {"text": "Palai MarcelloNittoms", "alts": ["Palai Marcello Nittoms"]}
+    got = name_the_spelling([dict(hit)], "Marcello Nittoms")[0]
+    assert got["spelling"] == "Palai Marcello Nittoms"
+
+
+def test_a_hit_found_by_its_own_reading_claims_nothing():
+    from desembarque.search import name_the_spelling
+
+    hit = {"text": "Palai Nello", "alts": ["Palai Nelio"]}
+    assert "spelling" not in name_the_spelling([dict(hit)], "Palai Nello")[0]
+    assert "spelling" not in name_the_spelling([{"text": "Palai Nello"}],
+                                               "Palai Nello")[0]

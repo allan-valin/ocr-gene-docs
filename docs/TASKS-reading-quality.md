@@ -523,7 +523,16 @@ what fails:
             has read. On the page it was written for it splits nothing — the
             glue and the misreading come together, and `Suireppe` is no more in
             the dictionary than `MattenceSuireppe` is.
-      - [ ] **A hit does not say which spelling it matched.** It carries
+      - [x] **A hit names the spelling that found it**, done the same
+            evening. `search.name_the_spelling` runs over the hits that will be
+            shown — fifty comparisons against a query, not thirty thousand —
+            and says which of a row's spellings read the query better than the
+            reading did, or says nothing when it was the reading itself. The
+            hit list prints *encontrado como “…”* under the reading, because a
+            hit that explains itself when it did not need to is noise, and one
+            that does not explain itself when it should is a tool answering
+            with a word no page contains.
+      - [ ] ~~A hit does not say which spelling it matched.~~ It carries
             `matched`, and that names the *kind* of match — year, ship, line,
             letters — not which of the row's spellings won. With a split now
             indexed beside the reading, a search for *Giuseppe* can land on a

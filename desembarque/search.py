@@ -1149,7 +1149,39 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # list, the ship's own dossier follows, and the guesses come after it.
     strong = [h for h in scored if h["score"] >= STRONG_NAME]
     weak = [h for h in scored if h["score"] < STRONG_NAME]
-    return (strong + aboard + weak)[:limit]
+    return name_the_spelling((strong + aboard + weak)[:limit], name_q)
+
+
+def name_the_spelling(hits: list[dict], query: str) -> list[dict]:
+    """Which of a row's spellings the query actually matched, where it was not
+    the reading.
+
+    A row is indexed under its reading, its second reading, and any pair of
+    names a capital says the recogniser ran together. So a search for
+    *Giuseppe* can land on a row whose stored reading holds no such word, and
+    the hit list would show the reading with nothing to explain the hit. The
+    rule this repository runs on is that a guess is labelled a guess.
+
+    Said only when another spelling reads the query better than the reading
+    does: a hit that explains itself when it did not need to is noise, which is
+    the same reason `matched` is left off a row the trigrams already had.
+
+    Run over the hits that will be shown, not inside the scoring pass — fifty
+    comparisons against a query, not thirty thousand.
+    """
+    q = fold(query)
+    if not q:
+        return hits
+    for h in hits:
+        alts = h.get("alts") or ()
+        if not alts:
+            continue
+        best = difflib.SequenceMatcher(None, q, fold(h.get("text") or "")).ratio()
+        for alt in alts:
+            score = difflib.SequenceMatcher(None, q, fold(alt)).ratio()
+            if score > best:
+                best, h["spelling"] = score, alt
+    return hits
 
 
 def _arrived(rows: list[dict], years: tuple[int, int], already: set) -> list[dict]:

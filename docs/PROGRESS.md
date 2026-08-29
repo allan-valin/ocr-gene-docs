@@ -26,12 +26,14 @@ beside the reading, where a row's second reading already goes and is already
 scored — a new candidate, not a new mechanism — and what is stored is
 untouched.
 
-**One thing this leaves undone, and it is a rule of the house.** A hit carries
-`matched`, which names the *kind* of match — year, ship, line, letters — and
-not which of the row's spellings won. So a search for *Giuseppe* can now land
-on a row whose stored reading holds no such word, and the hit list shows the
-reading with nothing to explain the hit. A guess has to be labelled a guess;
-this one is not yet, and it is the first thing to fix on top of this.
+**And a hit says which spelling found it.** `matched` names the *kind* of
+match — year, ship, line, letters — and never said which of a row's spellings
+won, so a search for *Giuseppe* could land on a row whose stored reading holds
+no such word with nothing on screen to explain it. `search.name_the_spelling`
+runs over the hits that will be shown, not inside the scoring pass, and the hit
+list prints *encontrado como “…”* under the reading — only where another
+spelling reads the query better than the reading does, because a hit that
+explains itself when it did not need to is noise.
 
 Tried first and rejected, so nobody tries it twice: cut where **both halves are
 names the archive has read**. On the page it was written for it splits nothing,
