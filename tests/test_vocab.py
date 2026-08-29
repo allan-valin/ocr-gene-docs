@@ -59,11 +59,19 @@ def test_case_and_accents_are_folded_and_the_stored_word_keeps_its_own():
 
 def test_the_list_on_disk_says_where_it_came_from():
     """The same claim `data/language_names.json` makes: this is a word these
-    forms print, never a word this archive has been read to contain."""
+    forms print, never a word this archive has been read to contain.
+
+    Skipped where the file is not there. Nothing under `data/` is versioned —
+    the records are public records about real people and this remote is public
+    — so a clone has the code and none of the lists, and a test that needs one
+    says so rather than failing."""
     import json
     from pathlib import Path
+    import pytest
     from desembarque.vocab import Vocabulary
     p = Path(__file__).resolve().parents[1] / "data" / "column_vocab.json"
+    if not p.exists():
+        pytest.skip("data/column_vocab.json is not versioned")
     d = json.loads(p.read_text(encoding="utf-8"))
     assert d.get("source") and d.get("why")
     v = Vocabulary.load(p)
@@ -88,8 +96,11 @@ def test_a_column_can_ask_for_a_nearer_match_than_the_others():
 
 def test_the_floors_travel_with_the_list_on_disk():
     from pathlib import Path
+    import pytest
     from desembarque.vocab import Vocabulary
     p = Path(__file__).resolve().parents[1] / "data" / "column_vocab.json"
+    if not p.exists():
+        pytest.skip("data/column_vocab.json is not versioned")
     v = Vocabulary.load(p)
     assert v.floors.get("nacionalidade", 0) > v.floors.get("estado", 1)
     assert v.snap("estado", "cau")["value"] == "CASADO"

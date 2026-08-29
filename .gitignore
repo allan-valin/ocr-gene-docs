@@ -32,3 +32,8 @@ data/spike_*.json
 # the engine can be trusted on handwriting, and it took eyes to make.
 !data/truth/
 !data/truth/*.json
+
+# Nothing else under data/ is versioned, including the lists written by hand.
+# Names belong to people in public records and this remote is public: a list of
+# names in git is a list of names online, and a test that needs one skips
+# instead. See tests/test_vocab.py.
