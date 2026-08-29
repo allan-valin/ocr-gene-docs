@@ -371,6 +371,18 @@ is written down beside it, not when the code runs.
             *Procedencia*, written once at the top of the sheet, went from 29
             cells read to 10. On a sheet printed with thirty rows and carrying
             three, which is the commoner page, the saving is most of the page.
+            Tried and rejected, measured on the same readings without running
+            the recogniser again: **the stroke rules on the way in**, running
+            each reading through `strokes.variants` and matching every variant
+            against the list. It buys recall with precision, which is the wrong
+            trade for a value shown beside a name — civil state 12 right / 1
+            wrong becomes 14 / 3, profession 7 / 1 becomes 9 / 6, and
+            nationality gets no more right answers and twice the wrong ones.
+            And **a floor of 0.50**: civil state 15 / 3 and profession 9 / 3,
+            more right answers than 0.55 buys and three times the wrong ones.
+            The stroke rules stay where they belong, in the menu a person opens
+            on a word, where a wrong guess costs a line of a list and not a
+            value on a record.
       - [ ] **The wiring, which is what is left.** `transcribe_page` does not
             call `cells_from_bands` yet, and what a cell costs is the decision
             to take with it: 31 bands × 8 columns is 216 crops against the 31
