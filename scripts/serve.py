@@ -118,6 +118,12 @@ def _why_check(row: dict, names: Names) -> list[str]:
     # legend says what the mark means.
     if names.near_miss(text):
         out.append("quase")
+    # Two names the recogniser ran into one word. Search reaches such a row
+    # through the split it indexes beside the reading (T13); a person scanning
+    # the page has nothing to tell `MarcelloNittoms` from a long surname, and
+    # it is the row where retyping buys the most.
+    if any(_s.unglued(w) for w in text.split()):
+        out.append("colado")
     return out
 
 

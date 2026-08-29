@@ -267,7 +267,7 @@
     <button id="nextdoubt" type="button" hidden
       title="Ir para a próxima linha sem semelhança com nomes do acervo (tecla D)">D ↓</button>
     <button id="doubtbtn" type="button" aria-pressed="false"
-      title="Marcar as linhas que valem uma segunda olhada primeiro: score baixo do motor, sobrenome inferido, ou leitura sem semelhança com nomes do acervo. Não quer dizer que estejam erradas.">? Conferir</button>
+      title="Marcar as linhas que valem uma segunda olhada primeiro: score baixo do motor, nome inferido pela posição, leitura sem semelhança com nomes do acervo, leitura a um traço de um nome, ou dois nomes grudados numa palavra. Não quer dizer que estejam erradas.">? Conferir</button>
     <button id="prev" title="Anterior (Shift+Enter)">↑</button>
     <button id="next" title="Próximo (Enter)">↓</button>
   </div>
@@ -621,6 +621,8 @@ function markDoubtful(){
         desconhecido: "nenhuma palavra se parece com um nome deste acervo",
         quase: "a leitura está a um traço de um nome que o acervo já leu — "
                + "quase um nome não é um nome",
+        colado: "dois nomes saíram grudados numa palavra só — a maiúscula no "
+               + "meio é onde o espaço estava",
       };
       rows.forEach((r,i)=>{
         if(why.has(r.n)){

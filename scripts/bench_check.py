@@ -48,6 +48,9 @@ def reasons(row: dict, names: Names, spoken: set[str] | None = None) -> list[str
         out.append("quase")
     if spoken and names.near_miss(text, spoken=spoken) and "quase" not in out:
         out.append("quase-lista")
+    # two names the recogniser ran into one word (T13)
+    if any(searchlib.unglued(w) for w in text.split()):
+        out.append("colado")
     return out
 
 
@@ -66,7 +69,8 @@ def main(argv=None) -> int:
     bad = [r for r in scored if r["bad"]]
     good = [r for r in scored if not r["bad"]]
 
-    every = ["score", "inferido", "desconhecido", "quase", "quase-lista"]
+    every = ["score", "inferido", "desconhecido", "quase", "quase-lista",
+             "colado"]
     report = {"rows": len(scored), "bad": len(bad), "good": len(good),
               "dictionary": len(names), "reasons": {}}
     for why in every + ["hoje", "todas"]:

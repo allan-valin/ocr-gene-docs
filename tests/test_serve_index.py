@@ -1010,3 +1010,22 @@ def test_a_save_does_not_record_the_same_typing_twice(tmp_path, monkeypatch):
 
 def test_tidying_leaves_a_row_that_never_was_edited_untouched():
     assert serve.tidy_rows([{"n": 1, "name_raw": "A"}]) == [{"n": 1, "name_raw": "A"}]
+
+
+def test_a_reading_that_ran_two_names_together_is_worth_a_second_look():
+    """`MarcelloNittoms` is two names and no dictionary word, and a reader
+    scanning a page has nothing to tell it from a long surname. Search reaches
+    it through `alts` since T13; the person correcting the page should be sent
+    to it too."""
+    from desembarque.gazetteer import Names
+
+    names = Names({"MARCELLO": 9})
+    why = serve._why_check({"n": 1, "name_raw": "Palai MarcelloNittoms"}, names)
+    assert "colado" in why
+
+
+def test_a_reading_written_as_two_words_is_not_flagged_as_glued():
+    from desembarque.gazetteer import Names
+
+    why = serve._why_check({"n": 1, "name_raw": "Palai Nello"}, Names({"PALAI": 9}))
+    assert "colado" not in why

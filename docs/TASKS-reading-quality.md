@@ -511,6 +511,14 @@ what fails:
             hand-read pages are not the pages this was written for and carry
             little glue; across the corpus **1,361 of 37,617 stored readings**
             carry a word a capital cuts in two.
+            **And the reader is sent to those rows.** `colado` is a fifth
+            reason in the check, measured by `bench_check.py` over the same 149
+            rows: it catches 0.041 of the badly-read rows and **stops nobody on
+            a correctly-read one** — the only reason in the table with no cost
+            at all. It adds nothing to what the four reasons already catch
+            together (0.868 either way), and is kept for what it says rather
+            than for what it finds: *this row is two names in one word, retype
+            it*, which is different advice from *the engine was unsure*.
             Tried and rejected: cutting where both halves are names the archive
             has read. On the page it was written for it splits nothing — the
             glue and the misreading come together, and `Suireppe` is no more in
