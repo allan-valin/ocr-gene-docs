@@ -1037,9 +1037,6 @@ class PaddleEngine:
         except (OSError, ValueError):
             return None
         found = None
-        # whether any pass found the table's own heading line, which is what
-        # says this page is a list at all
-        named = False
         for side in (None, FINE_DETECT_SIDE):
             try:
                 boxes = self._detect(small, side)
@@ -1059,37 +1056,20 @@ class PaddleEngine:
             # the half that was wrong before any of this.
             col = columns(boxes, w, h, labelled) or (
                 {**hint, "top": 0.0, "heading": None} if hint else None)
-            named = named or bool(col)
             if col:
                 ruled = self._ruled_rows(image, w, h, col)
                 if ruled is not None:
                     return ruled
-        if (found is not None and found.rows) or not named:
-            # Many pages in a dossier are not tables — a cover card, the
-            # interpreter's PARTE, a blank verso — and finding no table on one
-            # is the right answer, not a page to spend a third detection on.
-            return found
-        # Nothing crossed this page: it is one of the faint ones, grey ink on
-        # grey paper, and a few of them the archive has stamped ILEGÍVEL. The
-        # last thing to try is equalising it — measured in `spike_faint.py`,
-        # where OL.PRJ.17851 p2 goes from no rows to twenty-nine. It is a last
-        # resort because it also turns paper grain into boxes, so it is asked
-        # only where the alternative is no table, and the crops are still cut
-        # from the page as it is: the geometry is normalised, the lift is not
-        # a picture anybody reads.
-        lifted = small.with_name(f"{small.stem}-lifted.png")
-        try:
-            if not (lifted.exists() and lifted.stat().st_size):
-                with Image.open(small) as im:
-                    lift(im).save(lifted)
-            boxes = self._detect(lifted, None)
-        except Exception:
-            return found
-        if boxes:
-            labelled = self._read_boxes(lifted, heading_lines(boxes, h))
-            again = table(boxes, w, h, labelled=labelled, hint=hint)
-            if again is not None and len(again.rows) >= MIN_PRINTED_ROWS:
-                return again
+        # `lift` is the third thing there could be here and is deliberately not
+        # called. Equalising a faint page does move detection — 32 boxes and no
+        # rows to 71 and 29 on OL.PRJ.17851 p2, measured in
+        # `scripts/spike_faint.py` — but that page already comes back with 45
+        # bands and 23 names, because the ruled fallback above catches it, and
+        # every page in the corpus that still reads nothing prints no heading
+        # line at all: they are covers and PARTEs, not lists. So there is no
+        # page here it would help, and on a page where it fired it would turn
+        # paper grain into rows. It is written, measured and left unwired until
+        # a page turns up that wants it.
         return found
 
 

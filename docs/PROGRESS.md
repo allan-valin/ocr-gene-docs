@@ -97,16 +97,26 @@ moves.
 | stretch | 32 | found | 0 |
 | **equalised** | 71 | found | **29** |
 
-Read end to end the page now comes back as a list of 45 bands with 23 names on
-it, where it used to come back with nothing. The names are poor — the archive
-stamped this sheet *ORIGINAL ILEGÍVEL* — and equalising also turns paper grain
-into boxes, so it is a last resort and gated twice: only after the ordinary
-passes found no rows, and only on a page that printed a heading line, because
-many pages in a dossier are not tables and finding no table on a cover card is
-the right answer, not a page to spend a third detection on.
+**And then it turned out there is no page here that wants it.** The lift was
+wired in as a last resort, and measured again with a counter on it: on
+OL.PRJ.17851 p2 it never fires, because that page already comes back with 45
+bands and 23 names — the ruled fallback catches it, which the box count alone
+does not show. The twelve records on disk holding no rows were then read one by
+one with the engine: all twelve still come back `unknown`, and they print no
+heading line at all, because they are covers and interpreters' PARTEs rather
+than lists.
 
-Worth a batch: twelve records on disk hold no rows at all, and the pages behind
-them are the ones this is for.
+So `lift` is written, tested and documented, and deliberately **not called**.
+On a page where it did fire it would turn paper grain into rows — the same page
+whose seven clean printed headings become `oshdepaxdnley` when equalised — and
+there is no page in this corpus it would rescue. The comment in
+`_printed_table` says where it would go and what would have to be true first.
+
+What is worth having from this: `retry_unknown.py --again` now exists, and a
+page stored as a `list` with no rows on it counts as wanting a reading, which
+it did not before — the same failure as an `unknown` page wearing the other
+label. Both are how the next thing the engine learns reaches the pages that
+read nothing, without the eleven-hour re-read a schema bump costs.
 
 Next, in order: wire `cells_from_bands` into `transcribe_page` and take the
 cost decision with it (31 bands × 8 columns is 216 crops against the name

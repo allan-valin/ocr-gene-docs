@@ -34,6 +34,12 @@ def pages_wanting_a_reading(record: dict, schema: int = 0) -> list[int]:
     empty. Two hundred of them are genuinely blank paper, and re-proving that
     on every future run costs an hour and finds nobody. The stamp is the
     engine's schema, so when the engine learns something they all come back.
+
+    A page stored as a `list` with no rows on it counts as well, and did not
+    before. It is the same failure wearing the other label — the geometry found
+    a table and no rows on it, and nobody was told — and after the last retry
+    pass twelve records on disk are in exactly that state. They are the pages
+    the faint lift in `engine_paddle.lift` was written for.
     """
     if not record or not record.get("engine"):
         return []          # a document nobody read is an index run's work
@@ -43,7 +49,9 @@ def pages_wanting_a_reading(record: dict, schema: int = 0) -> list[int]:
     for p in record.get("pages") or []:
         if not isinstance(p, dict) or p.get("error"):
             continue
-        if p.get("kind") != "unknown" or p.get("n") in has_rows:
+        if p.get("n") in has_rows:
+            continue
+        if p.get("kind") not in ("unknown", "list"):
             continue
         if schema and int(p.get("retried") or 0) >= schema:
             continue

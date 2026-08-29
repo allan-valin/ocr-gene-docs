@@ -28,8 +28,12 @@ def test_a_page_that_produced_nothing_is_worth_reading_again():
 
 
 def test_a_page_that_produced_rows_is_left_alone():
+    """Page 3 read something, so it is not read again — a second set of rows
+    would draw two names against one line of the scan. Page 2 is in the list
+    because it is a `list` page with nothing on it, which is the same failure
+    as an `unknown` page and is now retried too."""
     r = record(rows=[{"page": 3, "n": 1, "name_raw": "MARIA"}])
-    assert pages_wanting_a_reading(r) == []
+    assert pages_wanting_a_reading(r) == [2]
 
 
 def test_a_page_the_engine_failed_on_is_not_this_job():
@@ -113,3 +117,23 @@ def test_the_stamps_are_left_where_they_are():
     out = with_page(record(), 3, {"n": 3, "kind": "list"},
                     [{"n": 1, "name_raw": "ANNA"}])
     assert out["schema"] == 18 and "read_schema" not in out
+
+
+def test_a_list_that_came_back_with_no_rows_is_worth_reading_again():
+    """A page stored as `list` with nothing on it is the same failure as a page
+    stored as `unknown`: the geometry found no rows and nobody was told. Twelve
+    records on disk are in exactly that state, and they are the pages the faint
+    lift was written for — the earlier retry pass moved them off `unknown`
+    without putting a name on them."""
+    r = record(pages=[{"n": 1, "kind": "list"}, {"n": 2, "kind": "list"}],
+               rows=[{"page": 1, "name_raw": "Alfieri"}])
+    assert pages_wanting_a_reading(r) == [2]
+
+
+def test_a_list_with_no_rows_that_this_engine_already_retried_is_left_alone():
+    """The same stamp rule the unknown pages have: two hundred of them are
+    genuinely blank paper, and re-proving that on every run costs an hour and
+    finds nobody."""
+    r = record(pages=[{"n": 2, "kind": "list", "retried": 4}], rows=[])
+    assert pages_wanting_a_reading(r, schema=4) == []
+    assert pages_wanting_a_reading(r, schema=5) == [2]

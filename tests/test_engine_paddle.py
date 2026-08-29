@@ -883,16 +883,3 @@ def test_lifting_a_page_that_cannot_be_lifted_gives_the_page_back():
     flat = Image.new("L", (40, 10), 255)
     assert lift(flat).size == (40, 10)
     assert lift(None) is None
-
-
-def test_a_page_that_is_not_a_list_does_not_pay_for_the_lift(tmp_path):
-    """Many pages in a dossier are not tables — a cover card, the interpreter's
-    PARTE, a blank verso — and finding no table on one is the right answer. The
-    faint-page retry is for a page that printed a heading line and still gave
-    up no rows, not for every page that is not a list; at three seconds a
-    detection and two pages a dossier, the difference over seven thousand
-    dossiers is hours."""
-    d = Detects(tmp_path)
-    d.eng._ruled_rows = lambda image, w, h, col: None
-    d.eng._printed_table(d.page)
-    assert d.sides == [None, 2000], "a third detection ran on a page with no headings"

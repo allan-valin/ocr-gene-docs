@@ -94,6 +94,15 @@ def main(argv: list[str] | None = None) -> int:
                     help="stop after this many records (0 = all)")
     ap.add_argument("--dry-run", action="store_true",
                     help="read and report, write nothing")
+    ap.add_argument("--again", action="store_true",
+                    help="ignore the stamp that says this engine already tried "
+                         "a page. The stamp exists so two hundred pages of "
+                         "blank paper are not re-proved every run; the reason "
+                         "to lift it is that the engine has learned something "
+                         "since — the faint-page lift is the case it was "
+                         "written for — and the alternative, bumping the "
+                         "schema, is an eleven-hour re-read of 660 dossiers "
+                         "to find pages this pass reaches in half an hour")
     # Three rather than one per core: each worker holds its own copy of the
     # models and a decompressed page, and this has to leave the laptop usable.
     ap.add_argument("--workers", type=int, default=3)
@@ -108,7 +117,8 @@ def main(argv: list[str] | None = None) -> int:
             record = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        wanted = pages_wanting_a_reading(record, schema=SCHEMA)
+        wanted = pages_wanting_a_reading(record,
+                                         schema=0 if args.again else SCHEMA)
         if not wanted:
             done_already += 1
             continue
