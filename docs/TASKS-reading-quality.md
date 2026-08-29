@@ -264,4 +264,58 @@ is written down beside it, not when the code runs.
             to the same idea — the picture is not what is wrong.
             A cursive page still needs its own truth file; a number measured on
             typescript must never be quoted as if it covered the hand.
+      - [x] **The crop was not what was wrong.** The line above says the four
+            columns that read *nothing* are a crop problem — a narrow heading
+            putting the edge in the wrong place. Measured, they are not, and
+            the four fail for three different reasons.
+            The columns were drawn over the page and looked at:
+            *Idade* is measured 0.388–0.415 of the sheet and the figures the
+            detector finds sit at 0.388–0.413; *Sexo* is measured 0.415–0.444
+            against ink at 0.417–0.442. Both crops hold their writing, and the
+            same digits read back as `二`, `7`, `1二` off the detector's own
+            tight boxes. **Idade and sexo are the recogniser's floor on a cell
+            of one or two characters**, not a crop: at 98 px wide and 26 rows
+            deep, nothing read right under any cutting tried.
+            **Procedencia and classe are mostly blank on the page.** The clerk
+            wrote *BUENOS AIRES* on the first row of the sheet and left the
+            rest of the column empty; the hand transcription writes it against
+            all 26 rows, because that is what the page means. Scoring a blank
+            cell against an expanded truth measures the transcriber, not the
+            engine — those two want the repetition rule the names already have
+            (T6) before any number about them means anything.
+            Tried and rejected, so nobody tries them twice:
+            *snapping the column edges to the gutters between the columns of
+            ink* — the detector merges neighbouring cells into one box often
+            enough that the body has no white column left to find between
+            0.29 and 0.68 of the sheet, and the one edge it did move (classe)
+            read worse; and *tightening each cell to its own ink and scaling it
+            to a standard height*, the usual answer to a small crop, which
+            moved idade 0/22 → 0/22 and sexo 0/26 → 1/26.
+            What did move: **a cell is cut at its band and its column exactly**,
+            where it used to be padded out by `PAD_PX` like a name. A name is
+            300 px wide and carries the rules at its edges; a cell of 98 px
+            hands the recogniser three printed lines around two digits. Swept
+            over 0.0 / 0.08 / 0.12 / 0.20 of the cell trimmed off each edge,
+            cutting at the band is best in every column and every trim past it
+            is worse — the rules cost less than the writing a trim takes with
+            them. `scripts/bench_columns.py --inset` is the knob that measured
+            it and stays for the cursive page.
+
+            | column | padded out, as it was | cut at the band |
+            |---|---|---|
+            | nacionalidade | 0.730 | **0.716** |
+            | idade | 0.977 | 0.977 |
+            | sexo | 1.000 | 1.000 |
+            | estado | 0.593 | **0.577** |
+            | profissao | 0.710 | **0.661** |
+            | procedencia | 0.974 | 0.969 |
+            | classe | 0.885 | 0.904 |
+
+            So the order of the work changes. The three columns that read
+            something wrong — nacionalidade 0.716, estado 0.577, profissao
+            0.661 — are a closed vocabulary away from being useful
+            (`SEAGNOLA`, `ISPAGNOLA`, `LASIERCL` all reach *ESPANHOLA* and
+            *BRASILEIRO* by a fuzzy match), and that is the next piece of work.
+            Idade and sexo need a different reader, which is a spike and not a
+            crop. Procedencia and classe need the repetition rule first.
 - [ ] **T11 — The language prior** (§7). Depends on T10.

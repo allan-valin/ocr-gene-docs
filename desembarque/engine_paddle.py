@@ -303,9 +303,28 @@ def name_strip_box(geo, size: tuple[int, int]) -> tuple[int, int]:
     return max(0, int((nx0 - 0.004) * W)), min(W, int((nx1 + 0.004) * W))
 
 
+# How much of a cell is left behind at each edge, as a fraction of the cell.
+# A name is 300 px wide on the full-resolution page and carries the rules at
+# its edges without trouble, which is why `rows_from_bands` pads its crop out
+# by `PAD_PX` to catch a descender. A cell of *Idade* is 98 px wide, the
+# printed rules stand at both its edges and the band's own lower rule runs
+# under the figures, so the same padding hands the recogniser three printed
+# lines around two digits.
+#
+# Measured on BS.ENT.017397 p2, the page transcribed by hand, over the whole
+# sweep 0.0 / 0.08 / 0.12 / 0.20: cutting at the band and the column exactly —
+# no padding out, nothing trimmed off — reads best in every column, and every
+# trim past it reads worse. The rules cost less than the writing they take with
+# them. The knob stays because `scripts/bench_columns.py --inset` is what
+# measured it and is what will measure it again on a cursive page.
+CELL_INSET_X = 0.0
+CELL_INSET_Y = 0.0
+
+
 def cells_from_bands(geo, size: tuple[int, int], field: str,
                      recognize: Callable[[list], list[tuple[str, float]]],
                      crop: Callable[[int, tuple[int, int, int, int]], object],
+                     inset: tuple[float, float] = (CELL_INSET_X, CELL_INSET_Y),
                      ) -> list[dict]:
     """One cell of one column per band, in page order.
 
@@ -323,14 +342,18 @@ def cells_from_bands(geo, size: tuple[int, int], field: str,
     box = cols.get(field)
     if not box:
         return []
+    ix, iy = inset
     x0 = max(0, int(box[0] * W))
     x1 = min(W, int(box[1] * W))
+    trim = int((x1 - x0) * ix)
+    x0, x1 = x0 + trim, x1 - trim
 
     bands = geo.normalized_rows()
     boxes, keep = [], []
     for i, (bt, bb) in enumerate(bands):
-        a = max(0, int(bt * H) - PAD_PX)
-        b = min(H, int(bb * H) + PAD_PX)
+        a, b = int(bt * H), int(bb * H)
+        cut = int((b - a) * iy)
+        a, b = max(0, a + cut), min(H, b - cut)
         if b - a < MIN_ROW_PX:
             continue
         boxes.append((x0, a, x1, b))

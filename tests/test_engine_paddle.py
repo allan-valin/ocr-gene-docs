@@ -721,3 +721,43 @@ def test_a_band_too_short_to_hold_writing_is_skipped_and_still_numbered():
     assert [c["n"] for c in got] == [1, 2]
     assert got[0] == {"n": 1, "text": "", "conf": 0.0}
     assert got[1]["text"] == "37"
+
+
+def test_a_cell_is_cut_at_the_band_and_not_padded_out_onto_the_rule():
+    """A name is 300 px wide on the full-resolution page and its crop is padded
+    out by `PAD_PX` to catch a descender. A cell of *Idade* is 98 px wide, with
+    a printed rule at each edge and the band's own rule under the figures, so
+    the same padding hands the recogniser three lines around two digits — which
+    is what it reads back: `一`, `_`, `11`, `十`. Measured over the sweep on
+    BS.ENT.017397 p2, cutting at the band exactly reads best in every column."""
+    from desembarque.engine_paddle import cells_from_bands
+
+    class Geo:
+        def normalized_rows(self): return [(0.10, 0.14), (0.15, 0.19)]
+        def normalized_columns(self): return {"nome": (0.05, 0.35),
+                                              "idade": (0.40, 0.50)}
+
+    seen = []
+    got = cells_from_bands(Geo(), (1000, 2000), "idade",
+                           lambda crops: [("23", 0.9), ("37", 0.8)],
+                           lambda i, box: seen.append(box) or f"c{i}")
+    assert [c["text"] for c in got] == ["23", "37"]
+    assert seen[0] == (400, 200, 500, 280), seen[0]
+
+
+def test_a_cell_can_be_trimmed_off_its_rules_when_asked():
+    """The knob the bench swept, kept because it is what will sweep a cursive
+    page: the trim is a margin off each edge, never a second column."""
+    from desembarque.engine_paddle import cells_from_bands
+
+    class Geo:
+        def normalized_rows(self): return [(0.10, 0.14)]
+        def normalized_columns(self): return {"nome": (0.05, 0.35),
+                                              "idade": (0.40, 0.50)}
+
+    seen = []
+    cells_from_bands(Geo(), (1000, 2000), "idade",
+                     lambda crops: [("23", 0.9)],
+                     lambda i, box: seen.append(box) or "c", inset=(0.10, 0.10))
+    x0, y0, x1, y1 = seen[0]
+    assert (x0, x1) == (410, 490) and (y0, y1) == (208, 272), seen[0]

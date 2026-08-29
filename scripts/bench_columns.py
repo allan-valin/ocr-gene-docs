@@ -31,7 +31,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from desembarque.engine_paddle import PaddleEngine, cells_from_bands  # noqa: E402
+from desembarque.engine_paddle import (CELL_INSET_X, PaddleEngine,  # noqa: E402
+                                       cells_from_bands)
 from page_geometry import page_image                                  # noqa: E402
 
 # Which stored field each measured column holds, for the columns worth scoring.
@@ -94,7 +95,8 @@ def prepared(recognize, how: str):
 
 
 def read_columns(pdf: Path, page: int, pagecache: Path,
-                 wanted: list[str], how: str = "none") -> tuple[dict, dict]:
+                 wanted: list[str], how: str = "none",
+                 inset: float = CELL_INSET_X) -> tuple[dict, dict]:
     """Each wanted column of one page, as the engine reads it today."""
     from PIL import Image
     img = page_image(pdf, page, pagecache)
@@ -112,7 +114,8 @@ def read_columns(pdf: Path, page: int, pagecache: Path,
             continue
         out[field] = cells_from_bands(geo, im.size, field,
                                       prepared(eng._recognize, how),
-                                      lambda i, box: im.crop(box))
+                                      lambda i, box: im.crop(box),
+                                      inset=(inset, inset))
     return measured, out
 
 
@@ -125,6 +128,9 @@ def main(argv=None) -> int:
     ap.add_argument("--prep", default="none",
                     choices=["none", "upscale2", "upscale4", "autocontrast"],
                     help="what to do to a cell before reading it")
+    ap.add_argument("--inset", type=float, default=CELL_INSET_X,
+                    help="how much of each edge of a cell to leave behind, so "
+                         "the printed rules are not read as strokes")
     ap.add_argument("--json", type=Path, default=None)
     a = ap.parse_args(argv)
 
@@ -138,7 +144,7 @@ def main(argv=None) -> int:
 
     wanted = [a.column] if a.column else list(SCORED)
     measured, read = read_columns(pdf, TRUTH["page"], a.pagecache, wanted,
-                                  a.prep)
+                                  a.prep, a.inset)
 
     print(f"{TRUTH['notation']} p{TRUTH['page']}, {len(rows)} rows typed by hand")
     print("columns measured:", ", ".join(sorted(measured)))
@@ -146,7 +152,8 @@ def main(argv=None) -> int:
     if missing:
         print("not measured on this page:", ", ".join(missing))
 
-    report = {"page": TRUTH, "rows": len(rows), "columns": {}}
+    report = {"page": TRUTH, "rows": len(rows), "prep": a.prep,
+              "inset": a.inset, "columns": {}}
     print("column         rows  exact  mean CER")
     for field in wanted:
         cells = read.get(field)

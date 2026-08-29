@@ -6,6 +6,59 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-08-29 — the cells were cut right, and three things were wrong instead
+
+Tests green: 606 Python assertions, 9 skipped. One task, T10a in
+`docs/TASKS-reading-quality.md`: the column benchmark said four columns read
+*nothing* and the checkpoint before this one called that a crop problem —
+a heading narrower than its column putting the edge in the wrong place.
+
+**It is not a crop problem.** The columns were drawn over BS.ENT.017397 p2 and
+looked at. *Idade* is measured 0.388–0.415 of the sheet and its figures sit at
+0.388–0.413; *Sexo* is measured 0.415–0.444 against ink at 0.417–0.442. The
+crops hold their writing. The four columns fail for three different reasons:
+
+* **idade and sexo** — the recogniser's floor on a cell of one or two
+  characters. The same figures read back `二`, `7`, `1二` off the detector's own
+  tight boxes, so no cutting rescues them. A different reader, as a spike.
+* **procedencia and classe** — mostly blank on the page. The clerk wrote
+  *BUENOS AIRES* once and left the column empty; the hand transcription writes
+  it against all 26 rows because that is what the page means. Scoring a blank
+  cell against an expanded truth measures the transcriber. Those two want the
+  repetition rule the names already have (T6) before a number about them means
+  anything.
+* **nacionalidade, estado, profissao** read something wrong — `SEAGNOLA`,
+  `LASIERCL`, `conercio` — which is a closed vocabulary away from being useful,
+  and is the next work.
+
+**What did move.** A cell is now cut at its band and its column exactly, where
+it used to be padded out by `PAD_PX` like a name: a name is 300 px wide and
+carries the rules at its edges, a cell of 98 px hands the recogniser three
+printed lines around two digits. Swept over 0.0 / 0.08 / 0.12 / 0.20 of each
+edge trimmed, cutting at the band is best in every column and every trim past
+it is worse.
+
+| column | padded out, as it was | cut at the band |
+|---|---|---|
+| nacionalidade | 0.730 | **0.716** |
+| estado | 0.593 | **0.577** |
+| profissao | 0.710 | **0.661** |
+| procedencia | 0.974 | 0.969 |
+| classe | 0.885 | 0.904 |
+| idade / sexo | 0.977 / 1.000 | unmoved |
+
+Tried and rejected, so nobody tries them twice: **snapping the column edges to
+the gutters between the columns of ink** — the detector merges neighbouring
+cells often enough that the body has no white column left to find between 0.29
+and 0.68 of the sheet, and the one edge it did move read worse; and
+**tightening each cell to its own ink and scaling it to a standard height**,
+the usual answer to a small crop, which moved idade 0/22 → 0/22 and sexo
+0/26 → 1/26.
+
+Next, in order: the closed vocabularies for nacionalidade / estado /
+profissao; the repetition rule for procedencia and classe (T6); then a reader
+for one- and two-character cells.
+
 ## 2026-08-28, evening — the reading, not the retrieval
 
 Allan away 21:00–23:00. Everything below is committed and pushed, tests green
