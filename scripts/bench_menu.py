@@ -24,7 +24,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from desembarque.gazetteer import Names, menu_for, spoken_names  # noqa: E402
+from desembarque.gazetteer import (Names, menu_for,  # noqa: E402
+                                   names_by_language, spoken_names)
 from desembarque.truthset import (fold, pairs, rank_of,  # noqa: E402
                                   word_pairs, words_from_disk)
 from desembarque import strokes                    # noqa: E402
@@ -116,8 +117,32 @@ def sources(names: Names, limit: int = 10) -> dict:
         return [g["name"] for g in menu_for(word, names, limit=limit,
                                             spoken=spoken)]
 
+    # The language prior (T11), measured at its ceiling. It is a per-row prior
+    # taken from the nationality column, and on these pages that column reads
+    # nothing: `scripts/read_nationalities.py` over the six hand-read pages
+    # returns `tiuin`, `geil`, `Bueclibme` and snaps none of 48 cells to a word
+    # these forms print. So the prior is scored here with the language *given*,
+    # which is the most it could ever be worth on this evidence — if knowing the
+    # language for certain buys nothing, reading it off a cursive column buys
+    # less.
+    by_lang = names_by_language(ROOT / "data" / "language_names.json")
+
+    def with_language(codes):
+        want = set()
+        for code in codes:
+            want |= by_lang.get(code, set())
+
+        def fn(word, row, i):
+            return [g["name"] for g in menu_for(word, names, limit=limit,
+                                                spoken=spoken,
+                                                language_names=want)]
+        return fn
+
     picked = {"alts": alts, "archive": archive, "menu": both,
               "guesses": guesses,
+              "guesses+it": with_language(["it"]),
+              "guesses+es": with_language(["es"]),
+              "guesses+it,es": with_language(["it", "es"]),
               "strokes": ink, "all": joined, "shipped": shipped}
     for rule in ("minims", "ascender", "round", "abbreviation", "edge",
                  "capital", "space", "two changes"):
@@ -151,11 +176,11 @@ def main(argv=None) -> int:
           f"stored reading, over {seen['pages']} pages; {len(cases)} words")
     for u in seen["unpaired"]:
         print(f"  {u['page']}: {u['missing']} rows never read")
-    head = "source      words  found   " + "  ".join(f"@{d:<4}" for d in DEPTHS)
+    head = "source         words  found   " + "  ".join(f"@{d:<4}" for d in DEPTHS)
     print(head)
     for label, m in report["sources"].items():
         cells = "  ".join(f"{m['at'][d]:<5.3f}" for d in DEPTHS)
-        print(f"{label:<10}  {m['words']:<5}  {m['found']:<5}  {cells}")
+        print(f"{label:<13}  {m['words']:<5}  {m['found']:<5}  {cells}")
     if a.json:
         a.json.write_text(json.dumps(report, indent=2), encoding="utf-8")
     return 0

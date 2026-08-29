@@ -433,5 +433,47 @@ is written down beside it, not when the code runs.
       page stored as a `list` with no rows now counts as wanting a reading.
       Separately, and already known: contrast does nothing for *reading* a crop
       once it is cut — `data/spike_prep.json`, 0.362 against 0.361.
-- [ ] **T11 — The language prior** (§7). No longer blocked: T10 is wired and
-      the three columns come back on every page the app reads.
+- [x] **T11 — The language prior** (§7), built and measured 2026-08-29.
+      `data/language_names.json` gains `by_language`: all 259 names placed, a
+      name in every language that uses it, and the overlap kept — MARIA is all
+      three, COSTA is Portuguese and Italian. `vocab.language_for` reads a
+      nationality as a language and only where there is a list behind it: the
+      Spanish-speaking republics are Spanish, *Suisso* is deliberately absent,
+      and a Japanese or Polish passenger gets the menu the rules already build.
+      Asked of the snapped word, never of the reading. `menu_for` stably
+      partitions the menu it had already ordered, so every measurement behind
+      that order survives inside each half; it orders and never filters,
+      because half these families carry a Spanish surname on an Italian
+      passport. The review screen sends the row's nationality with the word.
+
+      **It cannot be measured as it will be used, and that is the finding.**
+      `scripts/read_nationalities.py` reads the nationality column of the six
+      hand-read pages: 48 cells carry ink, they come back `tiuin`, `geil`,
+      `Bueclibme`, `一`, and **none of the 48 snaps to a word these forms
+      print**. The column is legible on typescript and is not legible in this
+      cursive hand, which is the same wall idade and sexo hit. So the prior has
+      no input on the pages the menu is scored over.
+
+      What is measurable is its **ceiling**: score the menu with the language
+      *given* rather than read. If knowing it for certain buys nothing, reading
+      it off a cursive column buys less.
+
+      | menu | words | found | @1 | @3 | @5 | @10 |
+      |---|---|---|---|---|---|---|
+      | guesses, as they ship | 217 | 82 | 0.235 | 0.350 | 0.369 | 0.378 |
+      | with Italian given | 217 | 82 | **0.263** | 0.355 | 0.369 | 0.378 |
+      | with Spanish given | 217 | 82 | **0.263** | 0.350 | 0.369 | 0.378 |
+      | with both given | 217 | 82 | **0.263** | 0.350 | 0.369 | 0.378 |
+
+      Six more words right at the first line, of 217, and nothing past rank
+      three — which is what a re-ranking should look like: the same 82 names
+      found, in a better order. Italian, Spanish and both give the same number,
+      because the names the prior lifts are mostly in more than one of the
+      lists.
+      So it ships — it costs nothing at query time and fires wherever the
+      column reads, which today means typewritten pages — and the number above
+      is a ceiling, not a claim about a cursive page.
+      **Still to do:** a truth page that has both hand-read names and a legible
+      nationality column, which is the only way to measure this as used. The
+      hand transcription of BS.ENT.017397 p2 is one half of it and has no
+      stored engine reading of its names to pair against.

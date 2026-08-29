@@ -6,6 +6,51 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-08-29, evening — the plan's last two tasks, and a wall worth naming
+
+Tests green: **673 Python assertions, 9 skipped; 126 browser assertions in both
+browsers.** `bench_search.py --matrix` measured before and after every commit
+of T6 and unmoved every time: 86/95/99 of 142 by name alone, 118/122/129 with
+the crossing named.
+
+**T6 — the name split is gone.** `split_name` took the last word of a reading
+as the given name, which is the convention these clerks mostly used and one a
+dossier breaks: the same passengers appear twice, once in German with the
+surname first, and there the split filed four people under *Benito*. The engine
+writes `name_raw` and the score; `ditto.resolve` writes `inherited` and marks
+the field `name`; `ditto.written` is the row's own words with the mark dropped;
+the review screen no longer splits what a person types. `conf` is keyed `name`,
+because that number was always the score of the name strip. The spreadsheet
+carries `repete_de_cima` and `nome_completo` where it carried *sobrenome* and
+*nome*.
+
+Nothing on disk was rewritten and nothing was re-read: 660 records carry the
+old fields, `desembarque/rowfields.py` and `search.row_text` understand both
+shapes, and only the new one is written.
+
+**T11 — the language prior ships, and cannot yet be measured as it is used.**
+The nationality column says which language a row's names are written in, so the
+menu compares a badly-read word with that language's names first. All 259 names
+in `data/language_names.json` are now grouped by language, a name belonging to
+every language that uses it. It orders and never filters.
+
+Then `scripts/read_nationalities.py` read that column on the six hand-read
+pages, and **none of the 48 cells with ink snapped to a word these forms
+print** — `tiuin`, `geil`, `Bueclibme`. The column is legible on typescript and
+not in this cursive hand, the same wall idade and sexo hit. So the prior was
+scored at its ceiling instead, with the language *given*: 0.235 → **0.263** at
+rank one over 217 badly-read words, the same 82 names found in a better order,
+and nothing past rank three. Six words. It ships because it costs nothing and
+fires wherever the column reads; the number is a ceiling and is written down as
+one.
+
+**What this leaves.** The reading-quality plan has no open task. What is left
+is the wall both of these ran into: a cursive hand the recogniser cannot read
+in a narrow column. The refset is where that gets worked on — one page per
+failure shape — and the next thing worth doing is the eight per cent of
+documents that come back with no readable row at all, because a dossier that
+yields nothing is a ship nobody can search and the run reports success.
+
 ## 2026-08-29, evening — the columns are read, and three things were writing into the demo record
 
 Tests green: **651 Python assertions, 9 skipped; 126 browser assertions passing

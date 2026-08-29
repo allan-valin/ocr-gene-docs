@@ -46,7 +46,11 @@ def pairs(truth: dict, rows: list[dict]) -> list[dict]:
         row = by_n.get(n)
         if row is None or not (row.get("name_raw") or "").strip():
             continue
-        out.append({"truth": name, "read": row["name_raw"], "row": row})
+        # the page a pair came from travels with it: a bench that wants
+        # anything else about the row — its nationality, for the language
+        # prior — has to be able to find the row again
+        out.append({"truth": name, "read": row["name_raw"], "row": row,
+                    "pdf": truth.get("pdf"), "page": truth.get("page")})
     return out
 
 
