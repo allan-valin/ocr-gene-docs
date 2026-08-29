@@ -67,8 +67,22 @@ and a person is not: Original / Realce / Alto contraste / Negativo, applied in
 the browser to the image already downloaded, remembered between pages, `\` to
 cycle.
 
-**Next, in order.** Run `remeasure.py` to completion and rebuild the index —
-that is the fifteen thousand names. Then the column vocabulary applied to the
+**How this is checked, from now on.** `data/refset.json` — outside git, since
+it names records — holds one page per failure shape: a typewritten table with
+its headings over its columns, a cursive table with hand-read truth, a heading
+printed away from its column, a page whose stored name column is the ordinal
+strip, a faint cursive page, a continuation page that prints no headings, and a
+cover card that must keep coming back as no table. Seven pages. A fix is proved
+on the shape it was written for and the corpus is not a test set: re-reading 700
+pages to see whether a change worked is hours spent learning what eight pages
+already said.
+
+The corpus is not being re-read. `remeasure.py` exists and is proved — 8 pages,
+26 names to 133 — and running it over the other 690 produces data, not
+knowledge. It is a one-time production step for whenever the reading is good
+enough to be worth freezing, and it is not the next thing to do.
+
+**Next, in order.** Make the reading work on the seven shapes. Then the column vocabulary applied to the
 cells as Allan asked: the corrected word shown with the reading kept and the
 cell's background saying it was corrected automatically. Then the six browser
 assertions, which are about the demo document and want re-checking now that it
