@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from desembarque.search import _is_printed_word, is_heading   # noqa: E402
+from desembarque.rowfields import name_score                  # noqa: E402
 from desembarque.voyage import _is_form_word                  # noqa: E402
 
 # What counts as a clean reading: the recogniser's own score, which is worth
@@ -78,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         for r in d.get("rows") or []:
             if is_heading(r.get("name_raw") or ""):
                 continue          # the column caption is not a passenger
-            conf = (r.get("conf") or {}).get("surname")
+            conf = name_score(r)
             by_hand = r.get("source") == "manual"
             if not by_hand and (conf is None or conf < CLEAN_SCORE):
                 handwritten += 1

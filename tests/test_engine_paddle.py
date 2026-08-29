@@ -33,7 +33,9 @@ def test_each_band_becomes_one_row_in_order():
                            crop=lambda i, box: box)
     assert [r["n"] for r in rows] == [1, 2, 3]
     assert rows[0]["surname"] == "ROCA REBULLIDA" and rows[0]["given"] == "AMPARO"
-    assert rows[0]["conf"]["surname"] == 0.94
+    # the score of the name strip, keyed `name` since T6 renamed it with the
+    # field; `rowfields.name_score` still reads the old key off older records
+    assert rows[0]["conf"]["name"] == 0.94
 
 
 def test_an_unread_row_is_null_not_invented():
@@ -41,7 +43,7 @@ def test_an_unread_row_is_null_not_invented():
     rows = rows_from_bands(geo, (1000, 2000), lambda crops: [("", 0.0), ("X", 0.9)],
                            crop=lambda i, box: box)
     assert rows[0]["surname"] is None and rows[0]["given"] is None
-    assert rows[0]["conf"]["surname"] == 0.0
+    assert rows[0]["conf"]["name"] == 0.0
 
 
 def test_recogniser_returning_short_falls_back_to_null_rows():

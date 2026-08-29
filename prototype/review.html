@@ -421,6 +421,15 @@ function rowMatches(r,q,scope){
 }
 
 // ---- rendering ----
+// The score of the name strip. It was keyed `surname` while a row asserted one
+// (T6); records read since are keyed `name`, and the corpus is not re-read to
+// pick up a rename — so both are understood and only one is written.
+function nameScoreKey(r){
+  if(!r||!r.conf) return null;
+  if(r.conf.name!=null) return "name";
+  if(r.conf.surname!=null) return "surname";
+  return null;
+}
 function conf(r,f){const c=r.conf&&r.conf[f];return c==null?"":c<0.5?"lo":c<0.8?"mid":"hi";}
 // What the number is: the recogniser's own decode score, which stays high on
 // confident nonsense. It is worth showing, because a *low* score does mean the
@@ -687,7 +696,7 @@ function render(){
     <tr data-i="${i}" class="${r.verified?"verified":""}">
       <td class="num">${r.n}</td>
       <td class="name ${r.handwritten?'hw':''}"><span contenteditable="${EDIT}" data-f="name"
-          title="${r.handwritten?'entrada manuscrita':''}">${nameCell(r)}</span>${r.conf&&'surname' in r.conf?dot(r,'surname'):''}</td>
+          title="${r.handwritten?'entrada manuscrita':''}">${nameCell(r)}</span>${nameScoreKey(r)?dot(r,nameScoreKey(r)):''}</td>
       ${cell(r,"nationality",r.nationality)}
       ${cell(r,"age",r.age)}
       <td>${r.sex||""}</td>

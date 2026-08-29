@@ -529,7 +529,11 @@ def rows_from_bands(geo, size: tuple[int, int],
             "surname": surname,
             "given": given,
             "name_raw": text or "",
-            "conf": {"surname": round(float(score), 3)},
+            # the score of the name strip the recogniser read, which is what
+            # it always was — it was keyed `surname` while the row asserted
+            # one (T6). Read through `rowfields.name_score`, which still
+            # understands the old key on the records that carry it.
+            "conf": {"name": round(float(score), 3)},
         }
         if indents.get(i) is not None:
             row["indent"] = round(indents[i], 3)

@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify, cached_hash  # noqa: E402
+from desembarque.rowfields import name_score   # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import (BatchIndexer, collect_pdfs, is_indexed,  # noqa: E402
                                merge_page_rows, preserve_human_work,
@@ -81,7 +82,7 @@ CHECK_SCORE = 0.85
 def _why_check(row: dict, names: Names) -> list[str]:
     """The reasons this row is worth a second look, in the order they matter."""
     out = []
-    score = (row.get("conf") or {}).get("surname")
+    score = name_score(row)
     if score is not None and score < CHECK_SCORE:
         out.append("score")
     if row.get("ditto_source") == "position":

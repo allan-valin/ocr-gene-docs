@@ -21,6 +21,8 @@ import os
 from array import array
 import re
 import unicodedata
+
+from desembarque.rowfields import name_score
 from pathlib import Path
 
 import numpy as np
@@ -447,7 +449,7 @@ def _parse(f: Path, engine_only: bool,
             "row": r.get("n"),
             "text": text,
             **({"alts": second} if second else {}),
-            "conf": (r.get("conf") or {}).get("surname"),
+            "conf": name_score(r),
         })
     return out
 

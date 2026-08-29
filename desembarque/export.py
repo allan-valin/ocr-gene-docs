@@ -32,6 +32,8 @@ from __future__ import annotations
 import csv
 import io
 
+from desembarque.rowfields import name_score
+
 FIELDS = [
     "notacao", "arquivo", "navio", "companhia", "procedencia", "porto_chegada",
     "data_chegada", "pagina", "linha", "nome_lido", "sobrenome", "nome",
@@ -80,6 +82,7 @@ def rows_to_csv(doc: dict, catalogued: str | None = None) -> str:
     voyage = doc.get("voyage") or {}
     for row in doc.get("rows") or []:
         conf = row.get("conf") or {}
+        score = name_score(row)
         w.writerow({
             "notacao": doc.get("notation") or "",
             "arquivo": doc.get("file") or "",
@@ -96,7 +99,7 @@ def rows_to_csv(doc: dict, catalogued: str | None = None) -> str:
             "origem": _origin(row, doc),
             "sobrenome_origem": (SURNAME_SOURCE.get(row.get("ditto_source"), "herdado")
                                  if row.get("ditto") else "lido"),
-            "score_motor": conf.get("surname") if conf.get("surname") is not None else "",
+            "score_motor": score if score is not None else "",
         })
     return buf.getvalue()
 

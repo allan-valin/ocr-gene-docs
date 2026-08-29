@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 from desembarque import search as searchlib          # noqa: E402
 from desembarque.gazetteer import Names, spoken_names  # noqa: E402
+from desembarque.rowfields import name_score          # noqa: E402
 from desembarque.truthset import fold, rows_from_disk  # noqa: E402
 
 CHECK_SCORE = 0.85
@@ -35,7 +36,7 @@ def reasons(row: dict, names: Names, spoken: set[str] | None = None) -> list[str
     """Every reason this row is worth a second look — the three the server
     gives today, and the one the plan argues for."""
     out = []
-    score = (row.get("conf") or {}).get("surname")
+    score = name_score(row)
     if score is not None and score < CHECK_SCORE:
         out.append("score")
     if row.get("ditto_source") == "position":
