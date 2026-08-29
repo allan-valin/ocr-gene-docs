@@ -82,6 +82,32 @@ a cell. On this dense page — 26 of 31 rows carry a passenger — 243 cells wer
 read where 216 are now, and *Procedencia*, written once at the top of the sheet
 and blank below, went from 29 cells read to 10.
 
+**A faint page is equalised before it is given up on** — Allan's question, and
+it has a measurable answer. `scripts/spike_faint.py` puts four ways of lifting a
+page in front of the detector on the pages that read nothing at all. Two of them
+do nothing: autocontrast and a 2nd/98th-percentile stretch each move the box
+count by one, because these scans already use their range end to end — grey ink
+on grey paper with the black point already black. Equalising is the one that
+moves.
+
+| OL.PRJ.17851 p2 | boxes | name column | rows |
+|---|---|---|---|
+| as it is | 32 | found | **0** |
+| autocontrast | 32 | found | 0 |
+| stretch | 32 | found | 0 |
+| **equalised** | 71 | found | **29** |
+
+Read end to end the page now comes back as a list of 45 bands with 23 names on
+it, where it used to come back with nothing. The names are poor — the archive
+stamped this sheet *ORIGINAL ILEGÍVEL* — and equalising also turns paper grain
+into boxes, so it is a last resort and gated twice: only after the ordinary
+passes found no rows, and only on a page that printed a heading line, because
+many pages in a dossier are not tables and finding no table on a cover card is
+the right answer, not a page to spend a third detection on.
+
+Worth a batch: twelve records on disk hold no rows at all, and the pages behind
+them are the ones this is for.
+
 Next, in order: wire `cells_from_bands` into `transcribe_page` and take the
 cost decision with it (31 bands × 8 columns is 216 crops against the name
 column's 31; the three columns worth reading are 90); the repetition rule for

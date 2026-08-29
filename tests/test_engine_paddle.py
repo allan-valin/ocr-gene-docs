@@ -850,3 +850,49 @@ def test_the_other_columns_are_not_read_unless_they_are_asked_for():
     assert PaddleEngine().columns == ()
     assert PaddleEngine(columns=READABLE_COLUMNS).columns == (
         "nacionalidade", "estado", "profissao")
+
+
+def test_a_faint_page_is_lifted_before_it_is_given_up_on():
+    """The scans are grey ink on grey paper and a few of them are faint enough
+    that detection finds nothing to cross: OL.PRJ.17851 p2, which the archive
+    itself stamped *ORIGINAL ILEGÍVEL*, came back with 32 boxes and no rows at
+    all. Equalising the page — spreading its histogram, not stretching its ends
+    — puts 29 rows on it. Stretching the black and white points does not: these
+    scans already use their range end to end, which is why `autocontrast` and a
+    2nd/98th-percentile stretch both move the box count by one."""
+    from PIL import Image
+    from desembarque.engine_paddle import lift
+    import numpy as np
+
+    # grey ink on grey paper, using a third of the range
+    faint = Image.fromarray(
+        np.clip(np.random.default_rng(0).normal(150, 8, (60, 200)), 120, 180)
+        .astype("uint8"), "L")
+    got = lift(faint)
+    assert got.size == faint.size
+    before = np.asarray(faint, dtype=float)
+    after = np.asarray(got, dtype=float)
+    assert after.std() > 2 * before.std(), (before.std(), after.std())
+
+
+def test_lifting_a_page_that_cannot_be_lifted_gives_the_page_back():
+    """A blank crop, a page already black and white: nothing to spread, and an
+    exception here would lose a page that reads perfectly well as it is."""
+    from PIL import Image
+    from desembarque.engine_paddle import lift
+    flat = Image.new("L", (40, 10), 255)
+    assert lift(flat).size == (40, 10)
+    assert lift(None) is None
+
+
+def test_a_page_that_is_not_a_list_does_not_pay_for_the_lift(tmp_path):
+    """Many pages in a dossier are not tables — a cover card, the interpreter's
+    PARTE, a blank verso — and finding no table on one is the right answer. The
+    faint-page retry is for a page that printed a heading line and still gave
+    up no rows, not for every page that is not a list; at three seconds a
+    detection and two pages a dossier, the difference over seven thousand
+    dossiers is hours."""
+    d = Detects(tmp_path)
+    d.eng._ruled_rows = lambda image, w, h, col: None
+    d.eng._printed_table(d.page)
+    assert d.sides == [None, 2000], "a third detection ran on a page with no headings"

@@ -199,6 +199,31 @@ def has_ink(im, margin: float = 0.0) -> bool:
                 >= max(3, int(0.01 * a.shape[1])))
 
 
+def lift(im):
+    """The page with its histogram spread, for a detector that found nothing.
+
+    Measured on the pages that read nothing at all (`scripts/spike_faint.py`).
+    Two things that sound like this one do nothing: autocontrast and a
+    2nd/98th-percentile stretch each move the box count by one, because these
+    scans already use their range end to end — grey ink on grey paper, with the
+    black point already black. Equalising is the one that moves: on
+    OL.PRJ.17851 p2 the detector goes from 32 boxes and no rows to 71 boxes and
+    29 rows, which is a page of twenty-three names that was returning nothing.
+
+    It is a last resort and not an improvement. It also turns paper grain into
+    boxes — the same page's readings go from seven clean printed headings to a
+    scatter of `oshdepaxdnley` — so it is asked for only where the alternative
+    is no table at all, and never on a page that already measured.
+    """
+    if im is None:
+        return im
+    try:
+        from PIL import ImageOps
+        return ImageOps.equalize(im.convert("L"))
+    except (OSError, ValueError, AttributeError):
+        return im
+
+
 def refine(im, margin: int = INK_MARGIN):
     """Trim a row band down to the writing inside it.
 
@@ -1012,6 +1037,9 @@ class PaddleEngine:
         except (OSError, ValueError):
             return None
         found = None
+        # whether any pass found the table's own heading line, which is what
+        # says this page is a list at all
+        named = False
         for side in (None, FINE_DETECT_SIDE):
             try:
                 boxes = self._detect(small, side)
@@ -1031,10 +1059,37 @@ class PaddleEngine:
             # the half that was wrong before any of this.
             col = columns(boxes, w, h, labelled) or (
                 {**hint, "top": 0.0, "heading": None} if hint else None)
+            named = named or bool(col)
             if col:
                 ruled = self._ruled_rows(image, w, h, col)
                 if ruled is not None:
                     return ruled
+        if (found is not None and found.rows) or not named:
+            # Many pages in a dossier are not tables — a cover card, the
+            # interpreter's PARTE, a blank verso — and finding no table on one
+            # is the right answer, not a page to spend a third detection on.
+            return found
+        # Nothing crossed this page: it is one of the faint ones, grey ink on
+        # grey paper, and a few of them the archive has stamped ILEGÍVEL. The
+        # last thing to try is equalising it — measured in `spike_faint.py`,
+        # where OL.PRJ.17851 p2 goes from no rows to twenty-nine. It is a last
+        # resort because it also turns paper grain into boxes, so it is asked
+        # only where the alternative is no table, and the crops are still cut
+        # from the page as it is: the geometry is normalised, the lift is not
+        # a picture anybody reads.
+        lifted = small.with_name(f"{small.stem}-lifted.png")
+        try:
+            if not (lifted.exists() and lifted.stat().st_size):
+                with Image.open(small) as im:
+                    lift(im).save(lifted)
+            boxes = self._detect(lifted, None)
+        except Exception:
+            return found
+        if boxes:
+            labelled = self._read_boxes(lifted, heading_lines(boxes, h))
+            again = table(boxes, w, h, labelled=labelled, hint=hint)
+            if again is not None and len(again.rows) >= MIN_PRINTED_ROWS:
+                return again
         return found
 
 
