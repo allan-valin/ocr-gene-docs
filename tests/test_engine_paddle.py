@@ -797,3 +797,56 @@ def test_an_empty_cell_is_not_handed_to_the_recogniser():
     assert len(handed) == 1, "only the cell somebody wrote in"
     assert [c["text"] for c in got] == ["", "23", ""]
     assert [c["n"] for c in got] == [1, 2, 3]
+
+
+def test_a_read_cell_is_put_beside_the_row_and_never_in_the_typed_field():
+    """Every non-name value in this corpus was typed by a person — the engine
+    has never written one — and the review screen says so on the page. So a
+    cell the engine reads goes under `cells`, with what it read, what it was
+    snapped to and how sure both were; `nationality`, `occupation` and the rest
+    stay the fields a person types into, and stay empty until one does."""
+    from desembarque.engine_paddle import attach_cells
+    from desembarque.vocab import Vocabulary
+
+    rows = [{"n": 1, "name_raw": "Alfieri"}, {"n": 2, "name_raw": "Santos"}]
+    cells = {"nacionalidade": [{"n": 1, "text": "SEAGNOLA", "conf": 0.4},
+                               {"n": 2, "text": "", "conf": 0.0}],
+             "estado": [{"n": 1, "text": "cau", "conf": 0.3},
+                        {"n": 2, "text": "", "conf": 0.0}]}
+    voc = Vocabulary({"nacionalidade": ["ESPANHOLA"], "estado": ["CASADO"]},
+                     floors={"nacionalidade": 0.62, "estado": 0.55})
+    got = attach_cells(rows, cells, voc)
+
+    assert got[0]["cells"]["nacionalidade"]["text"] == "SEAGNOLA"
+    assert got[0]["cells"]["nacionalidade"]["value"] == "ESPANHOLA"
+    assert got[0]["cells"]["estado"]["value"] == "CASADO"
+    assert "nationality" not in got[0] and "status" not in got[0]
+    # a cell nobody wrote in is not a cell
+    assert "cells" not in got[1] or got[1]["cells"] == {}
+    # and the rows themselves are not rewritten
+    assert got[0]["name_raw"] == "Alfieri"
+
+
+def test_a_column_that_snaps_to_nothing_still_keeps_what_was_read():
+    """The reading is the evidence. A cell that reaches no word on the list is
+    a cell somebody has to look at, not a cell to throw away."""
+    from desembarque.engine_paddle import attach_cells
+    from desembarque.vocab import Vocabulary
+
+    rows = [{"n": 1}]
+    cells = {"nacionalidade": [{"n": 1, "text": "LNE ARE", "conf": 0.2}]}
+    got = attach_cells(rows, cells, Vocabulary({"nacionalidade": ["ESPANHOLA"]}))
+    cell = got[0]["cells"]["nacionalidade"]
+    assert cell["text"] == "LNE ARE" and "value" not in cell
+
+
+def test_the_other_columns_are_not_read_unless_they_are_asked_for():
+    """A page is 31 bands by 8 columns and the recogniser is about twenty
+    seconds a column, against the eighty seconds a page costs now. Reading them
+    all doubles a corpus pass that already takes 34 hours, so which columns to
+    read is a decision somebody takes, not a default that arrives with an
+    upgrade."""
+    from desembarque.engine_paddle import PaddleEngine, READABLE_COLUMNS
+    assert PaddleEngine().columns == ()
+    assert PaddleEngine(columns=READABLE_COLUMNS).columns == (
+        "nacionalidade", "estado", "profissao")

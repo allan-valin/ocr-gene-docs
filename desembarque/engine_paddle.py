@@ -334,6 +334,14 @@ CELL_INSET_Y = 0.0
 # in it. The printed rules stand at the edges and are four columns of solid ink
 # on a cell 98 px wide, which is enough to call blank paper written on.
 CELL_INK_MARGIN = 0.12
+# The columns worth reading, measured on BS.ENT.017397 p2 against the page
+# somebody transcribed by hand. Nationality, civil state and profession read
+# something wrong and snap to the word the clerk typed — the civil state on 12
+# rows of 26 where reading alone got 1. Age and sex read nothing at all at any
+# cutting tried, and port and class are written once at the top of a sheet and
+# want the repetition rule the names have before a reading of them means
+# anything. See docs/TASKS-reading-quality.md, T10.
+READABLE_COLUMNS = ("nacionalidade", "estado", "profissao")
 
 
 def cells_from_bands(geo, size: tuple[int, int], field: str,
@@ -393,6 +401,38 @@ def cells_from_bands(geo, size: tuple[int, int], field: str,
         out.append({"n": i + 1, "text": text or "",
                     "conf": round(float(score), 3)})
     return out
+
+
+def attach_cells(rows: list[dict], cells: dict[str, list[dict]],
+                 vocab) -> list[dict]:
+    """The cells of the other columns, put beside the rows they belong to.
+
+    Under `cells`, by field, and never in the field a person types into. Every
+    non-name value in this corpus was typed by a person — the engine has never
+    written one — and the review screen tells the reader so on the page. A
+    reading is evidence about the page and a snapped word is a guess about the
+    reading; neither is somebody's typing, and the moment they are written into
+    the same key nobody can tell the three apart again.
+
+    A cell nobody wrote in is not attached at all: `cells_from_bands` returns a
+    row for every band, and an empty one is the honest answer for blank paper.
+    """
+    by_n = {}
+    for field, got in (cells or {}).items():
+        for cell in got or ():
+            if not (cell.get("text") or "").strip():
+                continue
+            out = {"text": cell["text"], "conf": cell.get("conf", 0.0)}
+            snapped = vocab.snap(field, cell["text"]) if vocab else None
+            if snapped:
+                out["value"] = snapped["value"]
+                out["snap"] = snapped["score"]
+            by_n.setdefault(cell.get("n"), {})[field] = out
+    for row in rows or ():
+        got = by_n.get(row.get("n"))
+        if got:
+            row["cells"] = got
+    return rows
 
 
 def stored_geometry(geo, measured_by: str, read_from: str) -> dict:
@@ -574,7 +614,8 @@ class PaddleEngine:
     name = "paddle"
 
     def __init__(self, rec_model: str = DEFAULT_REC, det_model: str = DEFAULT_DET,
-                 mkldnn: bool = True, threads: int | None = DEFAULT_THREADS) -> None:
+                 mkldnn: bool = True, threads: int | None = DEFAULT_THREADS,
+                 columns: tuple[str, ...] = ()) -> None:
         self.rec_model = rec_model
         self.det_model = det_model
         self.mkldnn = mkldnn
@@ -587,6 +628,22 @@ class PaddleEngine:
         # the first prints them; the rest are measured with the columns carried
         # over and their own rows.
         self._last_columns: dict[str, dict] = {}
+        # Which columns beside the name to read, and none by default. A page is
+        # 31 bands by 8 columns and the recogniser is about twenty seconds a
+        # column, against the eighty seconds a page costs now; reading all of
+        # them doubles a corpus pass that already takes 34 hours. The three in
+        # `READABLE_COLUMNS` are the ones measured to read anything at all.
+        self.columns = tuple(columns)
+        self._vocabulary = None
+
+    def _vocab(self):
+        """The closed lists, loaded once. Absent is a legitimate answer: a cell
+        then carries what was read and no snapped word."""
+        if self._vocabulary is None:
+            from desembarque.vocab import Vocabulary
+            self._vocabulary = Vocabulary.load(
+                Path(__file__).resolve().parents[1] / "data" / "column_vocab.json")
+        return self._vocabulary
 
     # ---- model loading ------------------------------------------------------
     def _import(self):
@@ -1056,6 +1113,18 @@ class PaddleEngine:
             # rather than at search time so the page shows what the row means
             # beside what it says.
             rows = resolve_dittos(rows)
+            # The columns beside the name, when this engine was asked for them.
+            # They are read from the same bands and the same picture, and what
+            # comes back is put under `cells` — never in the fields a person
+            # types into, which is where every non-name value in this corpus
+            # came from.
+            if self.columns:
+                cells = {
+                    field: cells_from_bands(geo, im.size, field, self._recognize,
+                                            lambda _i, box: im.crop(box))
+                    for field in self.columns
+                }
+                rows = attach_cells(rows, cells, self._vocab())
             return PageResult(
                 kind="list", engine=self.name, rows=rows,
                 **self.read_header(image, geo, text),
