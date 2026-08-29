@@ -115,6 +115,35 @@ BATCH = BatchIndexer()
 INDEX_WORKERS = int(os.environ.get("DESEMBARQUE_WORKERS", "4"))
 
 
+def columns_wanted(env: dict | None = None) -> tuple[str, ...]:
+    """Which columns beside the name the engine is asked to read.
+
+    The three in `READABLE_COLUMNS` are the ones measured to read anything at
+    all — nationality, civil state and profession, which the closed vocabulary
+    then carries from `SEAGNOLA` to *ESPANHOLA*. Idade and sexo are the
+    recogniser's floor on a cell of two characters, 0 of 22 and 0 of 26, so
+    asking for one is refused rather than paid for.
+
+    It costs: three columns is about ninety crops a page against the thirty-one
+    of the name column, though a blank cell is no longer read at all. Set
+    `DESEMBARQUE_COLUMNS=none` for the name alone when a pass has to be quick.
+    """
+    from desembarque.engine_paddle import READABLE_COLUMNS
+
+    raw = (env if env is not None else os.environ).get("DESEMBARQUE_COLUMNS")
+    if raw is None:
+        return READABLE_COLUMNS
+    fields = tuple(f.strip() for f in raw.split(",") if f.strip())
+    if not fields or fields == ("none",):
+        return ()
+    unreadable = [f for f in fields if f not in READABLE_COLUMNS]
+    if unreadable:
+        raise ValueError(
+            "DESEMBARQUE_COLUMNS: %s is not a column this engine reads; "
+            "measured are %s" % (", ".join(unreadable), ", ".join(READABLE_COLUMNS)))
+    return fields
+
+
 def register_engines() -> None:
     """Activate a local engine if its dependencies are installed.
 
@@ -122,8 +151,8 @@ def register_engines() -> None:
     (geometry-detected grids, manual entry, search over what is transcribed),
     and a missing model must read as missing rather than as an empty page."""
     try:
-        from desembarque.engine_paddle import PaddleEngine
-        engines.register(PaddleEngine())
+        from desembarque import engine_paddle
+        engines.register(engine_paddle.PaddleEngine(columns=columns_wanted()))
     except Exception:      # an engine that cannot even be imported is absent
         pass
 

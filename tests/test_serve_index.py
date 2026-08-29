@@ -912,3 +912,52 @@ def test_the_search_says_whether_the_query_named_a_crossing(server):
     # the crossing it is measured against everything the row holds
     assert alone["hits"][0]["name_score"] == 1.0
     assert named["hits"][0]["name_score"] < 1.0
+
+
+# --- which columns the app asks the engine to read -------------------------
+#
+# `cells_from_bands` and the closed vocabularies were built and measured in
+# August and then sat unreachable: `PaddleEngine.columns` defaults to none and
+# `register_engines` never passed anything, so no page the app read ever came
+# back with a cell. These say what the app asks for, and how to ask for less.
+
+def test_the_app_reads_the_columns_that_were_measured_to_read():
+    from desembarque.engine_paddle import READABLE_COLUMNS
+
+    assert serve.columns_wanted({}) == READABLE_COLUMNS
+
+
+def test_a_column_can_be_switched_off_when_a_pass_has_to_be_quick():
+    assert serve.columns_wanted({"DESEMBARQUE_COLUMNS": "none"}) == ()
+    assert serve.columns_wanted({"DESEMBARQUE_COLUMNS": ""}) == ()
+
+
+def test_a_named_list_is_taken_as_written():
+    assert serve.columns_wanted(
+        {"DESEMBARQUE_COLUMNS": "estado, profissao"}) == ("estado", "profissao")
+
+
+def test_a_column_nobody_can_read_is_refused_rather_than_read_badly():
+    """Idade and sexo are the recogniser's floor on a cell of two characters —
+    measured 0 of 22 and 0 of 26 — so naming one is a mistake worth saying out
+    loud rather than a minute a page spent on `一`."""
+    with pytest.raises(ValueError):
+        serve.columns_wanted({"DESEMBARQUE_COLUMNS": "idade"})
+
+
+def test_the_engine_is_registered_with_those_columns(monkeypatch):
+    from desembarque.engine_paddle import PaddleEngine, READABLE_COLUMNS
+
+    made = {}
+
+    class Spy(PaddleEngine):
+        def __init__(self, **kw):
+            made.update(kw)
+            super().__init__(**kw)
+
+        def available(self):
+            return True
+
+    monkeypatch.setattr("desembarque.engine_paddle.PaddleEngine", Spy)
+    serve.register_engines()
+    assert made.get("columns") == READABLE_COLUMNS
