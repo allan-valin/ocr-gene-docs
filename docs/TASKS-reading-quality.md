@@ -349,8 +349,25 @@ is written down beside it, not when the code runs.
             own (`CAS`) won `cau` away from CASADO, which is what the page
             says; a short reading is compared with the head of the word
             instead, so `cau` reaches CASADO and `SOLT` reaches SOLT.
-            What is left is the wiring: `transcribe_page` does not call
-            `cells_from_bands` yet, and what a cell costs — 40 bands × 8
-            columns against twenty seconds a column — is the decision that
-            has to be taken with it.
+      - [x] **An empty cell is not read.** The name column has skipped its
+            empty bands since the rows were cut from the comb, and a cell is
+            smaller, emptier and eight times as numerous — but `has_ink` was
+            written for a strip 300 px wide, where the printed rules at the
+            edges are lost. On a cell 98 px wide those two rules are four
+            columns of solid ink and every blank cell on the page passed as
+            written, which is where `一`, `1` and `十` in an empty cell come
+            from. `has_ink(im, margin)` now ignores the outer 12% of a cell.
+            Measured on BS.ENT.017397 p2, a dense page — 26 of its 31 rows
+            carry a passenger — 243 cells were read where 216 are now, and the
+            column it changes is the one that was blank all along:
+            *Procedencia*, written once at the top of the sheet, went from 29
+            cells read to 10. On a sheet printed with thirty rows and carrying
+            three, which is the commoner page, the saving is most of the page.
+      - [ ] **The wiring, which is what is left.** `transcribe_page` does not
+            call `cells_from_bands` yet, and what a cell costs is the decision
+            to take with it: 31 bands × 8 columns is 216 crops against the 31
+            of the name column, and the recogniser is about twenty seconds a
+            column. Reading only the three columns that read something —
+            nacionalidade, estado, profissao — is 90 crops and about a minute
+            a page against the eighty seconds a page costs now.
 - [ ] **T11 — The language prior** (§7). Depends on T10.

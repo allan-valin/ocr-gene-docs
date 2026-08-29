@@ -761,3 +761,39 @@ def test_a_cell_can_be_trimmed_off_its_rules_when_asked():
                      lambda i, box: seen.append(box) or "c", inset=(0.10, 0.10))
     x0, y0, x1, y1 = seen[0]
     assert (x0, x1) == (410, 490) and (y0, y1) == (208, 272), seen[0]
+
+
+def test_an_empty_cell_is_not_handed_to_the_recogniser():
+    """The rule the name column has had since the rows were cut from the comb,
+    and it matters more here: a page is forty bands by eight columns, most of
+    the cells are blank paper between two printed rules, and reading one costs
+    what reading a name costs. A blank cell read anyway comes back `一` or `1`
+    — the rules — which is a wrong value where there was no writing."""
+    from PIL import Image, ImageDraw
+    from desembarque.engine_paddle import cells_from_bands
+
+    class Geo:
+        def normalized_rows(self): return [(0.10, 0.14), (0.15, 0.19),
+                                           (0.20, 0.24)]
+        def normalized_columns(self): return {"nome": (0.05, 0.35),
+                                              "idade": (0.40, 0.50)}
+
+    written = Image.new("L", (100, 80), 255)
+    ImageDraw.Draw(written).text((20, 20), "23", fill=0)
+    ImageDraw.Draw(written).rectangle((20, 20, 60, 60), outline=0, width=6)
+    blank = Image.new("L", (100, 80), 255)
+    # the printed rule at each edge of the cell, which is not writing
+    ImageDraw.Draw(blank).line((1, 0, 1, 80), fill=0, width=2)
+    ImageDraw.Draw(blank).line((98, 0, 98, 80), fill=0, width=2)
+
+    handed = []
+
+    def recognize(crops):
+        handed.extend(crops)
+        return [("23", 0.9)] * len(crops)
+
+    got = cells_from_bands(Geo(), (1000, 2000), "idade", recognize,
+                           lambda i, box: written if i == 1 else blank)
+    assert len(handed) == 1, "only the cell somebody wrote in"
+    assert [c["text"] for c in got] == ["", "23", ""]
+    assert [c["n"] for c in got] == [1, 2, 3]

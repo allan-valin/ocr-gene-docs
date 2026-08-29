@@ -162,8 +162,14 @@ def derule(im):
     return Image.fromarray(a)
 
 
-def has_ink(im) -> bool:
+def has_ink(im, margin: float = 0.0) -> bool:
     """Whether anybody wrote on this band.
+
+    `margin` is how much of each side to ignore, as a fraction of the width.
+    A name strip is 300 px wide and the rules at its edges are lost in it. A
+    cell of *Idade* is 98 px wide with a printed rule down each edge, and those
+    two rules are four columns of solid ink — enough to call blank paper
+    written on, which is exactly the mistake that puts `一` in an empty cell.
 
     Most rows on these sheets are ruled and empty — a passenger list is printed
     with thirty rows and often carries three — and every one of them was being
@@ -181,6 +187,11 @@ def has_ink(im) -> bool:
         return True
     if a.size == 0:
         return False
+    if margin:
+        cut = int(a.shape[1] * margin)
+        if a.shape[1] - 2 * cut < 4:
+            return True
+        a = a[:, cut:a.shape[1] - cut]
     thr = max(60, int(a.mean()) - 35)
     ink = a < thr
     # a ruled line is one or two pixels tall in every column; writing is not
@@ -319,6 +330,10 @@ def name_strip_box(geo, size: tuple[int, int]) -> tuple[int, int]:
 # measured it and is what will measure it again on a cursive page.
 CELL_INSET_X = 0.0
 CELL_INSET_Y = 0.0
+# How much of each side of a cell is ignored when asking whether anybody wrote
+# in it. The printed rules stand at the edges and are four columns of solid ink
+# on a cell 98 px wide, which is enough to call blank paper written on.
+CELL_INK_MARGIN = 0.12
 
 
 def cells_from_bands(geo, size: tuple[int, int], field: str,
@@ -360,9 +375,17 @@ def cells_from_bands(geo, size: tuple[int, int], field: str,
         keep.append(i)
 
     crops = [crop(i, bx) for i, bx in zip(keep, boxes)]
-    said = list(recognize(crops)) if crops else []
-    said += [("", 0.0)] * (len(crops) - len(said))
-    by_band = dict(zip(keep, said))
+    # A page is forty bands by eight columns and most of those cells are blank
+    # paper between two printed rules. Reading one costs what reading a name
+    # costs, and what comes back is the rules — `一`, `1`, `十` — which is a
+    # value where the page has none. The name column has skipped its empty
+    # bands since the rows were cut from the comb; a cell is smaller, emptier
+    # and eight times as numerous.
+    written = [(i, c) for i, c in zip(keep, crops)
+               if has_ink(c, CELL_INK_MARGIN)]
+    said = list(recognize([c for _i, c in written])) if written else []
+    said += [("", 0.0)] * (len(written) - len(said))
+    by_band = dict(zip([i for i, _c in written], said))
 
     out = []
     for i in range(len(bands)):

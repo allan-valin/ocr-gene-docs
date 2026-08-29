@@ -74,10 +74,18 @@ fifty long words sharing their endings and wants 0.70. Listing an abbreviation
 as its own word was tried and taken out — `CAS` won `cau` away from CASADO —
 and a short reading is compared with the head of the word instead.
 
-Next, in order: wire `cells_from_bands` into `transcribe_page` and decide what
-a cell costs (40 bands × 8 columns against twenty seconds a column); the
-repetition rule for procedencia and classe (T6); then a reader for one- and
-two-character cells.
+**And an empty cell is no longer read at all.** `has_ink` was written for a
+name strip 300 px wide, where the printed rules at the edges are lost; on a
+cell 98 px wide those rules are four columns of solid ink, so every blank cell
+passed as written and came back as `一` or `1`. It now ignores the outer 12% of
+a cell. On this dense page — 26 of 31 rows carry a passenger — 243 cells were
+read where 216 are now, and *Procedencia*, written once at the top of the sheet
+and blank below, went from 29 cells read to 10.
+
+Next, in order: wire `cells_from_bands` into `transcribe_page` and take the
+cost decision with it (31 bands × 8 columns is 216 crops against the name
+column's 31; the three columns worth reading are 90); the repetition rule for
+procedencia and classe (T6); then a reader for one- and two-character cells.
 
 ## 2026-08-28, evening — the reading, not the retrieval
 
