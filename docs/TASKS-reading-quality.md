@@ -318,4 +318,39 @@ is written down beside it, not when the code runs.
             *BRASILEIRO* by a fuzzy match), and that is the next piece of work.
             Idade and sexo need a different reader, which is a spike and not a
             crop. Procedencia and classe need the repetition rule first.
+      - [x] **The closed vocabularies**, `desembarque/vocab.py` and
+            `data/column_vocab.json` — the words these forms print in each
+            column, written by hand and making the same claim the language-name
+            file makes: *these forms print this word*, never *this archive has
+            been read to contain it*. A snapped word is kept beside the reading
+            as `value` and `snap`, and `text` is never touched, which is the
+            gazetteer's rule about suggestions applied to a column.
+            Measured on BS.ENT.017397 p2, against the 26 rows read by hand:
+
+            | column | rows | right as read | snapped | of those, right |
+            |---|---|---|---|---|
+            | estado | 26 | 1 | 13 | **12** |
+            | profissao | 22 | 0 | 8 | **7** |
+            | nacionalidade | 26 | 0 | 5 | **3** |
+            | procedencia | 26 | 0 | 1 | 1 |
+            | classe | 26 | 2 | 6 | 2 |
+
+            So the civil state goes from one row right in twenty-six to twelve,
+            and the profession from none in twenty-two to seven. Nothing is
+            invented on a blank cell: an empty reading snaps to nothing, and
+            the columns that read nothing at all (idade, sexo) snap nothing.
+            The floor is per column, and measured — 0.55 / 0.62 / 0.70 swept
+            with `bench_columns.py --floor`. Civil state and profession are
+            short lists of words that look like nothing else and want 0.55;
+            nationality is fifty long words sharing their endings, where `BIG`
+            reaches INGLEZ as easily as BELGICA, and at 0.55 it snaps ten rows
+            to get four right against five snapped for three at 0.70. Also
+            measured and taken out: listing an abbreviation as a word of its
+            own (`CAS`) won `cau` away from CASADO, which is what the page
+            says; a short reading is compared with the head of the word
+            instead, so `cau` reaches CASADO and `SOLT` reaches SOLT.
+            What is left is the wiring: `transcribe_page` does not call
+            `cells_from_bands` yet, and what a cell costs — 40 bands × 8
+            columns against twenty seconds a column — is the decision that
+            has to be taken with it.
 - [ ] **T11 — The language prior** (§7). Depends on T10.

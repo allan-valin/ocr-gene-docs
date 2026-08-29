@@ -33,6 +33,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from desembarque.engine_paddle import (CELL_INSET_X, PaddleEngine,  # noqa: E402
                                        cells_from_bands)
+from desembarque.vocab import Vocabulary                              # noqa: E402
 from page_geometry import page_image                                  # noqa: E402
 
 # Which stored field each measured column holds, for the columns worth scoring.
@@ -131,6 +132,11 @@ def main(argv=None) -> int:
     ap.add_argument("--inset", type=float, default=CELL_INSET_X,
                     help="how much of each edge of a cell to leave behind, so "
                          "the printed rules are not read as strokes")
+    ap.add_argument("--vocab", type=Path,
+                    default=ROOT / "data" / "column_vocab.json",
+                    help="the closed lists each column is snapped to")
+    ap.add_argument("--floor", type=float, default=None,
+                    help="how near a reading has to be before it is snapped")
     ap.add_argument("--json", type=Path, default=None)
     a = ap.parse_args(argv)
 
@@ -152,9 +158,19 @@ def main(argv=None) -> int:
     if missing:
         print("not measured on this page:", ", ".join(missing))
 
+    from desembarque import vocab as vocab_mod
+    voc = Vocabulary.load(a.vocab)
+    if a.floor is not None:
+        # one floor for every column, which is what a sweep asks
+        vocab_mod.FLOOR = a.floor
+        voc.floors = {f: a.floor for f in voc.floors}
+
     report = {"page": TRUTH, "rows": len(rows), "prep": a.prep,
-              "inset": a.inset, "columns": {}}
-    print("column         rows  exact  mean CER")
+              "inset": a.inset, "floor": vocab_mod.FLOOR, "columns": {}}
+    # `snapped` is of the rows a value was snapped on: how often it is the word
+    # the clerk typed. `offered` is how many rows were snapped at all, because a
+    # column that snaps three rows of twenty-six is not a column that reads.
+    print("column         rows  exact  mean CER  offered  snapped right")
     for field in wanted:
         cells = read.get(field)
         if not cells:
@@ -167,10 +183,17 @@ def main(argv=None) -> int:
             continue
         exact = sum(1 for t, g in pairs if fold(t) == fold(g)) / len(pairs)
         mean = sum(cer(t, g) for t, g in pairs) / len(pairs)
-        report["columns"][field] = {"rows": len(pairs), "exact": round(exact, 3),
-                                    "cer": round(mean, 3),
-                                    "sample": [[str(t), g] for t, g in pairs[:5]]}
-        print(f"{field:<13}  {len(pairs):<4}  {exact:<5.3f}  {mean:.3f}")
+        snaps = [(t, (voc.snap(field, g) or {}).get("value")) for t, g in pairs]
+        offered = [(t, v) for t, v in snaps if v]
+        right = sum(1 for t, v in offered if fold(t) == fold(v))
+        report["columns"][field] = {
+            "rows": len(pairs), "exact": round(exact, 3), "cer": round(mean, 3),
+            "offered": len(offered), "snapped_right": right,
+            "snapped_exact": round(right / len(pairs), 3),
+            "sample": [[str(t), g, (voc.snap(field, g) or {}).get("value")]
+                       for t, g in pairs[:5]]}
+        print(f"{field:<13}  {len(pairs):<4}  {exact:<5.3f}  {mean:<8.3f}  "
+              f"{len(offered):<7}  {right}")
     if a.json:
         a.json.write_text(json.dumps(report, indent=2, ensure_ascii=False),
                           encoding="utf-8")

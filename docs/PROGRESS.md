@@ -55,9 +55,29 @@ and 0.68 of the sheet, and the one edge it did move read worse; and
 the usual answer to a small crop, which moved idade 0/22 → 0/22 and sexo
 0/26 → 1/26.
 
-Next, in order: the closed vocabularies for nacionalidade / estado /
-profissao; the repetition rule for procedencia and classe (T6); then a reader
-for one- and two-character cells.
+**The closed vocabularies, done and measured.** `desembarque/vocab.py` and
+`data/column_vocab.json`: the words these forms print in each column, written
+by hand, making the language-name file's claim — *these forms print this word*,
+never *this archive contains it*. A snapped word is stored as `value` beside
+the untouched `text`, which is the gazetteer's rule about suggestions applied
+to a column. On the same 26 hand-read rows:
+
+| column | rows | right as read | snapped | of those, right |
+|---|---|---|---|---|
+| estado | 26 | 1 | 13 | **12** |
+| profissao | 22 | 0 | 8 | **7** |
+| nacionalidade | 26 | 0 | 5 | **3** |
+
+The floor is per column and swept (0.55 / 0.62 / 0.70): civil state and
+profession are short lists of unmistakable words and want 0.55, nationality is
+fifty long words sharing their endings and wants 0.70. Listing an abbreviation
+as its own word was tried and taken out — `CAS` won `cau` away from CASADO —
+and a short reading is compared with the head of the word instead.
+
+Next, in order: wire `cells_from_bands` into `transcribe_page` and decide what
+a cell costs (40 bands × 8 columns against twenty seconds a column); the
+repetition rule for procedencia and classe (T6); then a reader for one- and
+two-character cells.
 
 ## 2026-08-28, evening — the reading, not the retrieval
 
