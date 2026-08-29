@@ -7,10 +7,14 @@ written, one Martinez is findable and the other six are not — and a person
 searching for an ancestor knows the surname far better than anything else on the
 sheet.
 
-The mark is what the page says; the surname is what the row means. Both are
-kept: `name_raw` is untouched, the surname is filled in from the row the mark
-points at, and `ditto` names the fields that were inherited so the UI can show
-them as inherited rather than as read.
+The mark is what the page says; the words it repeats are what the row means.
+Both are kept: `name_raw` is untouched, `inherited` holds the words taken from
+the row the mark points at, and `ditto` names the field that was inherited so
+the UI can show it as inherited rather than as read.
+
+Nothing here says which part of a name is the family name. That was
+`split_name`'s assumption, and on a page written given-name-first it filed four
+people under *Benito*; see T6 in docs/TASKS-reading-quality.md.
 """
 from __future__ import annotations
 
@@ -66,6 +70,25 @@ def _strip_mark(text: str) -> str | None:
     return rest if sum(c.isalpha() for c in rest) >= 3 else None
 
 
+def written(name_raw: str | None) -> list[str]:
+    """The words this row writes for itself, with any repetition mark dropped.
+
+    `" Maria` writes *Maria*; `"ose` writes *ose*, since the clerk's mark rarely
+    comes back with a space after it; a mark alone writes nothing. What the row
+    means is these words after the ones it inherits.
+    """
+    raw = (name_raw or "").strip()
+    if not raw:
+        return []
+    if is_mark(raw):
+        return []
+    parts = raw.split()
+    if _first_token_is_mark(raw):
+        return parts[1:]
+    rest = _strip_mark(raw)
+    return rest.split() if rest else parts
+
+
 def _first_token_is_mark(text: str | None) -> bool:
     parts = (text or "").split()
     return bool(parts) and is_mark(parts[0])
@@ -114,25 +137,20 @@ def resolve(rows: list[dict]) -> list[dict]:
             # the mark itself did not survive the recogniser; the indent it was
             # written under did
             row["inherited"] = inherited_from(above, len(parts))
-            row["surname"] = " ".join(row["inherited"]) or last
-            row["given"] = raw
-            row["ditto"] = ["surname"]
+            row["ditto"] = ["name"]
             row["ditto_source"] = "indent"
         elif (_first_token_is_mark(raw) or _strip_mark(raw)) and last and since <= MAX_GAP:
             rest = (" ".join(parts[1:]).strip() if _first_token_is_mark(raw)
                     else _strip_mark(raw))
             row["inherited"] = inherited_from(above, len(rest.split()))
-            row["surname"] = " ".join(row["inherited"]) or last
-            row["given"] = rest or row.get("given") or ""
-            row["ditto"] = ["surname"]
+            row["ditto"] = ["name"]
             row["ditto_source"] = "mark"
         elif is_mark(raw):
             # nothing but the mark: the row means the same surname and the
             # clerk wrote no given name to go with it
             if last and since <= MAX_GAP:
                 row["inherited"] = inherited_from(above, 0)
-                row["surname"] = " ".join(row["inherited"]) or last
-                row["ditto"] = ["surname"]
+                row["ditto"] = ["name"]
                 row["ditto_source"] = "mark"
         elif len(parts) >= 2 and not is_mark(parts[0]):
             # Only a row that names two things sets the family surname. A row
@@ -144,7 +162,10 @@ def resolve(rows: list[dict]) -> list[dict]:
             # that field is the assumption this work is removing — and for a
             # row the engine split, the two agree anyway.
             above = parts
-            last = row.get("surname") or " ".join(parts[:-1])
+            # that there *is* a family above, which is all this now says. It
+            # used to be the family name, read off a stored `surname`, and that
+            # field is the assumption T6 removes: `inherited` is the output.
+            last = raw
         elif last and since <= MAX_GAP and len(parts) == 1:
             # A single name under a family, with no mark that survived and no
             # indent to prove one: on these forms that is a continuation, and
@@ -152,9 +173,7 @@ def resolve(rows: list[dict]) -> list[dict]:
             # searcher reliably knows. Inherited, and labelled as inferred
             # rather than read, because the difference is the whole point.
             row["inherited"] = inherited_from(above, len(parts))
-            row["surname"] = " ".join(row["inherited"]) or last
-            row["given"] = raw
-            row["ditto"] = ["surname"]
+            row["ditto"] = ["name"]
             row["ditto_source"] = "position"
         since = 0
         out.append(row)

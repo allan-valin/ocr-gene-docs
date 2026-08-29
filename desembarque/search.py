@@ -232,12 +232,23 @@ def similarity(a: str, b: str) -> float:
 def row_text(row: dict) -> str:
     """What this row is searched by.
 
-    Normally the verbatim reading, because the split into surname and given
-    name is a derivation and the reading is not. The exception is the
-    repetition mark: `" Maria` is what the page says and *Martinez Maria* is
-    who the row is about, and a search for the surname has to find her — she is
-    one of seven Martinezes on that page written with a mark.
+    Normally the verbatim reading, because anything more is a derivation and
+    the reading is not. The exception is the repetition mark: `" Maria` is what
+    the page says and *Martinez Maria* is who the row is about, and a search
+    for the name has to find her — she is one of seven Martinezes on that page
+    written with a mark.
+
+    What the mark repeats is `inherited`, the words written above it that this
+    row does not write, and the row's own words come after them because that is
+    where the clerk's column puts them. A record written before T6 resolved the
+    mark into `surname` and `given` instead, and the corpus is not re-read to
+    pick up a rename, so both shapes are understood.
     """
+    if row.get("inherited"):
+        from desembarque.ditto import written
+        joined = " ".join(list(row["inherited"]) + written(row.get("name_raw")))
+        if joined:
+            return joined
     if row.get("ditto"):
         joined = " ".join(x for x in (row.get("surname"), row.get("given")) if x)
         if joined:

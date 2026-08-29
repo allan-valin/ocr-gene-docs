@@ -1227,3 +1227,46 @@ def test_a_row_the_limit_cut_off_is_not_offered_again_as_a_passenger():
     named = {k for k, h in zip(keys, hits) if h.get("matched") != "ship"}
     aboard = {k for k, h in zip(keys, hits) if h.get("matched") == "ship"}
     assert not (named & aboard)
+
+
+# --- what a row is searched by, after the split came out --------------------
+
+def test_a_row_with_a_mark_is_searched_by_what_the_mark_repeats():
+    """`" Maria` is what the page says and *Martinez Maria* is who the row is
+    about — one of seven Martinezes on that page written with a mark. Since T6
+    the row carries `inherited`, the words it takes from above, rather than a
+    `surname` claiming which part of a name is the family's."""
+    from desembarque.search import row_text
+
+    assert row_text({"name_raw": '" Maria', "ditto": ["name"],
+                     "inherited": ["Martinez"]}) == "Martinez Maria"
+
+
+def test_the_inherited_words_come_first_because_that_is_where_they_are_written():
+    from desembarque.search import row_text
+
+    assert row_text({"name_raw": '" Maria', "ditto": ["name"],
+                     "inherited": ["Ant", "Alonso"]}) == "Ant Alonso Maria"
+
+
+def test_a_mark_with_nothing_beside_it_is_searched_by_the_whole_name_above():
+    from desembarque.search import row_text
+
+    assert row_text({"name_raw": '"', "ditto": ["name"],
+                     "inherited": ["Santabarbara", "Salvador"]}) \
+        == "Santabarbara Salvador"
+
+
+def test_a_row_read_before_the_mark_was_understood_is_still_searched_by_it():
+    """660 records on disk resolved the mark into `surname` and `given`, and
+    the corpus is not re-read to pick up a rename."""
+    from desembarque.search import row_text
+
+    assert row_text({"name_raw": '" Maria', "ditto": ["surname"],
+                     "surname": "Martinez", "given": "Maria"}) == "Martinez Maria"
+
+
+def test_a_row_that_writes_its_own_name_is_searched_by_the_reading():
+    from desembarque.search import row_text
+
+    assert row_text({"name_raw": "Martinez Francisco"}) == "Martinez Francisco"
