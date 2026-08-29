@@ -380,6 +380,59 @@ def load_index(cache: Path, engine_only: bool = True,
     return index
 
 
+# The shortest half a cut can leave. `MMarzianFortunat` begins with a doubled
+# letter and `M` is not somebody's name; four letters is the shortest name this
+# archive carries in quantity — ANNA, ROSA, JOSE, LUIS.
+GLUE_HALF = 4
+RE_INNER_CAPITAL = re.compile(r"(?<=[a-z])(?=[A-Z])")
+
+
+def unglued(word: str) -> list[str]:
+    """The two names in a reading that ran them into one word, or nothing.
+
+    OL.PRJ.17347 p16 reads `MattenceSuireppe`, `MarcelloNittoms`,
+    `MerleltaForlunato` — 28 rows read and not one word this archive has read
+    before, because a person searching *Giuseppe* shares no whole word with any
+    of them. The stroke rules have known how to unglue a word since T7, and
+    only ever offered it to somebody who opened the menu on it.
+
+    The cut is taken where a capital stands inside a word: **the recogniser
+    dropped the space the clerk wrote and kept the capital that followed it**,
+    so the cut is evidence off the page rather than a guess about it.
+
+    Tried first and rejected: cutting where both halves are names this archive
+    has read. On the page it was written for it split nothing — the glue and
+    the misreading come together, and `Suireppe` is no more in the dictionary
+    than `MattenceSuireppe` is. A list cannot carry this cut; the ink can.
+    """
+    w = (word or "").strip()
+    if not w or " " in w or len(w) < GLUE_HALF * 2:
+        return []
+    out = []
+    for m in RE_INNER_CAPITAL.finditer(w):
+        i = m.start()
+        if i >= GLUE_HALF and len(w) - i >= GLUE_HALF:
+            out.append(f"{w[:i]} {w[i:]}")
+    return out
+
+
+def searchable_alts(row: dict, text: str) -> list[str]:
+    """Every other spelling of this row worth indexing beside its reading.
+
+    The row's second reading — the same band read with room around the ink —
+    and any glued pair of names in it. Both are candidates and neither is a
+    reading: what is stored is untouched, and a hit says which spelling it
+    matched.
+    """
+    out = list(_second_reading(row, text))
+    for word in text.split():
+        for split in unglued(word):
+            spelled = text.replace(word, split, 1)
+            if spelled != text and spelled not in out:
+                out.append(spelled)
+    return out
+
+
 def _second_reading(row: dict, text: str) -> list[str]:
     """The other reading of this row, as whole names rather than loose words.
 
@@ -447,7 +500,7 @@ def _parse(f: Path, engine_only: bool,
             continue
         if len(fold(text)) < 4:
             continue
-        second = _second_reading(r, text)
+        second = searchable_alts(r, text)
         out.append({
             "doc": d.get("hash", f.stem),
             "notation": d.get("notation"),

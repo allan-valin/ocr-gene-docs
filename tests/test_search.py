@@ -1270,3 +1270,59 @@ def test_a_row_that_writes_its_own_name_is_searched_by_the_reading():
     from desembarque.search import row_text
 
     assert row_text({"name_raw": "Martinez Francisco"}) == "Martinez Francisco"
+
+
+# --- two names written as one word ------------------------------------------
+#
+# OL.PRJ.17347 p16 reads 28 of 29 rows and not one word this archive has read
+# before, because the commonest damage on it is two names glued into one:
+# `MattenceSuireppe`, `MarcelloNittoms`, `MerleltaForlunato`. A person
+# searching *Giuseppe* shares no whole word with any of them. The menu has
+# known how to unglue a word since T7; search never has.
+#
+# Tried first and rejected, so nobody tries it twice: cut where **both halves
+# are names this archive has read**. On the page it was written for it splits
+# nothing at all — the glue and the misreading come together, and `Suireppe` is
+# no more a word in the dictionary than `MattenceSuireppe` is. The evidence
+# that has to carry the cut is in the ink, not in a list.
+
+def test_a_capital_inside_a_word_is_where_the_space_was():
+    """The recogniser dropped the space and kept the capital the clerk wrote.
+    That is evidence off the page, which is what a cut has to stand on."""
+    from desembarque.search import unglued
+
+    assert unglued("MarcelloNittoms") == ["Marcello Nittoms"]
+    assert unglued("MattenceSuireppe") == ["Mattence Suireppe"]
+
+
+def test_a_word_with_no_capital_inside_it_is_left_alone():
+    from desembarque.search import unglued
+
+    assert unglued("Gisranmini") == []
+    assert unglued("Muszihao") == []
+
+
+def test_a_half_too_short_to_be_a_name_is_not_a_half():
+    """`MMarzianFortunat` begins with the recogniser doubling a letter, and
+    `M` is not somebody's name."""
+    from desembarque.search import unglued
+
+    assert unglued("MMarzianFortunat") == ["MMarzian Fortunat"]
+    assert unglued("McDonald") == []
+
+
+def test_a_reading_the_clerk_wrote_as_two_words_is_not_touched():
+    from desembarque.search import unglued
+
+    assert unglued("Marcello Vittorio") == []
+    assert unglued("") == []
+
+
+def test_the_glued_pair_reaches_the_index_as_another_spelling():
+    """Through `alts`, which is where the row's second reading already goes and
+    is already scored — so this is a new candidate, not a new mechanism."""
+    from desembarque import search as s
+
+    row = {"n": 1, "page": 2, "name_raw": "Palai MarcelloNittoms"}
+    assert "Palai Marcello Nittoms" in s.searchable_alts(
+        row, "Palai MarcelloNittoms")
