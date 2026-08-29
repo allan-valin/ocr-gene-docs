@@ -80,10 +80,26 @@ def corpus_median_width(records: list[dict]) -> float:
     return statistics.median(widths) if widths else 0.2
 
 
+_ENGINE = None
+
+
+def engine():
+    """One engine for the whole pass.
+
+    It was being built per page, which loads the detector and the recogniser
+    again for every page — most of the nineteen seconds a page cost. The models
+    are the expensive part and they do not change between pages.
+    """
+    global _ENGINE
+    if _ENGINE is None:
+        from desembarque.engine_paddle import PaddleEngine
+        _ENGINE = PaddleEngine()
+        _ENGINE._import()
+    return _ENGINE
+
+
 def read_page(pdf: Path, page: int, pagecache: Path) -> tuple[list[dict], dict]:
-    from desembarque.engine_paddle import PaddleEngine
-    eng = PaddleEngine()
-    eng._import()
+    eng = engine()
     img = page_image(pdf, page, pagecache)
     if img is None:
         return [], {}
