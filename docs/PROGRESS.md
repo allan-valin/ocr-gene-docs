@@ -44,6 +44,36 @@ and nothing past rank three. Six words. It ships because it costs nothing and
 fires wherever the column reads; the number is a ceiling and is written down as
 one.
 
+**The reference set has a check now**, `scripts/bench_refset.py`, which the
+methodology described in the last checkpoint and nothing implemented. It reads
+the seven pages and says what each comes back as — kind, rows cut, rows with a
+reading, words the archive has read before, cells and snapped cells. Nothing is
+scored against a truth file, because five of the seven have none: the question
+it answers is *did this page stop being empty*.
+
+| shape | kind | rows | read | dict | cells | snap | s |
+|---|---|---|---|---|---|---|---|
+| typewritten, headings over columns | list | 31 | 27 | 14 | 59 | 26 | 25.9 |
+| cursive, headings printed, truth exists | list | 48 | 48 | 8 | 45 | 0 | 24.9 |
+| heading printed away from its column | list | 18 | 17 | 5 | 2 | 1 | 8.7 |
+| name column stored as the ordinal strip | list | 29 | 28 | **0** | 24 | 0 | 14.9 |
+| faint, low confidence, cursive | list | 37 | 36 | **1** | 35 | 0 | 19.5 |
+| continuation page, no heading line | list | 41 | 40 | 4 | 50 | 3 | 30.1 |
+| not a table at all | unknown | 0 | 0 | 0 | 0 | 0 | 43.1 |
+
+Read as a baseline: the geometry finds rows on all six tables and the cover
+card still comes back as no table, which is what it must do. What the table
+says is where the reading stands rather than the cutting — **two of the six
+pages read essentially no word this archive has ever seen**: the page whose
+name column was the ordinal strip reads 28 rows and not one known word, and the
+faint cursive page reads 36 rows and one. Those are the two shapes to work on,
+and they are the shape of the 8% that yield nothing.
+
+Two smaller things the table shows: the cover card costs 43 s to decide it is
+not a table, which is the most expensive page in the set and the one with
+nothing on it; and the cursive pages return cells that never snap, which is the
+same finding T11 ran into.
+
 **What this leaves.** The reading-quality plan has no open task. What is left
 is the wall both of these ran into: a cursive hand the recogniser cannot read
 in a narrow column. The refset is where that gets worked on — one page per
