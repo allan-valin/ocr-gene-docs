@@ -12,8 +12,15 @@ data/*
 scans/
 
 # ...but the parsed catalog is the corpus manifest and is versioned, since the
-# index PDFs it derives from are not in git and were saved by hand.
+# index PDFs it derives from are not in git and were saved by hand. It names
+# ships, notations and URLs — no passenger, which is the line.
 !data/catalog.jsonl
+
+# Nothing under data/ is ever un-ignored again, and this is the reason:
+# `data/truth/*.json` was versioned and pushed, and it holds names read by hand
+# off passenger lists — real people, some of them children on those sheets and
+# possibly alive. That is personal data and it does not belong in a public
+# history. docs/DATA.md says how to rebuild every file under data/ instead.
 
 # generated prototype assets (embeds an archive page)
 prototype/build/
