@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from desembarque.engine_paddle import rows_from_bands, split_name
+from desembarque.engine_paddle import rows_from_bands
 
 
 class Band:
@@ -32,7 +32,7 @@ def test_each_band_becomes_one_row_in_order():
     rows = rows_from_bands(geo, (1000, 2000), lambda crops: said,
                            crop=lambda i, box: box)
     assert [r["n"] for r in rows] == [1, 2, 3]
-    assert rows[0]["surname"] == "ROCA REBULLIDA" and rows[0]["given"] == "AMPARO"
+    assert rows[0]["name_raw"] == "ROCA REBULLIDA AMPARO"
     # the score of the name strip, keyed `name` since T6 renamed it with the
     # field; `rowfields.name_score` still reads the old key off older records
     assert rows[0]["conf"]["name"] == 0.94
@@ -42,7 +42,8 @@ def test_an_unread_row_is_null_not_invented():
     geo = Band([(0.1, 0.2), (0.2, 0.3)])
     rows = rows_from_bands(geo, (1000, 2000), lambda crops: [("", 0.0), ("X", 0.9)],
                            crop=lambda i, box: box)
-    assert rows[0]["surname"] is None and rows[0]["given"] is None
+    # nothing read is an empty reading, not an invented one
+    assert rows[0]["name_raw"] == ""
     assert rows[0]["conf"]["name"] == 0.0
 
 
@@ -52,14 +53,20 @@ def test_recogniser_returning_short_falls_back_to_null_rows():
     rows = rows_from_bands(geo, (1000, 2000), lambda crops: [("A B", 0.9)],
                            crop=lambda i, box: box)
     assert len(rows) == 3
-    assert rows[1]["surname"] is None and rows[2]["surname"] is None
+    assert rows[1]["name_raw"] == "" and rows[2]["name_raw"] == ""
 
 
-def test_split_name_keeps_compound_surnames_together():
-    assert split_name("ROCA REBULLIDA AMPARO") == ("ROCA REBULLIDA", "AMPARO")
-    assert split_name("VAZQUEZ JOSE") == ("VAZQUEZ", "JOSE")
-    assert split_name("SOLO") == ("SOLO", "")
-    assert split_name("") == (None, None)
+def test_a_row_makes_no_claim_about_which_part_of_a_name_is_the_family_s():
+    """`split_name` took the last word as the given name — the convention these
+    clerks mostly used, and one a dossier breaks: Allan reports the same
+    passengers written twice, once in German with the surname first. On those
+    pages it filed four people under *Benito*. The reading is what a row knows;
+    what a repetition mark repeats is `inherited`, and neither claims an order."""
+    geo = Band([(0.1, 0.2)])
+    rows = rows_from_bands(geo, (1000, 2000), lambda crops: [("ROCA REBULLIDA AMPARO", 0.9)],
+                           crop=lambda i, box: box)
+    assert rows[0]["name_raw"] == "ROCA REBULLIDA AMPARO"
+    assert "surname" not in rows[0] and "given" not in rows[0]
 
 
 def test_engine_reports_unavailable_rather_than_guessing(monkeypatch):

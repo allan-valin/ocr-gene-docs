@@ -366,7 +366,7 @@ def build_grid(pdf: Path, page_n: int) -> dict:
     bands = geo.normalized_rows()
     cols = geo.normalized_cols()
     name = geo.name_column(0)
-    rows = [{"n": i + 1, "surname": None, "given": None, "nationality": None,
+    rows = [{"n": i + 1, "name_raw": "", "nationality": None,
              "age": None, "sex": None, "status": None, "occupation": None,
              "origin": None, "notes": None, "conf": {}, "band": list(b)}
             for i, b in enumerate(bands)]

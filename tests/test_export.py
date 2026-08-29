@@ -158,22 +158,21 @@ def test_the_company_and_the_port_travel_too():
     assert out[1][out[0].index("porto_chegada")] == "Santos"
 
 
-def test_an_inherited_surname_says_it_was_inherited_and_how():
+def test_an_inherited_name_says_it_was_inherited_and_how():
     """Most rows on a family list carry a repetition mark rather than a name,
-    and some carry nothing at all and take the surname from their position.
+    and some carry nothing at all and take their name from their position.
     A spreadsheet that cannot tell those from a reading invites somebody to take
     an inference to a registry as evidence."""
     doc = {**DOC, "rows": [
-        {"n": 1, "page": 2, "name_raw": "Martinez Francisco",
-         "surname": "Martinez", "given": "Francisco"},
-        {"n": 2, "page": 2, "name_raw": '" Maria', "surname": "Martinez",
-         "given": "Maria", "ditto": ["surname"], "ditto_source": "mark"},
-        {"n": 3, "page": 2, "name_raw": "Manuel", "surname": "Martinez",
-         "given": "Manuel", "ditto": ["surname"], "ditto_source": "position"},
+        {"n": 1, "page": 2, "name_raw": "Martinez Francisco"},
+        {"n": 2, "page": 2, "name_raw": '" Maria', "ditto": ["name"],
+         "inherited": ["Martinez"], "ditto_source": "mark"},
+        {"n": 3, "page": 2, "name_raw": "Manuel", "ditto": ["name"],
+         "inherited": ["Martinez"], "ditto_source": "position"},
     ]}
     rows = lines(rows_to_csv(doc))
     head = rows[0]
-    assert "sobrenome_origem" in head
+    assert "repeticao_origem" in head
     assert "lido" in rows[1]
     assert "aspas de repetição" in rows[2]
     assert "inferido" in rows[3]
@@ -232,3 +231,29 @@ def test_the_search_csv_says_a_row_was_matched_letter_by_letter():
     out = hits_to_csv("EMILI MUESSO Valdivia",
                       [{"text": "bmike Meesoo", "matched": "letters", "row": 1}])
     assert "comparação letra a letra" in out
+
+
+# --- the spreadsheet after the split came out -------------------------------
+
+def test_the_spreadsheet_carries_the_name_as_read_and_what_the_mark_repeats():
+    """It used to carry *sobrenome* and *nome*, which is a claim about which
+    part of a name is the family's — derived the wrong way round often enough
+    to matter, and the reason T6 removed it. What a row actually knows is the
+    reading, and, under a repetition mark, the words repeated from above."""
+    from desembarque.export import FIELDS, rows_to_csv
+
+    assert "sobrenome" not in FIELDS and "nome" not in FIELDS
+    csvtext = rows_to_csv({
+        "notation": "BS.ENT.1", "rows": [
+            {"n": 1, "page": 2, "name_raw": "Santabarbara Salvador"},
+            {"n": 2, "page": 2, "name_raw": '" Jose', "ditto": ["name"],
+             "inherited": ["Santabarbara"], "ditto_source": "mark"}]})
+    import csv
+    import io
+
+    rows = list(csv.DictReader(io.StringIO(csvtext)))
+    assert "repete_de_cima" in rows[0] and "nome_completo" in rows[0]
+    got = rows[1]
+    assert got["nome_lido"] == '" Jose'
+    assert got["repete_de_cima"] == "Santabarbara"
+    assert got["nome_completo"] == "Santabarbara Jose"

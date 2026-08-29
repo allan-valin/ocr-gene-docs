@@ -390,7 +390,7 @@ function sim(a,b){
 // looking for "Paul" returns every passenger living in São Paulo, which buries
 // the one thing a genealogical search is actually for.
 const SCOPES={
-  name:        r=>[r.name_raw,r.given,r.surname],
+  name:        r=>[r.name_raw,...(r.inherited||[]),r.given,r.surname],
   nationality: r=>[r.nationality],
   age:         r=>[r.age],
   sex:         r=>[r.sex],
@@ -398,7 +398,7 @@ const SCOPES={
   occupation:  r=>[r.occupation],
   origin:      r=>[r.origin],
   notes:       r=>[r.notes],
-  all:         r=>[r.name_raw,r.given,r.surname,r.nationality,r.age,r.sex,r.status,r.occupation,r.origin,r.notes],
+  all:         r=>[r.name_raw,...(r.inherited||[]),r.given,r.surname,r.nationality,r.age,r.sex,r.status,r.occupation,r.origin,r.notes],
 };
 function rowMatches(r,q,scope){
   if(!q) return false;
@@ -549,16 +549,6 @@ function docmetaLine(){
 function nameText(r){
   if(r.name_raw) return r.name_raw;
   return [r.given, r.surname].filter(Boolean).join(" ");
-}
-// The same convention as desembarque/engine_paddle.py split_name: these tables
-// are written surname-first with compound surnames spelled out and the given
-// name last. Editing a cell used to split it the other way round, so a person
-// correcting a name silently reversed what the engine had derived.
-function splitName(t){
-  const p=(t||"").trim().split(/\s+/).filter(Boolean);
-  if(!p.length) return ["",""];
-  if(p.length===1) return [p[0],""];
-  return [p.slice(0,-1).join(" "), p[p.length-1]];
 }
 // A word the recogniser read more than one way is shown as a control, so the
 // other reading can be chosen instead of retyped. The alternatives are the
@@ -1351,10 +1341,10 @@ $("#rows").addEventListener("input",e=>{
   const idx=+e.target.closest("tr").dataset.i;
   const val=e.target.textContent.trim();
   if(f==="name"){
-    // what the person typed is the reading; the split is derived from it
+    // what the person typed is the reading, and that is the whole record of it.
+    // It used to be split into surname and given name on the way in, which
+    // reversed the name on every page these clerks wrote the other way round.
     rows[idx].name_raw = val;
-    const [sur, giv] = splitName(val);
-    rows[idx].surname = sur; rows[idx].given = giv;
   } else {
     rows[idx][f] = val==="" || val==="ilegível" ? null : val;
   }
@@ -1485,8 +1475,6 @@ function chooseReading(i, w, word){
   words[w] = word;
   const val = words.join(" ");
   r.name_raw = val;
-  const [sur, giv] = splitName(val);
-  r.surname = sur; r.given = giv;
   r.edits = r.edits || [];
   r.edits.push({field:"name", to:val, at:new Date().toISOString(), from:"leitura alternativa"});
   r.verified = true;

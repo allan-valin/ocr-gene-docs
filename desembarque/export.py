@@ -33,19 +33,20 @@ import csv
 import io
 
 from desembarque.rowfields import name_score
+from desembarque.search import row_text
 
 FIELDS = [
     "notacao", "arquivo", "navio", "companhia", "procedencia", "porto_chegada",
-    "data_chegada", "pagina", "linha", "nome_lido", "sobrenome", "nome",
-    "origem", "sobrenome_origem", "score_motor",
+    "data_chegada", "pagina", "linha", "nome_lido", "repete_de_cima",
+    "nome_completo", "origem", "repeticao_origem", "score_motor",
 ]
 
 
-# Where a row's surname came from. A surname the clerk wrote and a surname
-# inherited from the row above are different claims, and on a family list most
+# Where the words a row repeats came from. A name the clerk wrote and a name
+# taken from the row above are different claims, and on a family list most
 # rows are the second kind: a spreadsheet that does not say which is which
 # invites somebody to take an inference to a registry as a reading.
-SURNAME_SOURCE = {"mark": "aspas de repetição",
+REPEAT_SOURCE = {"mark": "aspas de repetição",
                   "indent": "recuo sob as aspas",
                   "position": "posição na lista (inferido)"}
 
@@ -94,10 +95,12 @@ def rows_to_csv(doc: dict, catalogued: str | None = None) -> str:
             "pagina": row.get("page") or "",
             "linha": row.get("n") or "",
             "nome_lido": row.get("name_raw") or "",
-            "sobrenome": row.get("surname") or "",
-            "nome": row.get("given") or "",
+            # what the mark repeats, and the two together — never a claim
+            # about which half of a name is the family's (T6)
+            "repete_de_cima": " ".join(row.get("inherited") or []),
+            "nome_completo": row_text(row),
             "origem": _origin(row, doc),
-            "sobrenome_origem": (SURNAME_SOURCE.get(row.get("ditto_source"), "herdado")
+            "repeticao_origem": (REPEAT_SOURCE.get(row.get("ditto_source"), "herdado")
                                  if row.get("ditto") else "lido"),
             "score_motor": score if score is not None else "",
         })

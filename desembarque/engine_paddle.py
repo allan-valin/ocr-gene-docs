@@ -315,23 +315,6 @@ def list_breaks(ordinals: list[str], lookback: int = 3) -> list[int]:
     return breaks
 
 
-def split_name(text: str) -> tuple[str | None, str | None]:
-    """Split a manifest name into surname and given name.
-
-    These tables are written surname-first, with compound surnames spelled out
-    in full and the given name last ("ROCA REBULLIDA AMPARO"). Taking the last
-    token as the given name follows the convention the clerks actually used.
-    The raw string is kept alongside, so a wrong split loses nothing.
-    """
-    t = " ".join((text or "").split())
-    if not t:
-        return None, None
-    parts = t.split(" ")
-    if len(parts) == 1:
-        return parts[0], ""
-    return " ".join(parts[:-1]), parts[-1]
-
-
 def name_strip_box(geo, size: tuple[int, int]) -> tuple[int, int]:
     """The name column's x-range in pixels, with a little air either side."""
     W, _H = size
@@ -523,11 +506,13 @@ def rows_from_bands(geo, size: tuple[int, int],
         text, score = by_band.get(i, ("", 0.0))
         # the line number belongs to the Numero column, not to anybody's surname
         text = strip_ordinal(text)
-        surname, given = split_name(text)
+        # The reading, and nothing claiming which part of it is a family name.
+        # `split_name` took the last word as the given name, which is the
+        # convention these clerks *mostly* used — and a dossier carries the same
+        # passengers twice, once in German with the surname first, so on those
+        # pages it filed four people under *Benito*. T6.
         row = {
             "n": i + 1,
-            "surname": surname,
-            "given": given,
             "name_raw": text or "",
             # the score of the name strip the recogniser read, which is what
             # it always was — it was keyed `surname` while the row asserted

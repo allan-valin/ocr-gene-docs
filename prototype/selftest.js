@@ -448,11 +448,16 @@ window.addEventListener("load",async()=>{
     ok("the name cell shows the reading verbatim", nameText(row) === "Nayomgo Cassaudii");
     ok("a row with no verbatim reading still shows a name",
        nameText({surname:"SILVA", given:"JOSE"}).indexOf("SILVA") >= 0);
-    // same convention as desembarque/engine_paddle.py split_name
-    ok("the split takes the given name last",
-       String(splitName("ROCA REBULLIDA AMPARO")) === "ROCA REBULLIDA,AMPARO");
-    ok("one word is a surname on its own",
-       String(splitName("CASSAUDII")) === "CASSAUDII,");
+    // T6: the split is gone from both sides. A person correcting a name used
+    // to have it split on the way in, by the same convention the engine used —
+    // last word is the given name — which reverses every page these clerks
+    // wrote the other way round. What a person types is the reading.
+    ok("correcting a name no longer splits it",
+       typeof splitName === "undefined");
+    ok("and a row under a mark is searched by what the mark repeats",
+       typeof SCOPES === "object"
+       && SCOPES.name({name_raw:'" Maria', inherited:["Martinez"]})
+              .filter(Boolean).join(" ").indexOf("Martinez") >= 0);
   }
 
   // Beside the ship in the folder list, when she landed: that is how somebody
