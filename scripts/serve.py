@@ -284,11 +284,64 @@ def corpus(folder: Path, limit: int = 0) -> dict:
                      or (sample["document"] if is_sample else None)),
             "transcribed_page": (cached or {}).get("transcribed_page") or (2 if is_sample else None),
             "transcribed": bool(cached) or is_sample,
+            "transcribed_by": transcribed_by(cached) or ("pessoa" if is_sample else None),
         })
         if limit and len(docs) >= limit:
             break
     return {"documents": docs, "active": next((i for i, d in enumerate(docs) if d["rows"]), 0),
             "root": str(folder)}
+
+
+# The columns the engine has never written. It reads the name, and since the
+# column reading was wired it writes what it read under `cells` — never into
+# these, which is what makes a value in one of them somebody's typing.
+TYPED_ONLY = ("nationality", "age", "sex", "status", "occupation", "origin",
+              "class", "notes")
+
+
+def tidy_rows(rows: list[dict]) -> list[dict]:
+    """The posted rows, with each row's edit log tidied.
+
+    Done where the rows are stored rather than in the browser, because the
+    record is what has to be true: a client that posts an edit per keystroke
+    event — which this one does — must not be able to write sixty records of
+    one act into a file that says a person was here.
+    """
+    from desembarque.batch import tidy_edits
+
+    out = []
+    for r in rows or ():
+        if isinstance(r, dict) and r.get("edits"):
+            r = {**r, "edits": tidy_edits(r["edits"])}
+        out.append(r)
+    return out
+
+
+def transcribed_by(record: dict | None) -> str | None:
+    """Whether a person typed this record's other columns.
+
+    The demo document is the only one in the corpus with them filled, and
+    without the note beside it the next dossier — names and nothing else —
+    reads as a tool that stopped working. Derived rather than stored: the flag
+    the file:// build carries was lost by a save, and what the rows hold cannot
+    be lost while the rows are there.
+    """
+    for row in (record or {}).get("rows") or ():
+        if isinstance(row, dict) and any(row.get(f) not in (None, "")
+                                         for f in TYPED_ONLY):
+            return "pessoa"
+    return None
+
+
+def transcribed_page(existing: dict | None, stated: int | None) -> int | None:
+    """Which page of a record somebody typed.
+
+    It is how a record whose rows carry no page number finds its scan, so it is
+    a fact about the transcription and not about what the client is looking at.
+    A save posted while the demo sat on page 1 rewrote it to 1 and showed
+    BS.ENT.017397's 26 typed rows beside the wrong page.
+    """
+    return (existing or {}).get("transcribed_page") or stated
 
 
 COLUMN_LABELS = ["numero", "nome", "nacionalidade", "idade", "sexo",
@@ -767,9 +820,9 @@ class Handler(BaseHTTPRequestHandler):
                 "hash": ident.doc_hash,
                 "notation": ident.notation,
                 "identified_by": ident.source,
-                "rows": merge_page_rows(existing, rows, page),
+                "rows": merge_page_rows(existing, tidy_rows(rows), page),
                 "geometry": body.get("geometry") or existing.get("geometry"),
-                "transcribed_page": body.get("page") or existing.get("transcribed_page"),
+                "transcribed_page": transcribed_page(existing, body.get("page")),
                 "source": body.get("source") or "manual",
                 "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             })

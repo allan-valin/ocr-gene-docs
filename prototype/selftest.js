@@ -33,7 +33,7 @@ window.addEventListener("load",async()=>{
   // the sample's rows arrive with the corpus, which on a loaded machine can be
   // a second behind the page being ready
   for(let i=0;i<40 && document.querySelectorAll("#rows tr").length!==26;i++) await wait(150);
-  ok("rows rendered=26", document.querySelectorAll("#rows tr").length===26);
+  ok("rows rendered=26", document.querySelectorAll("#rows tr").length===26);   // 26 passengers, one row each
   ok("scan image loaded", q("#scan").naturalWidth>0);
   ok("band painted", !q("#bandBox").hidden && parseFloat(q("#bandBox").style.height)>0);
   ok("scope defaults to name", q("#scope").value==="name");
@@ -149,8 +149,12 @@ window.addEventListener("load",async()=>{
     if(pill){
       pill.click(); await wait(600);
       const menu=document.querySelector(".altmenu");
-      ok("the menu still offers what the engine read",
-         !!menu && /leituras do motor/.test(menu.textContent));
+      // Either form of the same claim: what the engine read about this word.
+      // The demo document was typed by a person and its words carry no second
+      // reading at all, so the menu says the engine read it once — demanding
+      // the plural was demanding that a hand transcription have alternatives.
+      ok("the menu still says what the engine read of the word",
+         !!menu && /leituras do motor|o motor leu esta palavra/.test(menu.textContent));
       ok("a guess is labelled as not read from the page",
          !menu || !menu.querySelector("button.guess")
          || /não lidos da página/.test(menu.textContent));
@@ -566,6 +570,38 @@ window.addEventListener("load",async()=>{
        typeof cell === "function"
        && !/class="[^"]*typed/.test(cell({nationality: "BELGA"},
                                          "nationality", "BELGA")));
+
+    // The three columns the engine now reads. A cell is not a typed value and
+    // not a name: it is a reading, sometimes carried to a printed word by the
+    // closed vocabulary — SEAGNOLA to ESPANHOLA, conercio to COMERCIO. All
+    // three claims are different and the screen has to keep them apart.
+    const READ = {cells: {nacionalidade: {text: "SEAGNOLA", conf: 0.61}}};
+    const SNAPPED = {cells: {nacionalidade: {text: "SEAGNOLA", conf: 0.61,
+                                             value: "ESPANHOLA", snap: 0.78}}};
+    ok("a column the engine read is shown as read, not as somebody's typing",
+       typeof cell === "function"
+       && />SEAGNOLA</.test(cell(READ, "nationality", undefined))
+       && /class="[^"]*read/.test(cell(READ, "nationality", undefined))
+       && !/class="[^"]*typed/.test(cell(READ, "nationality", undefined)));
+    ok("a reading carried to a printed word shows the word",
+       typeof cell === "function"
+       && />ESPANHOLA</.test(cell(SNAPPED, "nationality", undefined))
+       && /class="[^"]*snapped/.test(cell(SNAPPED, "nationality", undefined)));
+    ok("and keeps the reading where the reader can see it",
+       typeof cell === "function"
+       && /SEAGNOLA/.test(cell(SNAPPED, "nationality", undefined))
+       && /corrigido automaticamente/.test(cell(SNAPPED, "nationality", undefined)));
+    ok("somebody's typing beats a reading of the same cell",
+       typeof cell === "function"
+       && /class="[^"]*typed/.test(cell({...SNAPPED, nationality: "BELGA",
+                                         edits: [{field: "nationality", to: "BELGA"}]},
+                                        "nationality", "BELGA"))
+       && />BELGA</.test(cell({...SNAPPED, nationality: "BELGA",
+                               edits: [{field: "nationality", to: "BELGA"}]},
+                              "nationality", "BELGA")));
+    ok("a column nobody read is still not transcribed",
+       typeof cell === "function"
+       && /não transcrito/.test(cell({cells: {}}, "age", undefined)));
 
     // Measured: the first guess is the right name for 51 of 217 badly-read
     // words and the engine's own second reading for 6, so the guesses are the

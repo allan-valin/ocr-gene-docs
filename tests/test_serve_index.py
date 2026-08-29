@@ -961,3 +961,52 @@ def test_the_engine_is_registered_with_those_columns(monkeypatch):
     monkeypatch.setattr("desembarque.engine_paddle.PaddleEngine", Spy)
     serve.register_engines()
     assert made.get("columns") == READABLE_COLUMNS
+
+
+# --- what a save may not move ----------------------------------------------
+
+def test_a_save_does_not_move_where_a_hand_transcription_lives():
+    """`transcribed_page` says which page somebody typed, and it is how a
+    record whose rows carry no page number finds its scan. A save posted while
+    the demo sat on page 1 rewrote it to 1, and BS.ENT.017397's 26 typed rows
+    were shown beside the wrong page. What the client is looking at is not a
+    claim about where the transcription is."""
+    assert serve.transcribed_page({"transcribed_page": 2}, 1) == 2
+    assert serve.transcribed_page({}, 3) == 3
+    assert serve.transcribed_page({"transcribed_page": None}, 3) == 3
+
+
+# --- the note that says a record was typed by a person ----------------------
+
+def test_a_record_whose_other_columns_are_filled_was_typed_by_a_person():
+    """The engine has never written nationality, age, profession or the rest —
+    it reads the name column and, since today, three columns into `cells`. A
+    value in the field itself is somebody's typing, and the review screen has
+    to say so or the next dossier reads as a tool that stopped working."""
+    typed = {"rows": [{"n": 1, "name_raw": "AMPARO", "nationality": "ESPANHOLA"}]}
+    assert serve.transcribed_by(typed) == "pessoa"
+
+
+def test_a_record_the_engine_read_makes_no_such_claim():
+    read = {"rows": [{"n": 1, "name_raw": "AMPARO",
+                      "cells": {"nacionalidade": {"text": "SEAGNOLA"}}}]}
+    assert serve.transcribed_by(read) is None
+    assert serve.transcribed_by({"rows": []}) is None
+    assert serve.transcribed_by(None) is None
+
+
+def test_a_save_does_not_record_the_same_typing_twice(tmp_path, monkeypatch):
+    """The browser posts an edit for every keystroke event, and the self-test
+    types `SIRVIENTA` into a cell that already says SIRVIENTA on every run. The
+    log is tidied where the rows are stored, so the record says what happened
+    once."""
+    from desembarque.batch import tidy_edits
+
+    rows = [{"n": 1, "edits": [{"field": "occupation", "to": "S", "at": "1"},
+                               {"field": "occupation", "to": "S", "at": "2"}]}]
+    assert len(tidy_edits(rows[0]["edits"])) == 1
+    assert [len(r["edits"]) for r in serve.tidy_rows(rows)] == [1]
+
+
+def test_tidying_leaves_a_row_that_never_was_edited_untouched():
+    assert serve.tidy_rows([{"n": 1, "name_raw": "A"}]) == [{"n": 1, "name_raw": "A"}]

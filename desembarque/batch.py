@@ -153,6 +153,90 @@ def saved_page(rows: list[dict], stated: int | None) -> int | None:
     return None
 
 
+def tidy_edits(edits: list[dict] | None) -> list[dict]:
+    """An edit log with the repetitions of one act collapsed.
+
+    Row 1 of BS.ENT.017397 carried sixty `occupation -> SIRVIENTA` entries, one
+    per browser self-test run, each indistinguishable from a person typing the
+    word. An edit is evidence that somebody put a value in a field; typing the
+    same word into the same field again, with nothing in between, is the same
+    act recorded twice, and sixty of them make the one act that happened
+    unreadable. The same word after a different one is a second act and stays.
+
+    The first of a run is kept, not the last: it is when the value the record
+    now holds was actually typed.
+    """
+    out: list[dict] = []
+    last: dict[str, str] = {}
+    for e in edits or ():
+        if not isinstance(e, dict):
+            out.append(e)
+            continue
+        field = e.get("field")
+        if field in last and last[field] == e.get("to"):
+            continue
+        last[field] = e.get("to")
+        out.append(e)
+    return out
+
+
+def _filled(row: dict) -> int:
+    """How much of a row is written in. Two copies of one row differ by what a
+    person did to them, and the fuller copy is the one somebody typed into."""
+    return sum(1 for k, v in row.items()
+               if k not in ("n", "page", "edits") and v not in (None, "", [], {}))
+
+
+def dedupe_rows(rows: list[dict]) -> list[dict]:
+    """One row per place on the page, with every copy's work kept.
+
+    BS.ENT.017397 doubled on every save until it held 26,624 rows — the save
+    rule that did it is fixed in `merge_page_rows` — and the repair that
+    followed collapsed rows that were *equal*. A row saved twice carries a
+    different `edits` list each time, so fourteen copies of row 1 survived the
+    repair as fourteen distinct rows, and the demo document showed 41 rows for
+    26 passengers. Equality is the wrong identity: two rows of one page cannot
+    both be row 1, whatever else differs between them.
+
+    The fullest copy is kept, since that is the one somebody typed into, and
+    the edits of every copy are merged and told apart by when they were made —
+    a repair may not drop a record of what a person did.
+
+    A row that says no number is left exactly where it is. It cannot be shown
+    to be another row, and a repair that guessed would delete somebody's work
+    on the strength of a guess.
+    """
+    out: list[dict] = []
+    seen: dict[tuple, int] = {}
+    for row in rows or ():
+        if not isinstance(row, dict) or row.get("n") is None:
+            out.append(row)
+            continue
+        key = (row.get("page"), row.get("n"))
+        if key not in seen:
+            seen[key] = len(out)
+            out.append(dict(row))
+            continue
+        at = out[seen[key]]
+        keep, drop = (at, row) if _filled(at) >= _filled(row) else (dict(row), at)
+        edits = list(at.get("edits") or []) + list(row.get("edits") or [])
+        uniq, done = [], set()
+        for e in edits:
+            k = (e.get("field"), e.get("to"), e.get("at")) if isinstance(e, dict) else repr(e)
+            if k in done:
+                continue
+            done.add(k)
+            uniq.append(e)
+        keep = dict(keep)
+        if uniq:
+            keep["edits"] = sorted(uniq, key=lambda e: str(e.get("at") or ""))
+        out[seen[key]] = keep
+        del drop
+    placed = [r for r in out if isinstance(r, dict) and r.get("n") is not None]
+    loose = [r for r in out if r not in placed]
+    return sorted(placed, key=_place) + loose
+
+
 def merge_page_rows(existing: dict | None, rows: list[dict],
                     page: int | None) -> list[dict]:
     """The rows of one page, saved back into a record that holds every page.

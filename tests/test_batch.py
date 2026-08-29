@@ -456,3 +456,111 @@ def test_saving_a_page_still_leaves_the_other_pages_alone():
                     {"n": 1, "name_raw": "C", "page": 3}]}
     out = merge_page_rows(old, [{"n": 1, "name_raw": "B2", "page": 2}], 2)
     assert [r["name_raw"] for r in out] == ["A", "B2", "C"]
+
+
+# --- rows duplicated by number ---------------------------------------------
+#
+# BS.ENT.017397 doubled on every save until it held 26,624 rows. The rule that
+# caused it is fixed, and the repair that followed was not: it collapsed rows
+# that were *equal*, and a row saved twice carries a different `edits` list each
+# time, so fourteen copies of row 1 survived as fourteen distinct rows. Two rows
+# of one page cannot both be row 1; that, not equality, is what makes them the
+# same row.
+
+def test_two_rows_of_the_same_page_cannot_both_be_row_one():
+    from desembarque.batch import dedupe_rows
+
+    rows = [{"n": 1, "page": 2, "name_raw": "AMPARO"},
+            {"n": 1, "page": 2, "name_raw": "AMPARO"},
+            {"n": 2, "page": 2, "name_raw": "FERNANDO"}]
+    assert [r["n"] for r in dedupe_rows(rows)] == [1, 2]
+
+
+def test_the_copy_that_carries_the_most_work_is_the_one_kept():
+    """Copies differ by what a person did to them, and the fullest is the one
+    somebody typed into. Nothing a person typed may be dropped to tidy a row."""
+    from desembarque.batch import dedupe_rows
+
+    thin = {"n": 1, "page": 2, "name_raw": "AMPARO"}
+    fat = {"n": 1, "page": 2, "name_raw": "AMPARO", "occupation": "SIRVIENTA",
+           "nationality": "ESPANHOLA"}
+    assert dedupe_rows([thin, fat])[0]["occupation"] == "SIRVIENTA"
+    assert dedupe_rows([fat, thin])[0]["occupation"] == "SIRVIENTA"
+
+
+def test_the_edits_of_every_copy_are_kept_and_told_apart_by_when():
+    from desembarque.batch import dedupe_rows
+
+    a = {"n": 1, "page": 2, "edits": [{"field": "occupation", "to": "X",
+                                       "at": "2026-08-19T11:35:39Z"}]}
+    b = {"n": 1, "page": 2, "edits": [{"field": "occupation", "to": "X",
+                                       "at": "2026-08-19T11:35:39Z"},
+                                      {"field": "age", "to": "23",
+                                       "at": "2026-08-20T09:00:00Z"}]}
+    got = dedupe_rows([a, b])
+    assert len(got) == 1
+    assert [e["field"] for e in got[0]["edits"]] == ["occupation", "age"]
+
+
+def test_a_row_that_says_no_number_is_left_where_it_is():
+    """A row with no number cannot be shown to be another row, and a repair
+    that guesses would delete somebody's work on the strength of a guess."""
+    from desembarque.batch import dedupe_rows
+
+    rows = [{"name_raw": "A"}, {"name_raw": "B"}]
+    assert len(dedupe_rows(rows)) == 2
+
+
+def test_the_same_number_on_two_pages_is_two_rows():
+    from desembarque.batch import dedupe_rows
+
+    rows = [{"n": 1, "page": 2}, {"n": 1, "page": 3}]
+    assert len(dedupe_rows(rows)) == 2
+
+
+def test_the_rows_come_back_in_page_and_row_order():
+    from desembarque.batch import dedupe_rows
+
+    rows = [{"n": 2, "page": 3}, {"n": 1, "page": 3}, {"n": 5, "page": 2}]
+    assert [(r["page"], r["n"]) for r in dedupe_rows(rows)] == [(2, 5), (3, 1), (3, 2)]
+
+
+# --- an edit log that says what happened ------------------------------------
+
+def test_typing_the_same_word_into_the_same_field_twice_is_one_act():
+    """Row 1 of BS.ENT.017397 carried sixty `occupation -> SIRVIENTA` edits,
+    one per browser self-test run, each looking exactly like a person typing.
+    An edit log is evidence about what somebody did; two consecutive records of
+    the same word in the same field are one act, and keeping them makes the
+    record of the one act that happened unreadable."""
+    from desembarque.batch import tidy_edits
+
+    got = tidy_edits([{"field": "occupation", "to": "SIRVIENTA", "at": "1"},
+                      {"field": "occupation", "to": "SIRVIENTA", "at": "2"},
+                      {"field": "occupation", "to": "SIRVIENTA", "at": "3"}])
+    assert got == [{"field": "occupation", "to": "SIRVIENTA", "at": "1"}]
+
+
+def test_a_word_typed_again_after_something_else_is_a_second_act():
+    from desembarque.batch import tidy_edits
+
+    got = tidy_edits([{"field": "occupation", "to": "SIRVIENTA", "at": "1"},
+                      {"field": "occupation", "to": "COSTUREIRA", "at": "2"},
+                      {"field": "occupation", "to": "SIRVIENTA", "at": "3"}])
+    assert [e["to"] for e in got] == ["SIRVIENTA", "COSTUREIRA", "SIRVIENTA"]
+
+
+def test_another_field_does_not_hide_a_repetition():
+    from desembarque.batch import tidy_edits
+
+    got = tidy_edits([{"field": "occupation", "to": "X", "at": "1"},
+                      {"field": "age", "to": "23", "at": "2"},
+                      {"field": "occupation", "to": "X", "at": "3"}])
+    assert [(e["field"], e["to"]) for e in got] == [("occupation", "X"), ("age", "23")]
+
+
+def test_a_row_with_no_edits_is_left_alone():
+    from desembarque.batch import tidy_edits
+
+    assert tidy_edits([]) == []
+    assert tidy_edits(None) == []

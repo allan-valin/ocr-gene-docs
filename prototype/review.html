@@ -213,6 +213,15 @@
      it has to look like one. */
   .ditto.guessed{border-bottom:1px dotted var(--warn)}
   .ditto.guessed::before{content:"≈ ";opacity:.8;color:var(--warn)}
+  /* A cell the engine read in one of the three columns it can read. It is not
+     somebody's typing and must never look like it; and where the closed
+     vocabulary carried the reading to a word the form prints, the background
+     says so, because the word on screen is then a correction and not the ink. */
+  td .read{color:var(--ink);opacity:.9;cursor:help}
+  td .snapped{background:var(--accent-soft);border-radius:2px;padding:0 2px;
+              cursor:help}
+  td .snapped::after{content:"⌇";font-size:9px;vertical-align:2px;opacity:.7;
+                     margin-left:2px;color:var(--accent)}
   .hw{border-left:2px solid var(--warn);padding-left:4px}
   mark{background:var(--focus);color:#fff;border-radius:2px;padding:0 1px}
   tr.hit{box-shadow:inset 3px 0 0 var(--focus)}
@@ -429,7 +438,38 @@ function dot(r,f){
   return `<span class="dot ${k}" role="img" aria-label="${CONF_LABEL[k]}${pct}"
            title="${CONF_LABEL[k]}${pct}"></span>`;
 }
+// The columns the engine reads are measured off the printed heading and named
+// in the language the form is printed in; the record has always called them by
+// these English keys. One map, so a reading and the field it belongs to can be
+// put side by side.
+const CELL_FIELD={nationality:"nacionalidade", age:"idade", sex:"sexo",
+                  status:"estado", occupation:"profissao", origin:"procedencia"};
+function readCell(r,f){
+  const c=r.cells&&r.cells[CELL_FIELD[f]];
+  return (c && (c.text||"").trim()) ? c : null;
+}
 function cell(r,f,txt){
+  // What the engine read in one of the three columns it can read. Kept apart
+  // from `r[f]`, which is only ever somebody's typing — so a person's word
+  // wins, and where there is none the reading is shown as a reading.
+  const rd = (f in r) ? null : readCell(r,f);
+  if(rd){
+    // The vocabulary is a guess about the reading, never a reading. It is shown
+    // because `SEAGNOLA` helps nobody and *ESPANHOLA* is what the form prints —
+    // and the reading stays one hover away, because the snap is wrong often
+    // enough to matter: measured 3 right of 5 snapped on nationality.
+    const snapped = !!rd.value;
+    const shown = snapped ? rd.value : rd.text;
+    const title = snapped
+      ? `corrigido automaticamente para uma palavra impressa nesta coluna — `
+        + `o motor leu “${rd.text}” (${Math.round((rd.snap||0)*100)}% de `
+        + `semelhança). Confira no original.`
+      : `lido pelo motor nesta coluna — não digitado por uma pessoa. `
+        + `Confira no original.`;
+    return `<td class="cellwrap"><span contenteditable="${EDIT}" data-f="${f}"
+             class="read${snapped?" snapped":""}" data-read="${rd.text}"
+             title="${title}">${shown}</span>${dot({conf:{[f]:rd.conf}},f)}</td>`;
+  }
   // absent and null are different claims: the engine reads the name column
   // only, so the other fields were never attempted. Marking those "ilegível"
   // would report a failure that never happened.
