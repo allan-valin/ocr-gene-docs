@@ -6,6 +6,52 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-08-29, evening — two names in one word
+
+Tests green: **681 Python assertions, 9 skipped; 126 browser assertions in both
+browsers.**
+
+The reference-set baseline said two of its six tables read essentially no word
+this archive has ever seen, and both were looked at rather than guessed about.
+Neither is a geometry failure. On **OL.PRJ.17347 p16** the rows are cut, 28 of
+29 read, and the names are there under the damage — the commonest fault is two
+names run into one word: `MattenceSuireppe`, `MarcelloNittoms`,
+`MerleltaForlunato`. A person searching *Giuseppe* shares no whole word with
+any of them, so the dossier is a ship nobody can find a name in.
+
+**The cut is taken where a capital stands inside a word.** The recogniser
+dropped the space the clerk wrote and kept the capital that followed it, so the
+cut is evidence off the page and not a guess about it. It is indexed in `alts`,
+beside the reading, where a row's second reading already goes and is already
+scored — a new candidate, not a new mechanism — and what is stored is
+untouched.
+
+Tried first and rejected, so nobody tries it twice: cut where **both halves are
+names the archive has read**. On the page it was written for it splits nothing,
+because the glue and the misreading come together and `Suireppe` is no more in
+the dictionary than `MattenceSuireppe` is. A list cannot carry this cut.
+
+`bench_search.py --matrix` moves for the first time in this session — 86→87 of
+142 in the top five by name alone, 99→100 in the top twenty, 122→123 with the
+crossing named, nothing lost. The hand-read pages are not the pages this was
+written for; across the corpus **1,361 of 37,617 stored readings** carry a word
+a capital cuts in two, and each was unfindable by either of its names.
+
+The reader is sent there too: `colado` is a fifth reason in the check, catching
+0.041 of the badly-read rows and **stopping nobody on a row that was right** —
+the only reason in that table with no cost. It adds nothing to what the four
+existing reasons catch together, and is kept for what it says rather than what
+it finds: *two names in one word, retype it* is different advice from *the
+engine was unsure*.
+
+**What is left of that page's neighbour.** OL.PRJ.16030 p3, the faint hand,
+reads 36 of 37 rows one or two letters from a name — `Nose` for José, `Tuan`
+for Juan, `Gerolano` for Gerolamo. Search will not reach those: a four-letter
+word shares almost no trigram with another, and the edit-distance pass that
+would catch it runs only inside a crossing somebody named — over the whole
+corpus it was measured in July and is worth nothing. That one is not a search
+fix, and what remains of it is the recogniser.
+
 ## 2026-08-29, evening — the plan's last two tasks, and a wall worth naming
 
 Tests green: **673 Python assertions, 9 skipped; 126 browser assertions in both
