@@ -2197,6 +2197,14 @@ session, because the geometry currently works on the other 92%.
    dossiers that is roughly a million rows. It wants SQLite before then, not a bigger
    dictionary.
 
+### Future work, written down when it was asked for
+
+* **Knowing what kind of document is on the screen** — `docs/FUTURE-document-types.md`.
+  Certificates, notary books and German records from the 1700s are coming through
+  the FamilySearch API, and they are not the shape this reader assumes. Identify
+  the type, choose the geometry from the type, and show the type in the file list
+  with an icon a person can correct.
+
 ### Open questions for Allan
 
 * **How much does handwriting matter to you?** For the jus sanguinis work, an ancestor
