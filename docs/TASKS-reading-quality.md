@@ -477,3 +477,37 @@ is written down beside it, not when the code runs.
       nationality column, which is the only way to measure this as used. The
       hand transcription of BS.ENT.017397 p2 is one half of it and has no
       stored engine reading of its names to pair against.
+
+---
+
+## What the reference set says to do next (2026-08-29 evening)
+
+The plan above has no open task. `scripts/bench_refset.py` gives the baseline,
+and two of its six tables read essentially no word this archive has ever seen.
+Both were looked at rather than guessed about, and **neither is a geometry
+failure** — the rows are cut, the writing is in them, and the recogniser is
+what fails:
+
+* **OL.PRJ.17347 p16**, the page whose stored name column was the ordinal
+  strip. Measured fresh it reads 28 of 29 rows and the names are there under
+  the damage — `MattenceSuireppe`, `MarcelloNittoms`, `MerleltaForlunato`,
+  `Miaccagh Lurgi`, `Palai Nello`. **The commonest damage is two names glued
+  into one word**, which is exactly what makes a row unfindable: a person
+  searching *Giuseppe* shares no whole word with `MattenceSuireppe`.
+* **OL.PRJ.16030 p3**, the faint cursive page. 36 of 37 rows read and most are
+  one or two letters from a name: `Nose`/`Nosa` for José and Rosa, `Tuan` for
+  Juan, `Gerolano` for Gerolamo, `Garpar` for Gaspar. One word of the whole
+  page is a name this archive has read before.
+
+- [ ] **T13 — Findability on the pages that read as noise.** The candidate
+      rules already know how to unglue a word (`strokes`, the *space* rule) and
+      how to reach a name one stroke away, and all of that is offered to a
+      person who opens the menu on a word. None of it reaches **search**, which
+      is where these two pages actually fail — a dossier nobody can find a name
+      in is a ship nobody can search, whatever the review screen would offer.
+      The measurement already exists and is the one that must move:
+      `bench_search.py --matrix`, 86/95/99 of 142 by name alone.
+      To settle first, because they are different claims: what is indexed
+      beside a reading is not a reading, and a search that matches an invented
+      spelling has to say which spelling it matched, or the tool starts
+      answering with words no page contains.
