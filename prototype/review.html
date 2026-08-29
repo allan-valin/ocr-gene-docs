@@ -142,6 +142,22 @@
   #scanPane{background:#0e0d0c;border-right:1px solid var(--line)}
   #scanInner{position:relative;width:100%}
   #scan{display:block;width:100%;height:auto}
+  /* Reading the faint pages with your own eyes. The recogniser is at its
+     ceiling on a hundred-year-old hand and a person is not: on the pages where
+     it returns nonsense the writing is often perfectly legible to somebody
+     looking at it, if the paper can be got out of the way. These are the two
+     things that do that — more contrast, and the negative, where a faint grey
+     stroke on grey paper becomes a light stroke on black. Done in the browser,
+     on the image already downloaded, so it costs nothing and no scan is
+     rewritten. */
+  #scantools{position:sticky;top:0;z-index:3;display:flex;gap:6px;align-items:center;
+    padding:6px 8px;background:rgba(14,13,12,.92);border-bottom:1px solid var(--line);
+    backdrop-filter:blur(3px)}
+  #scantools span{font-size:11px;color:var(--muted);margin-right:2px}
+  #scantools button{padding:3px 8px;font-size:11px}
+  #scan[data-enhance="realce"]{filter:grayscale(1) contrast(1.9) brightness(1.08)}
+  #scan[data-enhance="forte"]{filter:grayscale(1) contrast(3.1) brightness(1.22)}
+  #scan[data-enhance="negativo"]{filter:grayscale(1) invert(1) contrast(1.7) brightness(.95)}
   #bandBox{position:absolute;left:0;right:0;border-top:1px solid var(--focus);
     border-bottom:1px solid var(--focus);background:rgba(201,133,63,.16);pointer-events:none;
     transition:top .12s ease,height .12s ease}
@@ -297,6 +313,13 @@ Um ano ou o nome do navio na busca não competem com o nome: eles reordenam o qu
     <div id="doclist"></div>
   </div>
   <div class="pane" id="scanPane">
+    <div id="scantools" role="group" aria-label="Realce da imagem">
+      <span>Imagem</span>
+      <button id="enh-original" data-enhance="" aria-pressed="true">Original</button>
+      <button id="enh-realce" data-enhance="realce" aria-pressed="false">Realce</button>
+      <button id="enh-forte" data-enhance="forte" aria-pressed="false">Alto contraste</button>
+      <button id="enh-negativo" data-enhance="negativo" aria-pressed="false">Negativo</button>
+    </div>
     <div id="scanInner">
       <img id="scan" alt="Digitalização original da relação de passageiros">
       <div id="bandBox" hidden></div>
@@ -1438,6 +1461,41 @@ function loadData(){
 // Listing a folder reads every file in it, and during indexing the engine has
 // the machine, so that listing can take half a minute — long enough for the
 // page to look broken with nothing on it to say why.
+// ---- reading the page with your own eyes -------------------------------
+// The recogniser is at its ceiling on a hundred-year-old hand; a person is not.
+// On the faint pages the writing is often perfectly legible to somebody looking
+// at it once the paper is out of the way, and that is a browser filter on an
+// image already downloaded — no second copy of the scan, nothing rewritten,
+// nothing sent anywhere. The choice is remembered because a reader working
+// through a faint dossier wants it on for every page of it.
+const ENHANCE_KEY="desembarque.enhance";
+function setEnhance(mode){
+  const img=$("#scan");
+  if(!img) return;
+  if(mode) img.dataset.enhance=mode; else delete img.dataset.enhance;
+  document.querySelectorAll("#scantools button").forEach(b=>{
+    b.setAttribute("aria-pressed", String((b.dataset.enhance||"")===(mode||"")));
+  });
+  try{ localStorage.setItem(ENHANCE_KEY, mode||""); }catch(e){}
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("#scantools button");
+  if(!b) return;
+  setEnhance(b.dataset.enhance||"");
+});
+// Ctrl is taken by the browser and single letters by the row editor; the
+// bracket keys are free and sit under the hand that is already on the page.
+document.addEventListener("keydown",e=>{
+  if(e.key!=="\\" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t=e.target;
+  if(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const order=["","realce","forte","negativo"];
+  const now=($("#scan").dataset.enhance)||"";
+  setEnhance(order[(order.indexOf(now)+1)%order.length]);
+  e.preventDefault();
+});
+try{ setEnhance(localStorage.getItem(ENHANCE_KEY)||""); }catch(e){ setEnhance(""); }
+
 bootIndexBar();
 if(SERVED) $("#warn").textContent="Carregando a pasta…";
 loadData().then(d=>{

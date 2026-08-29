@@ -6,6 +6,74 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-08-29, afternoon — the name column was measured wrong on half the corpus
+
+Tests green: 630 Python assertions, 9 skipped (the nine are one parametrised
+check over `scripts/*.py`, skipped where a script does not import the package).
+Browser self-test: 116 of 122 in both browsers; the six failures are older than
+this session's work and are listed below.
+
+**The finding.** Allan looked for his great-grandfather across 1919–1925 and did
+not find him, and asked whether contrast could recover the barely legible pages.
+Contrast is not what was wrong. On OL.PRJ.18109 p20 the page is typewritten and
+perfectly legible to a person — *Julio Augusto da Costa*, *Seraphim Gomes
+Saraiva* — and the engine read `ete do Coeto`, because the name column was
+measured from 0.128 of the sheet while the names begin at 0.014. It was reading
+the right rows through the wrong window.
+
+Two causes, both now fixed:
+
+* Where the heading line prints nothing to the left of the name — no *Ordem*,
+  no rule the detector finds — the left edge fell back to **two per cent of the
+  sheet left of the printed heading**, a constant. It is now taken from the
+  page's own rows: the 20th percentile of where the boxes under that heading
+  start, and only where at least four rows agree. The five hand-read truth
+  pages are unmoved (CER 0.362, 25 exact, 79 findable of 142) and OL.PRJ.18109
+  p20 goes from 13 readings and no dictionary words to 17 and five.
+* **Half the stored corpus was measured before any of this.** Of 2,543 stored
+  pages, 946 carry a name column narrower than a name — 0.017 to 0.06 of the
+  sheet is the ordinal strip — 394 carry most of the sheet, and 43 start past
+  the middle. `scripts/remeasure.py` reads those pages again, selecting them by
+  how unlike their own dossier they measure rather than by any fixed number,
+  since the same printed sheet runs the length of a list. **Dry run over eight
+  pages: 36 names before, 211 after.** 702 pages are selected in all, so the
+  order of magnitude is fifteen thousand passengers who cannot currently be
+  found by name.
+
+**The pass has not been run.** It was started, stopped after seventeen records,
+and the seventeen it wrote are intact. It should be run to completion — six to
+twelve hours — and the index rebuilt after it.
+
+**A row that carried no page number was duplicating the record on every save.**
+`merge_page_rows` keeps the rows of other pages and replaces the page being
+saved; a row with `page: null` is not another page's, but by the letter of the
+rule it was kept, and the posted copy was added beside it. BS.ENT.017397 — the
+demo document, transcribed before rows carried a page — had doubled ten times
+into 26,624 rows, 1,024 copies of twenty-six. Found while checking whether the
+re-measure pass had damaged anything; it had not, this was older and is what
+the six browser failures are about. The rule now says a row must *say* which
+page it is on before it can be treated as another page's, and the record has
+been deduplicated back to its 41 rows. No other record on disk holds a
+duplicate row.
+
+**Also this afternoon.** Preprocessing was measured properly and does not help
+the engine: background division, CLAHE, adaptive thresholding and their
+combinations move the truth pages from CER 0.362 to 0.358 at best, and on four
+faint pages they move nothing. What did come out of it is `union findable
+124/142 against 118 for the best single variant` — reading a row several ways
+finds people no single reading finds — and a **contrast control in the review
+screen**, because the recogniser is at its ceiling on a hundred-year-old hand
+and a person is not: Original / Realce / Alto contraste / Negativo, applied in
+the browser to the image already downloaded, remembered between pages, `\` to
+cycle.
+
+**Next, in order.** Run `remeasure.py` to completion and rebuild the index —
+that is the fifteen thousand names. Then the column vocabulary applied to the
+cells as Allan asked: the corrected word shown with the reading kept and the
+cell's background saying it was corrected automatically. Then the six browser
+assertions, which are about the demo document and want re-checking now that it
+is repaired.
+
 ## 2026-08-29 — the cells were cut right, and three things were wrong instead
 
 Tests green: 606 Python assertions, 9 skipped. One task, T10a in

@@ -422,3 +422,37 @@ def test_the_page_a_save_replaces_is_the_one_its_rows_agree_on():
     assert saved_page([{"page": 3}, {"page": 4}], None) is None
     assert saved_page([{"n": 1}], None) is None
     assert saved_page([{"page": 3}], 2) == 2, "what the client says wins"
+
+
+def test_saving_a_page_does_not_duplicate_rows_that_carry_no_page_number():
+    """BS.ENT.017397 was transcribed by hand before the records carried a page
+    number on every row, so its rows have `page: null`. Saving page 2 kept them
+    — they are not page 2, by the letter of the rule — and added the posted
+    copy beside them. Ten saves later the record held 26,624 rows, 1,024 copies
+    of twenty-six, and the demo document was unusable.
+
+    A row that does not say which page it is on cannot be shown to be another
+    page's, and the screen that posted this page is the only thing that has
+    seen it. It is replaced, like the rest of the page it was posted with."""
+    from desembarque.batch import merge_page_rows
+    old = {"rows": [{"n": 1, "name_raw": "JOSE", "page": None},
+                    {"n": 2, "name_raw": "MARIA", "page": None}]}
+    posted = [{"n": 1, "name_raw": "JOSE CORRIGIDO", "page": 2},
+              {"n": 2, "name_raw": "MARIA", "page": 2}]
+    out = merge_page_rows(old, posted, 2)
+    assert len(out) == 2, out
+    assert out[0]["name_raw"] == "JOSE CORRIGIDO"
+    # and it stays stable however many times it is saved
+    again = merge_page_rows({"rows": out}, posted, 2)
+    assert len(again) == 2, again
+
+
+def test_saving_a_page_still_leaves_the_other_pages_alone():
+    """The reason the rule exists: correcting page 2 of an eleven-page dossier
+    used to delete pages 3 to 11."""
+    from desembarque.batch import merge_page_rows
+    old = {"rows": [{"n": 1, "name_raw": "A", "page": 1},
+                    {"n": 1, "name_raw": "B", "page": 2},
+                    {"n": 1, "name_raw": "C", "page": 3}]}
+    out = merge_page_rows(old, [{"n": 1, "name_raw": "B2", "page": 2}], 2)
+    assert [r["name_raw"] for r in out] == ["A", "B2", "C"]

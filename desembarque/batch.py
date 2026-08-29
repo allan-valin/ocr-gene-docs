@@ -168,9 +168,18 @@ def merge_page_rows(existing: dict | None, rows: list[dict],
 
     A save that carries no page number cannot say which page it replaces, so it
     replaces the rows, which is what the clients that do not send one expect.
+
+    And a *row* that carries no page number is not another page's either. The
+    records transcribed by hand before rows carried a page were kept beside
+    every save — they are not page 2, by the letter of the rule — and the
+    posted copy was added next to them. BS.ENT.017397 doubled on every save
+    until it held 26,624 rows, 1,024 copies of twenty-six, and the document the
+    demo runs on was unusable. Only a row that says which page it is on can be
+    shown to belong to another one.
     """
     kept = [r for r in (existing or {}).get("rows") or []
-            if isinstance(r, dict) and r.get("page") != page]
+            if isinstance(r, dict) and r.get("page") is not None
+            and r.get("page") != page]
     if page is None or not kept:
         return list(rows)
     return sorted(list(rows) + kept, key=_place)

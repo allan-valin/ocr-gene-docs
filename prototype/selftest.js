@@ -575,6 +575,28 @@ window.addEventListener("load",async()=>{
     ok("and the control says so",
        !!q("#guessfirst") && q("#guessfirst").getAttribute("aria-pressed") === "true");
 
+    // Reading the faint pages by eye. The recogniser is at its ceiling on a
+    // hundred-year-old hand and a person is not, so the reader needs the paper
+    // out of the way rather than a better guess about it.
+    const tools = q("#scantools");
+    ok("the scan can be enhanced for a person to read", !!tools);
+    if(tools && typeof setEnhance === "function"){
+      const img = q("#scan");
+      setEnhance("realce");
+      ok("a realce is applied to the scan itself",
+         img.getAttribute("data-enhance") === "realce");
+      ok("and the control shows which one is on",
+         q("#enh-realce").getAttribute("aria-pressed") === "true"
+         && q("#enh-original").getAttribute("aria-pressed") === "false");
+      setEnhance("negativo");
+      ok("the negative is available, where faint grey on grey becomes light on black",
+         img.getAttribute("data-enhance") === "negativo");
+      setEnhance("");
+      ok("and the original comes back untouched",
+         !img.hasAttribute("data-enhance")
+         && q("#enh-original").getAttribute("aria-pressed") === "true");
+    }
+
     const ex = document.getElementById("exportcsv");
     ok("an export control exists", !!ex);
     if(ex) ok("export points at the served document or is disabled",
