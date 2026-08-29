@@ -411,3 +411,60 @@ def test_an_unread_heading_with_no_place_to_put_it_is_left_out():
            box(0.52, 0.54), box(0.55, 0.62, "Estado civil")]
     got = {c["field"] for c in columns(frs, W, H)["others"]}
     assert got == {"nacionalidade", "estado"}
+
+
+def test_a_heading_with_nothing_beside_it_takes_its_left_edge_from_the_writing():
+    """On OL.PRJ.18109 p20 the heading line prints `NOMES` at 0.148 and nothing
+    at all to its left — no *Ordem*, no rule the detector finds. The column's
+    left edge then fell back to two per cent of the sheet left of the printed
+    word, which is a number somebody chose, and the typewritten names on that
+    page start at 0.014. Every name was cut off at the front: *Julio Augusto da
+    Costa* reached the recogniser as `ete do Coeto`.
+
+    A page cannot be measured with a constant. The rows say where they start,
+    and they are what the edge is taken from."""
+    from desembarque.tablegrid import columns
+    W, H = 1470, 2000
+
+    def box(x0, x1, y0, y1, text=None):
+        f = {"x0": x0 * W, "y0": y0, "x1": x1 * W, "y1": y1}
+        if text is not None:
+            f["text"] = text
+        return f
+
+    frs = [box(0.148, 0.257, 117, 146, "NOMES"),
+           box(0.381, 0.486, 119, 142, "Nacionalidade")]
+    for i in range(14):
+        y0, y1 = 200 + 36 * i, 224 + 36 * i
+        frs.append(box(0.014, 0.212, y0, y1))     # ordinal and name in one box
+    col = columns(frs, W, H)
+    assert col is not None
+    x0 = col["name"][0] / W
+    assert x0 <= 0.02, (x0, "the names are still cut off at the front")
+
+
+def test_the_writing_only_moves_an_edge_the_page_did_not_print():
+    """Where the heading line does carry a box to the left — an *Ordem*
+    heading, a rule — that is a measurement off the printing and it stands. One
+    long row that runs from the ordinal to the observations is not a reason to
+    put the name column's edge on top of the ordinals: that box is what
+    `written_lines` was taught to handle, and moving the edge for it would
+    break the pages that read correctly today."""
+    from desembarque.tablegrid import columns
+    W, H = 1000, 1400
+
+    def box(x0, x1, y0, y1, text=None):
+        f = {"x0": x0 * W, "y0": y0, "x1": x1 * W, "y1": y1}
+        if text is not None:
+            f["text"] = text
+        return f
+
+    frs = [box(0.12, 0.38, 100, 130, "Nome e Cognomes"),
+           box(0.02, 0.10, 100, 130, "Ordem")]
+    for i in range(12):
+        y0, y1 = 200 + 30 * i, 225 + 30 * i
+        frs.append(box(0.03, 0.07, y0, y1))
+        frs.append(box(0.13, 0.36, y0, y1))
+    frs.append(box(0.03, 0.62, 200, 225))   # the one row read as a single box
+    x0 = columns(frs, W, H)["name"][0] / W
+    assert 0.09 <= x0 <= 0.13, x0

@@ -71,6 +71,40 @@ def _heading(fragments: list[dict]) -> dict | None:
     return best if score >= HEADING_FLOOR else None
 
 
+# How many rows have to start at the same place before their start is taken as
+# the column's edge. One long box that runs from the ordinal to the
+# observations is not a column edge; a dozen rows beginning together is.
+MIN_ROWS_FOR_EDGE = 4
+# Which of the row starts to take. Not the leftmost — one row that begins with
+# a mark or a stray speck would drag the edge across the page — and not the
+# median either, since a short name genuinely starts where the others do.
+EDGE_QUANTILE = 0.2
+
+
+def _left_from_writing(fragments: list[dict], head: dict,
+                       width: float) -> float | None:
+    """Where the rows under this heading actually start.
+
+    Only asked when the heading line prints nothing to the left of the name —
+    no *Ordem*, no rule the detector found — which used to fall back to a fixed
+    two per cent of the sheet. On OL.PRJ.18109 p20 the heading `NOMES` is
+    printed at 0.148 and the typewritten names begin at 0.014, so that constant
+    cut the front off every name on the page and *Julio Augusto da Costa*
+    reached the recogniser as `ete do Coeto`.
+
+    A printing is not a constant. These forms differ by country, by decade and
+    by the printer who set them, so the page's own rows are the measurement and
+    the printed heading only says which rows to look at.
+    """
+    hw = head["x1"] - head["x0"]
+    starts = sorted(f["x0"] for f in fragments
+                    if f["y0"] > head["y1"]
+                    and _overlap(f["x0"], f["x1"], head["x0"], head["x1"]) >= 0.3 * hw)
+    if len(starts) < MIN_ROWS_FOR_EDGE:
+        return None
+    return starts[int(EDGE_QUANTILE * (len(starts) - 1))]
+
+
 def columns(fragments: list[dict], width: float, height: float,
             labelled: list[dict] | None = None) -> dict | None:
     """The name column, the ordinal column beside it, and where the table starts.
@@ -91,7 +125,13 @@ def columns(fragments: list[dict], width: float, height: float,
     left = [f for f in same if f["x1"] <= head["x0"] + 2]
     right = [f for f in same if f["x0"] >= head["x1"] - 2]
     margin = 0.02 * width
-    x0 = max((f["x1"] for f in left), default=head["x0"] - margin)
+    if left:
+        x0 = max(f["x1"] for f in left)
+    else:
+        # nothing printed to the left of the heading: the rows say where the
+        # column starts, and only if they cannot is a constant used at all
+        written = _left_from_writing(fragments, head, width)
+        x0 = written if written is not None else head["x0"] - margin
     x1 = min((f["x0"] for f in right), default=head["x1"] + margin)
     others = _other_columns(right, x1, width,
                             labelled if labelled is not None else fragments)

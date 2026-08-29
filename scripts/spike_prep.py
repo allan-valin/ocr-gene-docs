@@ -29,7 +29,13 @@ from desembarque import engine_paddle as ep                   # noqa: E402
 from desembarque.search import similarity                     # noqa: E402
 from page_geometry import page_image                          # noqa: E402
 
-VARIANTS = ("none", "autocontrast", "upscale2", "sharpen", "deslant")
+VARIANTS = ("none", "autocontrast", "upscale2", "sharpen", "deslant",
+            # the faded-document moves, which had never been tried: the paper
+            # browns unevenly and the ink fades where the pen ran dry, so one
+            # curve for the whole crop serves the darkest corner and the
+            # faintest stroke at once
+            "bgdiv", "clahe", "bgdiv_clahe", "bgdiv_up2", "adaptive",
+            "bgdiv_adaptive")
 
 
 def crops_of(eng, pdf: Path, page: int):

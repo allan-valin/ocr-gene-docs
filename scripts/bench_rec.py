@@ -95,6 +95,56 @@ def deslant(im):
                         resample=Image.BICUBIC, fillcolor=255)
 
 
+def _cv(im):
+    import numpy as np
+    return np.asarray(im.convert("L"), dtype=np.uint8)
+
+
+def _pil(a):
+    from PIL import Image
+    return Image.fromarray(a)
+
+
+def background_divided(im):
+    """The crop divided by its own background, which is what fading is.
+
+    A scan of a hundred-year-old sheet is not uniformly dark: the paper browns
+    unevenly, the ink fades where the pen ran dry, and one global contrast
+    curve for the whole crop — which is what `autocontrast` is — has to serve
+    the darkest corner and the faintest stroke at once. Dividing by a heavily
+    blurred copy of the crop removes the paper and leaves the ink, whatever the
+    paper was doing locally. It is the standard first move on a faded document
+    and it had never been tried here.
+    """
+    import cv2
+    import numpy as np
+    a = _cv(im).astype(np.float32)
+    k = max(15, (min(a.shape) // 2) * 2 + 1)
+    bg = cv2.GaussianBlur(a, (k, k), 0) + 1.0
+    out = np.clip(a * 255.0 / bg, 0, 255)
+    return _pil(out.astype(np.uint8))
+
+
+def clahe(im, clip: float = 2.0, tile: int = 8):
+    """Contrast lifted tile by tile rather than over the whole crop."""
+    import cv2
+    a = _cv(im)
+    grid = (max(2, min(tile, a.shape[1] // 8 or 2)),
+            max(2, min(tile, a.shape[0] // 8 or 2)))
+    return _pil(cv2.createCLAHE(clipLimit=clip, tileGridSize=grid).apply(a))
+
+
+def adaptive(im, block: int = 31, c: int = 15):
+    """Black and white, thresholded against the local paper."""
+    import cv2
+    a = _cv(im)
+    b = max(3, min(block, (min(a.shape) // 2) * 2 - 1))
+    if b % 2 == 0:
+        b += 1
+    return _pil(cv2.adaptiveThreshold(a, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                      cv2.THRESH_BINARY, b, c))
+
+
 def prepared(recognize, how: str):
     """The engine's recogniser with every crop put through `how` first."""
     from PIL import Image, ImageOps
@@ -109,6 +159,19 @@ def prepared(recognize, how: str):
             return im.filter(ImageFilter.UnsharpMask(radius=2, percent=150))
         if how == "deslant":
             return deslant(im)
+        if how == "bgdiv":
+            return background_divided(im)
+        if how == "clahe":
+            return clahe(im)
+        if how == "bgdiv_clahe":
+            return clahe(background_divided(im))
+        if how == "bgdiv_up2":
+            out = background_divided(im)
+            return out.resize((out.width * 2, out.height * 2), Image.LANCZOS)
+        if how == "adaptive":
+            return adaptive(im)
+        if how == "bgdiv_adaptive":
+            return adaptive(background_divided(im))
         return im
 
     if how == "none":
