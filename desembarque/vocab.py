@@ -34,6 +34,41 @@ def fold(text) -> str:
     return "".join(c for c in s if not unicodedata.combining(c)).upper().strip()
 
 
+# Which language a nationality is written in, for the names on that row.
+#
+# The nationality column changes from row to row, so the prior it feeds is per
+# row and never per page (T11). The list speaks for the languages these ships
+# carried — Italian, Spanish, Portuguese, and the Levantine names these clerks
+# spell in Portuguese — and for nothing else: a Japanese or Polish passenger
+# gets the menu the rules already build, which is the honest answer when there
+# is no list to speak for them.
+#
+# The Spanish-speaking republics are read as Spanish because that is what the
+# name on the row is: a passenger boarding at Buenos Aires and writing
+# ARGENTINO carries a Spanish name. *Suisso* is deliberately absent — it is
+# three languages and the column does not say which.
+LANGUAGE_OF = {
+    "pt": ["BRASILEIRO", "BRASILEIRA", "PORTUGUEZ", "PORTUGUEZA", "PORTUGUES"],
+    "es": ["ESPANHOL", "ESPANHOLA", "ARGENTINO", "ARGENTINA", "URUGUAYO",
+           "URUGUAYA", "CHILENO", "CHILENA", "PARAGUAYO", "BOLIVIANO",
+           "PERUANO", "MEXICANO", "CUBANO"],
+    "it": ["ITALIANO", "ITALIANA"],
+    "ar": ["SYRIO", "SYRIA", "TURCO", "TURCA", "LIBANEZ", "EGYPCIO"],
+    "de": ["ALLEMAO", "ALLEMA", "AUSTRIACO", "AUSTRIACA"],
+}
+_LANGUAGE_BY_WORD = {w: lang for lang, ws in LANGUAGE_OF.items() for w in ws}
+
+
+def language_for(nationality: str | None) -> str | None:
+    """The language a row's names are likely written in, or None.
+
+    Asked of the *snapped* value and not of the reading: `LASIERCL` is what the
+    recogniser made of BRASILEIRA and is not a nationality, and matching a
+    reading against this table would put a prior on a misreading.
+    """
+    return _LANGUAGE_BY_WORD.get(fold(nationality))
+
+
 class Vocabulary:
     """The closed lists, by the field names the app already uses."""
 

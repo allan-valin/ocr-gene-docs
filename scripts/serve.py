@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.rowfields import name_score   # noqa: E402
+from desembarque.vocab import language_for     # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import (BatchIndexer, collect_pdfs, is_indexed,  # noqa: E402
                                merge_page_rows, preserve_human_work,
@@ -50,7 +51,7 @@ from desembarque.voyage import (is_complete, merge_voyages,  # noqa: E402
                                 parse_voyage)
 from desembarque import search as searchlib          # noqa: E402
 from desembarque.gazetteer import (Names, menu_for,   # noqa: E402
-                                   spoken_names)
+                                   names_by_language, spoken_names)
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
 
@@ -68,6 +69,23 @@ NAMES = Names.load(ROOT / "data" / "names.json")
 # what the candidate rules check against when the archive has nothing to say,
 # which on most words is the case — the archive's list is 1,081 names.
 SPOKEN = spoken_names(ROOT / "data" / "language_names.json")
+
+
+# The names each language uses, read once beside `SPOKEN`. Same claim, grouped:
+# `SPOKEN` says these languages use this name, this says which of them does.
+LANGUAGE_NAMES = names_by_language(ROOT / "data" / "language_names.json")
+
+
+def language_names_for(nationality: str | None) -> set[str] | None:
+    """The names to look at first for a row of this nationality, or None.
+
+    None where the column says nothing, says something the vocabulary could not
+    place, or names a language this list does not speak for — a Japanese or
+    Polish passenger gets the menu the rules already build, which is the honest
+    answer when there is no list behind the prior.
+    """
+    lang = language_for(nationality)
+    return LANGUAGE_NAMES.get(lang) if lang else None
 
 
 # Which rows to look at first, and why. Measured against 139 hand-read rows, of
@@ -649,10 +667,14 @@ class Handler(BaseHTTPRequestHandler):
                 # They are guesses and the response says so; the caller shows
                 # them as guesses and stores nothing unless a person picks one.
                 word = q.get("q", "")
+                # The row's own nationality, snapped to a word these forms
+                # print. It orders the menu and never filters it (T11).
+                lang = language_names_for(q.get("nacionalidade"))
                 return self._send(200, {
                     "word": word,
                     "guesses": menu_for(word, current_names(),
-                                        spoken=SPOKEN),
+                                        spoken=SPOKEN,
+                                        language_names=lang),
                     "of": len(current_names()),
                     "source": "nomes deste acervo e outras leituras do mesmo "
                               "traço — não é leitura do motor",

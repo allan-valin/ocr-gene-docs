@@ -219,8 +219,29 @@ def spoken_names(path: Path) -> set[str]:
     return out
 
 
+def names_by_language(path: Path) -> dict[str, set[str]]:
+    """The same names as `spoken_names`, grouped by the language that uses one.
+
+    A name belongs to every language that uses it and the overlap is real —
+    MARIA is all three, COSTA is Portuguese and Italian — so these are not
+    partitions and nothing is filtered by them. They order a menu: the
+    nationality column says which language the row's names are likely written
+    in, and a badly-read word is compared with that language's names first.
+
+    An absent file leaves every language empty, which is the same answer the
+    rest of this module gives: the menu is then whatever the rules build.
+    """
+    try:
+        d = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {lang: {fold(n) for n in names if n}
+            for lang, names in (d.get("by_language") or {}).items()}
+
+
 def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
-             spoken: set[str] | None = None) -> list[dict]:
+             spoken: set[str] | None = None,
+             language_names: set[str] | None = None) -> list[dict]:
     """Everything worth offering for one word, in the order that was measured.
 
     Two sources, and they answer different questions. The archive says *this
@@ -236,6 +257,12 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
     readings that spell nothing anyone has read yet — because the archive has
     not read every name correctly, and a dictionary can never be the gate on
     what the page could say.
+
+    `language_names` is the row's own language, read off its nationality
+    column: the same candidates, with the ones that language uses moved up.
+    It orders and never filters — half these families carry a Spanish surname
+    on an Italian passport, and a menu that dropped the right name because the
+    nationality disagreed would be worse than no prior at all (T11).
     """
     w = fold(word)
     read_here = {fold(n) for n in names.counts}
@@ -291,6 +318,15 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
             continue
         at[g["name"]] = g
         out.append(g)
-        if len(out) >= limit:
-            break
-    return out
+    if language_names:
+        spoken_here = {fold(n) for n in language_names}
+        for g in out:
+            if fold(g["name"].replace(" ", "")) in spoken_here:
+                g["language"] = True
+                g["why"] = f"{g['why']}; nome corrente na língua desta linha"
+        # A stable partition, so everything the measurements above put in order
+        # keeps that order inside each half. The prior says which names to look
+        # at first, not which candidate is right.
+        out = ([g for g in out if g.get("language")]
+               + [g for g in out if not g.get("language")])
+    return out[:limit]

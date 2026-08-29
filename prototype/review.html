@@ -1398,7 +1398,7 @@ document.addEventListener("click",e=>{
   // The guesses are fetched rather than baked in: they come from the archive's
   // own typed pages, they are not what the page says, and the menu has to be
   // usable before they arrive.
-  if(GUESSES) fetchGuesses(menu, words[w], readings);
+  if(GUESSES) fetchGuesses(menu, words[w], readings, r);
   const box = pill.getBoundingClientRect();
   menu.style.left = `${Math.round(box.left + scrollX)}px`;
   menu.style.top = `${Math.round(box.bottom + scrollY + 2)}px`;
@@ -1424,8 +1424,15 @@ document.addEventListener("click",e=>{
 // a person the scan. The toggle stays, because a reader comparing the engine's
 // two readings wants them together.
 let GUESSES=true, GUESSES_FIRST=true;
-function fetchGuesses(menu, word, readings){
-  fetch(`/api/names?q=${encodeURIComponent(word)}`).then(r=>r.json()).then(j=>{
+function fetchGuesses(menu, word, readings, r){
+  // The row's own nationality goes with the word: it says which language to
+  // look in first, and it changes from row to row, so it is never a page-wide
+  // setting. The snapped word, not the reading — `LASIERCL` names no language.
+  const natCell = ((r||{}).cells||{}).nacionalidade;
+  const nat = (r||{}).nationality || (natCell && (natCell.value || "")) || "";
+  fetch(`/api/names?q=${encodeURIComponent(word)}`
+        + (nat ? `&nacionalidade=${encodeURIComponent(nat)}` : "")
+       ).then(r=>r.json()).then(j=>{
     if(!document.body.contains(menu)) return;
     const gs=(j.guesses||[]);
     // Two sources, and the person has to be able to tell them apart: a name
