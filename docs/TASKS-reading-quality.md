@@ -370,4 +370,20 @@ is written down beside it, not when the code runs.
             column. Reading only the three columns that read something —
             nacionalidade, estado, profissao — is 90 crops and about a minute
             a page against the eighty seconds a page costs now.
+- [x] **T12 — Contrast on a faint page** (asked 2026-08-29). *Measured, and
+      not wired.* `scripts/spike_faint.py` puts four liftings in front of the
+      detector on the pages that read nothing. Autocontrast and a 2nd/98th
+      percentile stretch each move the box count by one — these scans already
+      use their range end to end, grey ink on grey paper with the black point
+      already black. Equalising moves: OL.PRJ.17851 p2 goes from 32 boxes and
+      no rows to 71 and 29. But counted with the engine actually running, it
+      never fires — that page already comes back with 45 bands and 23 names
+      from the ruled fallback — and the twelve records holding no rows all
+      still read `unknown` and print no heading line, because they are covers
+      and PARTEs and not lists. `engine_paddle.lift` is written and tested and
+      deliberately not called; the comment in `_printed_table` says what would
+      have to be true first. Kept from it: `retry_unknown.py --again`, and a
+      page stored as a `list` with no rows now counts as wanting a reading.
+      Separately, and already known: contrast does nothing for *reading* a crop
+      once it is cut — `data/spike_prep.json`, 0.362 against 0.361.
 - [ ] **T11 — The language prior** (§7). Depends on T10.
