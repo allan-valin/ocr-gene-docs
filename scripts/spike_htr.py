@@ -48,13 +48,20 @@ def crops_for(pdf: Path, page: int, work: Path, target_h: int):
     return out
 
 
-def run_trocr(crops, model_id: str, beams: int, batch: int):
-    """TrOCR is an encoder-decoder: an image in, a text sequence out."""
+def run_trocr(crops, model_id: str, beams: int, batch: int,
+              processor: str | None = None):
+    """TrOCR is an encoder-decoder: an image in, a text sequence out.
+
+    `processor` is for the repositories that do not keep one at the top level
+    -- `Kansallisarkisto/cyrillic-htr-model` files its under `processor/` --
+    written as `repo` or `repo#subfolder`.
+    """
     import torch
     from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
     torch.set_grad_enabled(False)
-    proc = TrOCRProcessor.from_pretrained(model_id)
+    where, _, sub = (processor or model_id).partition("#")
+    proc = TrOCRProcessor.from_pretrained(where, **({"subfolder": sub} if sub else {}))
     model = VisionEncoderDecoderModel.from_pretrained(model_id)
     model.eval()
     # Some repositories ship a processor cut for line images (192x1024) beside

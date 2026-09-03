@@ -24,6 +24,11 @@ def main() -> None:
                     default="Riksarkivet/trocr-base-handwritten-hist-swe-2")
     ap.add_argument("--batch", type=int, default=3)
     ap.add_argument("--beams", type=int, default=4)
+    ap.add_argument("--processor", default=None,
+                    help="where the image processor and tokenizer live, if "
+                         "not beside the weights: `repo` or `repo#subfolder`")
+    ap.add_argument("--pages", type=int, default=0,
+                    help="stop after this many pages, for a quick look")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
@@ -43,7 +48,10 @@ def main() -> None:
             pass
 
     t0 = time.time()
+    seen = 0
     for key, rows in index.items():
+        if args.pages and seen >= args.pages:
+            break
         doc, page = key.split("/")
         if not rows or str(page) in said.get(doc, {}):
             continue
@@ -54,11 +62,13 @@ def main() -> None:
                 crops.append((r["n"], Image.open(path).convert("RGB")))
         if not crops:
             continue
-        dt, got = run_trocr(crops, args.model, args.beams, args.batch)
+        dt, got = run_trocr(crops, args.model, args.beams, args.batch,
+                            args.processor)
         said.setdefault(doc, {})[str(page)] = {str(n): t for n, t in got.items()}
         args.out.write_text(json.dumps(
             {"model": args.model, "by": "row", "read": said},
             ensure_ascii=False, indent=2))
+        seen += 1
         print(f"  {doc[:8]} p{page}: {len(crops)} crops in {dt:.0f}s", flush=True)
     print(f"wrote {args.out} in {time.time() - t0:.0f}s")
 

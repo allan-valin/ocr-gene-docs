@@ -596,6 +596,50 @@ model will need too.
 The measurement that would change this answer is not more coverage — it is a
 recogniser that beats 0.205, rather than one that adds a second wrong reading
 beside the first.
+
+---
+
+## Did a clerk write these names in Cyrillic shapes? (asked 2026-09-03)
+
+Allan watched somebody write Cyrillic and recognised shapes he had seen in
+these manifests — letterforms he does not remember being taught — and asked
+whether a clerk whose first script was Cyrillic carried it into portuary
+work. It is a good question because it is a testable one: it predicts
+*particular* misreadings, since a cursive `и` is shaped like a Latin u, `т`
+like an m, `н` like an h, `р` like a p, `в` like a b, `г` like an r.
+
+**Asked of the errors.** Over the 142 hand-read names, 2,169 truth characters
+and 210 single-letter substitutions, the confusions those shapes predict are
+**4 of 210 (2%)**, and no dossier carries more than 4% of them. What the hand
+is actually read as: `L→T` 16, `A→O` 11, `M→E` 11, `Q→G` 8, `R→I` 5 — ordinary
+Latin cursive.
+
+**Asked of a recogniser.** Two Cyrillic-trained models were put in front of
+exactly the crops the engine reads (`export_bands.py`, `read_bands.py`) and
+their output carried back to Latin two ways — phonetically, if the clerk wrote
+Cyrillic letters for the sounds, and by shape, if the clerk wrote Latin in
+Cyrillic forms. Over 601 rows of 8 dossiers, `kazars24/trocr-base-handwritten-ru`
+put a name from the archive or the language lists on **0 rows phonetically and
+2 by shape**, against the engine's 313 on the same rows.
+`Kansallisarkisto/cyrillic-htr-model`, trained on historical hands, behaves
+the same way on a 66-row sample.
+
+Both collapse in the same telling way: mean output length 7 and 9 characters
+against the engine's ~18, and what comes out is common Russian words —
+`это`, `от`, `на` — rather than letter-faithful nonsense. That is what a
+recogniser does with a script it was not trained on, and it is the answer:
+these hands do not read as Cyrillic.
+
+**What would still change this.** Neither test can see the page Allan was
+looking at. The confusion matrix covers the 4 dossiers that have hand-read
+truth and the recogniser test the 15 of the second-opinion subcorpus, and
+none of those was chosen for looking Cyrillic. If he can name the dossier or
+the year, the same instruments answer it directly on that hand — the crops
+are exported per page and the analysis is a minute's work.
+
+Kept from it either way: `strokes.MINIMS` already absorbs the one carryover
+that would matter most, because a Cyrillic `и` is a minim shape and the
+re-cut rule treats I, U, V, N, R, M and W as the same ink divided differently.
 ---
 
 ## What the reference set says to do next (2026-08-29 evening)

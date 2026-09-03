@@ -2504,12 +2504,14 @@ by what it does for a cursive page.
   it just does that for the competition too. 18 hours of offline reading not
   spent.
 
-**Left running.** Allan's Cyrillic hypothesis — that a clerk who learned to
-write in Cyrillic carried its shapes into these Latin names. Against the
-hand-read truth the confusions do not support it (4 of 210 substitutions, on
-4 dossiers). A Cyrillic-trained recogniser is being put in front of the same
-crops, read back both phonetically and by letter shape, to see whether any
-single hand answers to it.
+**Asked and answered, for now.** Allan's Cyrillic hypothesis — that a clerk
+who learned to write in Cyrillic carried its shapes into these Latin names.
+The confusions do not support it (4 of 210 substitutions), and two
+Cyrillic-trained recognisers put in front of the engine's own crops read
+nothing: 0 and 2 dictionary names over 601 rows against the engine's 313, both
+collapsing to short common Russian words. Neither test can see the page he was
+actually looking at, so if he names the dossier the same instruments answer it
+there. See `docs/TASKS-reading-quality.md`.
 
 ### Future work, written down when it was asked for
 
