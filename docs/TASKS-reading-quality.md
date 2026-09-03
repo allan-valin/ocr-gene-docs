@@ -540,14 +540,63 @@ what fails:
             shows the reading with nothing to explain the hit. The rule this
             repository runs on says a guess is labelled a guess, and this one
             currently is not.
-      - [ ] **The faint hand.** OL.PRJ.16030 p3 reads 36 of 37 rows one or two
-            letters from a name — `Nose` for José, `Tuan` for Juan, `Gerolano`
-            for Gerolamo. Search will not reach those: a four-letter word
-            shares almost no trigram with another, and the edit-distance pass
-            that would catch it runs only inside a crossing somebody named —
-            running it over the whole corpus was measured in July and is worth
-            nothing (91 findable against 90). So this one is not a search fix,
-            and what is left of it is the recogniser.
+      - [x] **The faint hand**, done 2026-09-03. Not the recogniser after all:
+            the stroke rules already knew the way from `Tuan` to Juan and were
+            offered only to a person with the row open. They are now indexed
+            beside the reading, in `alts`, and every constraint on them was
+            measured rather than assumed.
+
+            | | top 5 | top 10 | top 20 |
+            |---|---|---|---|
+            | by name alone | 87 → **87** | 95 → **97** | 100 → **105** |
+            | naming the crossing | 118 → 118 | 123 → 123 | 129 → 129 |
+
+            Four gates, each one put there by a number:
+
+            * **A name somebody has read** — the archive, or the languages
+              these ships carried. Ungated this is July's corpus-wide fuzzy
+              pass, 91 findable against 90.
+            * **Not a name the archive is full of** (`COMMON_NAME`, 40 — 14
+              names of 1,081). Guessing rows into MARIA, read 270 times, buried
+              the rows that read as it: `Lorenzo Maria`, read `Maria`, 4 → 13.
+            * **Within a letter of the word it reads, and four letters long.**
+              The edge rule trims `turelis` to `Lis` and `FidaePas` to `Pas`
+              against a long enough list — not readings of that ink but what is
+              left when most of it is thrown away. This gate alone takes the
+              corpus from 46% of rows carrying a guess to 19.5%.
+            * **Never to a searcher who named a crossing.** That query does not
+              go through the trigram scoring at all; it goes through the
+              edit-distance pass, where the ship bonus is added to every row in
+              the pool, so a row that only *might* be the name rode the right
+              ship past the row somebody had read. Six rows out of the top five,
+              and not one row gained. This was the whole of the regression, and
+              weighting and flooring the guesses had both failed to shift it
+              before the pass itself was found.
+
+            A guess is weighted at 0.95 of a reading so it can add a row and
+            never displace one on a tie, and `name_the_spelling` already makes
+            the hit say which spelling found it — checked through the running
+            app, where `I goseph Ybrooks.` comes back for *Joseph* at 0.95 and
+            says so.
+
+            **What it reaches.** Read fresh, OL.PRJ.16030 p3 — the page this
+            was written for — has 10 of its 36 read rows reachable by typing a
+            real name: `Tuan Canars`→Juan, `Garpar bolhes`→Gaspar, `Nosa`→Rosa,
+            `mvires`→Aires, `Gerolano Rrira`→Irma. Corpus-wide, 6,315 of 32,322
+            rows carry a spelling nobody read.
+
+            **What it costs.** A cold index build goes from 40 s to 2 m 20 s
+            over the 660 dossiers, with the stroke readings of a word cached
+            across the rows that repeat it. `/api/search` builds it once and
+            keeps it, so this is paid at startup and after a re-read, not per
+            keystroke — but at ten times the corpus it is the thing that will
+            have to move to SQLite first.
+
+            **Left open, deliberately.** With no floor on how much of a query a
+            guess must account for, the numbers above are the best measured;
+            a floor of 0.6 trades the +5 at twenty for +1 and protects nothing
+            that the crossing fix does not already protect. The frontier, name
+            alone, at floor 0.0 / 0.6 / 0.7: 87/97/105, 87/95/101, 87/95/100.
 
       **The original note, kept:** The candidate
       rules already know how to unglue a word (`strokes`, the *space* rule) and

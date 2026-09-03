@@ -2477,9 +2477,12 @@ session, because the geometry currently works on the other 92%.
 
 ### Open questions for Allan
 
-* **How much does handwriting matter to you?** For the jus sanguinis work, an ancestor
-  on a handwritten list is currently findable only if you already know roughly which
-  dossier to look in. That is the decision that shapes the next stretch of work.
+* ~~**How much does handwriting matter to you?**~~ **Answered 2026-09-03:** it is
+  the whole point — "typed stuff I don't need help with". Work is ranked by what it
+  does for a cursive page from here. The first of it shipped the same day (T13, the
+  faint hand): a searcher with only a name now reaches five more of the 142 hand-read
+  names in the top twenty, and the page the work was written for has 10 of its 36 read
+  rows reachable by typing a real name where it had none.
 * Is ~34 h for 7,000 dossiers acceptable? Four workers use ~7 GB and leave the laptop
   usable; more workers would cut the wall clock and make it unpleasant to use.
 * `docs/HOSTING.md` recommends local-only as the shipped default, with hosting as a
