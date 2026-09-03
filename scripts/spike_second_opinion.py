@@ -42,26 +42,46 @@ def main() -> None:
     ap.add_argument("--target-h", type=int, default=64)
     ap.add_argument("--beams", type=int, default=4)
     ap.add_argument("--batch", type=int, default=6)
+    ap.add_argument("--records", type=Path, default=None,
+                    help="read every page of every record in this directory, "
+                         "rather than the hand-read pages -- the whole of a "
+                         "small corpus, so targets and competitors are read "
+                         "the same number of times and the comparison is fair")
     ap.add_argument("--out", type=Path,
                     default=ROOT / "data" / "second_opinion.json")
     args = ap.parse_args()
 
+    if args.records:
+        want = []
+        for rf in sorted(args.records.glob("*.json")):
+            rec = json.loads(rf.read_text(encoding="utf-8"))
+            name = rec.get("file")
+            for page in sorted({r.get("page") for r in rec.get("rows") or []
+                                if r.get("page")}):
+                want.append({"pdf": name, "page": page, "label": rf.name})
+    else:
+        want = []
+        for tf in sorted(args.truth.glob("*.json")):
+            d = json.loads(tf.read_text(encoding="utf-8"))
+            want.append({"pdf": d["pdf"], "page": int(d["page"]),
+                         "label": tf.name})
+
     out: dict[str, dict] = {}
     t0 = time.time()
-    for tf in sorted(args.truth.glob("*.json")):
-        d = json.loads(tf.read_text(encoding="utf-8"))
-        pdf = args.scans / d["pdf"]
+    for job in want:
+        pdf = args.scans / job["pdf"]
         if not pdf.exists():
-            print(f"  no scan for {tf.name}", flush=True)
+            print(f"  no scan for {job['label']}", flush=True)
             continue
-        page = int(d["page"])
+        page = int(job["page"])
         crops = crops_for(pdf, page, args.work, args.target_h)
         dt, said = run_trocr(crops, args.model, args.beams, args.batch)
         doc = cached_hash(pdf)
         # keyed by the band's position on the page: the crops come out of the
         # same geometry the engine cut its rows with, so band i is row i
         out.setdefault(doc, {})[str(page)] = {str(i): t for i, t in said.items()}
-        print(f"  {tf.name}: {len(crops)} bands in {dt:.0f}s", flush=True)
+        print(f"  {job['label']} p{page}: {len(crops)} bands in {dt:.0f}s",
+              flush=True)
 
     args.out.write_text(json.dumps(
         {"model": args.model, "seconds": round(time.time() - t0, 1),

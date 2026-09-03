@@ -498,6 +498,54 @@ is written down beside it, not when the code runs.
       hand transcription of BS.ENT.017397 p2 is one half of it and has no
       stored engine reading of its names to pair against.
 
+
+---
+
+## Is the recogniser replaceable? (2026-09-03)
+
+`spike_htr.py` asked this in August, tried the two Microsoft IAM models, and
+answered no. It never tried a model trained on an *archive's* hand, which is a
+different prior entirely — IAM is modern English on lined paper. Over the same
+crops, the same truth and the same CER:
+
+| recogniser | CER | seconds a row |
+|---|---|---|
+| **the engine that ships (PaddleOCR)** | **0.205** | fast |
+| agomberto/trocr-large-handwritten-fr | 0.257 | 6.6 |
+| Riksarkivet/trocr-base-handwritten-hist-swe-2 | 0.338 | 2.0 |
+| microsoft/trocr-large-handwritten | 0.607 | 8.1 |
+| microsoft/trocr-base-handwritten | 0.785 | 7.7 |
+
+So the archival prior is worth a third of the character error against the
+English one, and **the engine still wins.** Nothing here replaces it.
+
+`Kansallisarkisto/multicentury-htr-model` ships a processor cut for line
+images beside an encoder that wants squares and threw
+`Input image size (192*1024) doesn't match model (384*384)`; `spike_htr.py`
+now takes the size from the encoder, so it can be scored next time.
+
+**But an average hides the shape.** The engine reads `Guudo Camtadore` where
+the French model reads `Guiso Cantadore`; both are wrong and they are wrong
+differently, and a searcher needs only one of them to be reachable. That is
+the question `spike_second_opinion.py` and `bench_search.py --second-opinion`
+ask: put the second recogniser's reading in `alts`, beside the engine's own
+second reading, as a reading and not a guess.
+
+**First result, and why it is not the answer.** Reading the six hand-read
+pages a second time moved the matrix a long way — 87/97/105 to 101/110/119 by
+name alone, 118/123/129 to 122/127/133 with the crossing named, on 78 rows of
+142. It is inflated and must not be quoted: only the rows being searched for
+were read twice, and none of the 32,000 rows competing with them were. The
+competition is diffuse — 588 pages hold the rows that outrank the truth rows,
+and the top 14 of them only 17% — so patching the competitors is not
+available either.
+
+**The fair measurement** is a subcorpus read twice in full, targets and
+competitors alike: 15 dossiers, 1,038 indexed rows, which the Swedish model
+can read in about three quarters of an hour where the French one would take
+two hours. Its baseline is 121/125/127 by name alone and 122/130/133 with the
+crossing named, out of 142 — higher than the whole archive's because there is
+so much less to be confused with.
 ---
 
 ## What the reference set says to do next (2026-08-29 evening)
