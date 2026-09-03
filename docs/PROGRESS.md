@@ -2467,6 +2467,50 @@ session, because the geometry currently works on the other 92%.
    dossiers that is roughly a million rows. It wants SQLite before then, not a bigger
    dictionary.
 
+### 2026-09-03, the day handwriting became the only question
+
+Allan settled the open question at the top of the day — handwriting is the
+point of this tool, typed pages need no help — so everything below is ranked
+by what it does for a cursive page.
+
+**Shipped.**
+
+* **The faint hand (T13).** The stroke rules knew the way from `Tuan` to Juan
+  and only ever offered it to a person with the row open. They are indexed
+  now, gated four ways, each gate measured. By name alone, of 142 hand-read
+  names: 87/95/100 → 87/97/105 at five, ten and twenty; a searcher naming the
+  crossing loses nothing. On the page it was written for, 10 of 36 read rows
+  are reachable by typing a real name where none were.
+* **A minim slip.** A re-cut keeps the stroke count, so it reaches `Maria`
+  from `Mania` and can never reach `Gerolamo` from `Gerolano`. One minim more
+  or fewer, costed at two, made only where a known name comes out.
+* **The menu's first line (T7).** The archive's top suggestion held it and is
+  a spelling neighbour that knows nothing about the ink. Where it is distant
+  and one stroke rule reaches a name somebody has read, the ink takes the
+  line: 0.235 → 0.267 right at rank one, nothing lost deeper.
+
+**Measured and not shipped, which is the more useful half.**
+
+* **No pretrained recogniser beats the engine.** Five were scored on the same
+  crops and truth. The best, a French historical hand at CER 0.257, still
+  loses to the engine's 0.205; the English IAM models are at 0.607 and 0.785.
+  An archive's hand is worth a third of the character error over IAM, and it
+  is not enough.
+* **A second recogniser's reading, indexed beside the engine's, is worth
+  nothing.** It looked worth five names until the coverage was fixed: 28%
+  pairing was a selection, not a sample, because the pages that paired were
+  the hand-read ones that hold every row the bench looks for. At 82% the gain
+  is gone. It still adds a dictionary name the engine missed on 8% of rows —
+  it just does that for the competition too. 18 hours of offline reading not
+  spent.
+
+**Left running.** Allan's Cyrillic hypothesis — that a clerk who learned to
+write in Cyrillic carried its shapes into these Latin names. Against the
+hand-read truth the confusions do not support it (4 of 210 substitutions, on
+4 dossiers). A Cyrillic-trained recogniser is being put in front of the same
+crops, read back both phonetically and by letter shape, to see whether any
+single hand answers to it.
+
 ### Future work, written down when it was asked for
 
 * **Knowing what kind of document is on the screen** — `docs/FUTURE-document-types.md`.
