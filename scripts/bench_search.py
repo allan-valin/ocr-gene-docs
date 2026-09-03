@@ -45,6 +45,37 @@ def known_names() -> dict[str, int]:
     return out
 
 
+def add_second_opinion(rows, path: Path) -> str:
+    """Put a second recogniser's reading of a row beside the engine's own.
+
+    A reading, not a guess: another recogniser read it off the same crop, so it
+    goes where the engine's own second reading goes and is scored the same way.
+    The sidecar is keyed by the band's position on the page, which is the order
+    the engine cut its rows in, so the check below refuses a page whose stored
+    row count and band count disagree rather than pairing readings blindly.
+    """
+    d = json.loads(path.read_text(encoding="utf-8"))
+    said, mapped = d.get("read") or {}, d.get("map") or {}
+    at_row: dict[tuple, dict] = {}
+    for r in rows:
+        at_row[(r.get("doc"), r.get("page"), r.get("row"))] = r
+    used = missing = 0
+    for doc, pages_of in mapped.items():
+        for page, bands in pages_of.items():
+            for band, row_n in bands.items():
+                r = at_row.get((doc, int(page), row_n))
+                text = ((said.get(doc, {}).get(page, {}) or {}).get(band) or "").strip()
+                if r is None or not text or text == r.get("text"):
+                    missing += 1
+                    continue
+                r["alts"] = list(r.get("alts") or ())
+                # ahead of the guesses, which are counted from the end
+                at = len(r["alts"]) - int(r.get("guessed") or 0)
+                r["alts"].insert(at, text)
+                used += 1
+    return f"second opinion: {used} rows read twice, {missing} unpaired"
+
+
 def catalogue_ships(scans: Path) -> dict[str, str]:
     """The archive's own index: filename -> the ship it filed the dossier under.
 
@@ -130,6 +161,11 @@ def matrix(args) -> int:
     ships = catalogue_ships(args.scans)
     rows = load_index(args.cache, engine_only=False, ships=ships or None,
                       known=known_names())
+    if getattr(args, "second_opinion", None):
+        print(add_second_opinion(rows, args.second_opinion))
+        # a different index: the postings and the letter counts were built
+        # before these readings existed, and both are cached by version
+        rows.version = (rows.version or 0) + 1_000_000
     asked = {
         "by name alone": [(w, w["name"]) for w in
                           truth_rows(args.cache, args.scans, ships=ships)],
@@ -163,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="where the dossier names no ship, hint with the "
                          "shipping line on its letterhead instead of the year")
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--second-opinion", type=Path, default=None,
+                    help="a sidecar of another recogniser's readings, put "
+                         "beside the engine's own before searching")
     ap.add_argument("--matrix", action="store_true",
                     help="both questions at three cutoffs, on one load of the "
                          "index — what a scoring change has to be judged by")

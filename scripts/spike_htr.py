@@ -57,6 +57,13 @@ def run_trocr(crops, model_id: str, beams: int, batch: int):
     proc = TrOCRProcessor.from_pretrained(model_id)
     model = VisionEncoderDecoderModel.from_pretrained(model_id)
     model.eval()
+    # Some repositories ship a processor cut for line images (192x1024) beside
+    # an encoder that wants squares, and the mismatch is only found at the
+    # first forward pass. The encoder is the one that cannot be argued with.
+    want = getattr(model.config.encoder, "image_size", None)
+    if want:
+        h = w = want if isinstance(want, int) else want[0]
+        proc.image_processor.size = {"height": h, "width": w}
 
     said: dict[int, str] = {}
     t0 = time.time()
