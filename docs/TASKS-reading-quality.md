@@ -561,10 +561,41 @@ against 0.205), so it is weaker evidence, and weighting it below every
 reading and keeping it out of the crossing pass costs nothing and returns
 those three rows.
 
-So a second opinion is worth about five of 142 names at the top five, on 28%
-coverage, for 2 seconds a row — roughly 18 hours of offline reading over the
-whole archive, or far less if it is run only on the pages that read as
-cursive.
+**And then the coverage was fixed, and the gain went away.** 28% is not a
+sample, it is a selection: the pages that paired were the hand-read ones,
+which are cut cleanly, and those are the pages holding every row the bench
+searches for. So the rows being looked for were still being read twice more
+often than the rows competing with them.
+
+`export_bands.py` takes the crops from the engine itself, through the
+recogniser hook, named by the row number the engine gave them; `read_bands.py`
+reads those same images with the second model. Pairing is then engine against
+engine — median similarity 1.00 over 848 rows, mean 0.86 — and coverage goes
+from 28% to **82%**:
+
+| | top 5 | top 10 | top 20 |
+|---|---|---|---|
+| by name alone | 121 → **120** | 125 → **123** | 127 → **128** |
+| naming the crossing | 122 → 122 | 130 → 130 | 133 → 133 |
+
+Nothing. The five names were an artefact of who was being read twice.
+
+It is not that the second reading says nothing: it differs from the engine on
+every one of the 848 rows, and on **69 of them (8%) it spells a name from the
+archive or the language lists that the engine's reading missed**. That is a
+real reading of real ink. It does not make anybody easier to find, because
+every row competing with them gained the same thing, and a name that 8% more
+of the corpus now matches is a name that returns 8% more rows.
+
+**So the second opinion does not ship**, and 18 hours of offline reading is
+not spent. What ships is the instrument: `export_bands.py` and
+`read_bands.py` will put any recogniser in front of exactly the ink the
+engine reads, keyed to the rows already in the index, which is what the next
+model will need too.
+
+The measurement that would change this answer is not more coverage — it is a
+recogniser that beats 0.205, rather than one that adds a second wrong reading
+beside the first.
 ---
 
 ## What the reference set says to do next (2026-08-29 evening)
