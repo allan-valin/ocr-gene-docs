@@ -597,6 +597,43 @@ The measurement that would change this answer is not more coverage — it is a
 recogniser that beats 0.205, rather than one that adds a second wrong reading
 beside the first.
 
+
+---
+
+## What to do next, after 2026-09-03
+
+Today closed a direction, so this says plainly what is left.
+
+**The engine is the ceiling, and no pretrained model lifts it.** Five were
+scored; the best loses to it. Everything shipped since August works *around* a
+reading that is one or two letters wrong — the menu offers the reader the
+right name, the index reaches it for a searcher — and each of those is worth a
+few names of 142. They are worth having and they are not the answer.
+
+**The one lever left is a recogniser trained on this archive's own hands**,
+which is what `spike_htr.py` concluded in August and what today's numbers
+confirm from the other side. The work that leads there, cheapest first:
+
+1. **Keep the corrections.** Every time somebody retypes a row on the review
+   screen, that is a labelled crop — the image the engine read and the name a
+   person says it is. The rows are already stored with `edits` and their
+   provenance (T4, T5); what is missing is the crop beside them.
+   `export_bands.py` already saves exactly the ink the engine read, keyed to
+   the row number, so this is a matter of keeping those crops for corrected
+   rows rather than throwing them away. Nothing else on this list is possible
+   without it, and it costs nothing to start.
+2. **Count what a training set would need.** 142 hand-read names exist today.
+   Fine-tuning a TrOCR base on a few hundred crops of one archive's hands is
+   the smallest experiment that could beat 0.205, and the honest first step is
+   to measure how far 142 gets before asking anyone to label more.
+3. **Then fine-tune, and score it the same way as everything else** — the same
+   crops, the same truth, `bench_search.py --matrix` and `bench_menu.py`, and
+   `read_bands.py` will put it in front of the ink without any new plumbing.
+
+**Still open from before, and unaffected by any of this:** T3's
+`bench_columns.py` and per-column truth, and T10's other columns — both of
+which want a cursive page whose columns read at all, which T11 measured and
+found they do not.
 ---
 
 ## Did a clerk write these names in Cyrillic shapes? (asked 2026-09-03)
