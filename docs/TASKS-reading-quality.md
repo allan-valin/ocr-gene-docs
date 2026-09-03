@@ -689,8 +689,14 @@ the same way on a 66-row sample.
 Both collapse in the same telling way: mean output length 7 and 9 characters
 against the engine's ~18, and what comes out is common Russian words —
 `это`, `от`, `на` — rather than letter-faithful nonsense. That is what a
-recogniser does with a script it was not trained on, and it is the answer:
-these hands do not read as Cyrillic.
+recogniser does with a script it was not trained on.
+
+**But this half has to be run again.** Those readings were taken from the
+engine's *carved* crops, which a Latin TrOCR reads at CER 0.892 where it reads
+the deskewed strip at 0.338 — see the second-opinion note above. A recogniser
+handed pictures it cannot read says nothing about the script in them. The
+confusion matrix above is unaffected, because it reads stored readings against
+the truth and never touches a crop.
 
 **What would still change this.** Neither test can see the page Allan was
 looking at. The confusion matrix covers the 4 dossiers that have hand-read

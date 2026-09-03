@@ -6,6 +6,111 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-09-03 — the day handwriting became the only question
+
+Allan settled the open question at the top of the day — handwriting is the
+point of this tool, typed pages need no help — so everything below is ranked
+by what it does for a cursive page.
+
+**Shipped.**
+
+* **The faint hand (T13).** The stroke rules knew the way from `Tuan` to Juan
+  and only ever offered it to a person with the row open. They are indexed
+  now, gated four ways, each gate measured. By name alone, of 142 hand-read
+  names: 87/95/100 → 87/97/105 at five, ten and twenty; a searcher naming the
+  crossing loses nothing. On the page it was written for, 10 of 36 read rows
+  are reachable by typing a real name where none were.
+* **A minim slip.** A re-cut keeps the stroke count, so it reaches `Maria`
+  from `Mania` and can never reach `Gerolamo` from `Gerolano`. One minim more
+  or fewer, costed at two, made only where a known name comes out.
+* **The menu's first line (T7).** The archive's top suggestion held it and is
+  a spelling neighbour that knows nothing about the ink. Where it is distant
+  and one stroke rule reaches a name somebody has read, the ink takes the
+  line: 0.235 → 0.267 right at rank one, nothing lost deeper.
+
+**Measured and not shipped, which is the more useful half.**
+
+* **No pretrained recogniser beats the engine.** Five were scored on the same
+  crops and truth. The best, a French historical hand at CER 0.257, still
+  loses to the engine's 0.205; the English IAM models are at 0.607 and 0.785.
+  An archive's hand is worth a third of the character error over IAM, and it
+  is not enough.
+* **A second recogniser's reading, indexed beside the engine's — still
+  unanswered, and both of today's numbers are unfair.** It looked worth five
+  names at 28% pairing, and that was a selection rather than a sample: the
+  pages that paired were the hand-read ones holding every row the bench looks
+  for. Fixing coverage to 82% took the gain away — but that run fed the second
+  model the engine's *carved* crops, which it reads at CER 0.892 where it
+  reads the deskewed strip at 0.338. So the second question was asked with the
+  wrong pictures. Nothing was shipped on either number. The fix is one step:
+  export the strip crop beside the carved one and measure again.
+
+**Asked, and half answered.** Allan's Cyrillic hypothesis — that a clerk who
+learned to write in Cyrillic carried its shapes into these Latin names.
+
+* **The evidence that stands:** over the hand-read truth, the substitutions
+  those shapes predict are 4 of 210, no dossier above 4%. This reads the
+  engine's stored readings against the truth and is untouched by the crop
+  problem below.
+* **The evidence that does not:** two Cyrillic recognisers put in front of the
+  engine's crops named 0 and 2 rows against the engine's 313, collapsing to
+  short common Russian words — but those are the same *carved* crops that made
+  the second-opinion run unfair, so this half has to be run again after the
+  fix. Both halves also miss the page he was actually looking at.
+
+So: no support in what can be seen, and naming the dossier would settle it
+faster than any of this. See `docs/TASKS-reading-quality.md`.
+
+### Start here next time, in order
+
+1. **Give `export_bands.py` the strip crop as well as the carved one.** This is
+   the one thing blocking a real answer on the second opinion, and it is
+   plumbing rather than research. The engine's carved crop cuts a band to its
+   own ink and TrOCR reads it at CER 0.892; the deskewed strip crop of the same
+   row reads at 0.338. Both come out of the same `analyze(page)`, so the row
+   number is available on both sides. Then run
+   `bench_search.py --matrix --second-opinion … --second-as-guess` again over
+   the subcorpus and the 82%-coverage number finally means something.
+2. **Keep the crops for rows a person corrects.** `training_set.py` builds 152
+   labelled pairs out of the truth pages today. Every correction on the review
+   screen is another one, and nothing on this list is possible without a bigger
+   set. It costs nothing to start and it compounds.
+3. **Then measure whether 152 is enough**, with `spike_finetune.py` — but only
+   after (1), because its `before` number was taken on the carved crops and is
+   meaningless until they are readable.
+4. Still open from before and untouched by any of this: T3's
+   `bench_columns.py` and per-column truth, and T10's other columns. Both want
+   a cursive page whose columns read at all, which T11 measured and found they
+   do not.
+
+### How to resume the runs
+
+The scratch data lives outside the repo and is gone when `/tmp` is cleared;
+everything below is cheap to rebuild and all of it checkpoints and resumes.
+
+```sh
+# the 15-dossier subcorpus, its crops, and a second reading of them
+.venv-ocr/bin/python scripts/export_bands.py --records <subcache> --out <bands>
+.venv-htr/bin/python scripts/read_bands.py  --bands <bands> --out <sidecar>
+.venv/bin/python     scripts/training_set.py --bands <bands> --out <trainset>
+```
+
+`read_bands.py` and `spike_second_opinion.py` write after every page and skip
+what is already done, so a killed run loses one page. Two things took a run
+down silently before that was true: `name_strip` raises
+`SystemExit("no grid detected")` on a page with no ruled table, which
+`except Exception` does not catch, and a page whose crop step allocates enough
+to be killed outright. Both are handled; the marking happens *before* the page
+is read so a fatal page is skipped on the next run rather than retried.
+
+### Two traps worth not rediscovering
+
+* `pgrep -f "spike_x"` matches the waiting shell's own command line, so
+  `until ! pgrep -f …; do sleep; done` never exits. Wait on a PID file or on
+  the output file instead.
+* `nohup … | tail -30 &` shows nothing until the job ends, so a long run looks
+  hung. Redirect to a log and read the log.
+
 ## 2026-08-29, evening — two names in one word
 
 Tests green: **681 Python assertions, 9 skipped; 126 browser assertions in both
@@ -2466,54 +2571,6 @@ session, because the geometry currently works on the other 92%.
 6. **`data/transcriptions/` will outgrow memory.** Search loads every row; at 7,000
    dossiers that is roughly a million rows. It wants SQLite before then, not a bigger
    dictionary.
-
-### 2026-09-03, the day handwriting became the only question
-
-Allan settled the open question at the top of the day — handwriting is the
-point of this tool, typed pages need no help — so everything below is ranked
-by what it does for a cursive page.
-
-**Shipped.**
-
-* **The faint hand (T13).** The stroke rules knew the way from `Tuan` to Juan
-  and only ever offered it to a person with the row open. They are indexed
-  now, gated four ways, each gate measured. By name alone, of 142 hand-read
-  names: 87/95/100 → 87/97/105 at five, ten and twenty; a searcher naming the
-  crossing loses nothing. On the page it was written for, 10 of 36 read rows
-  are reachable by typing a real name where none were.
-* **A minim slip.** A re-cut keeps the stroke count, so it reaches `Maria`
-  from `Mania` and can never reach `Gerolamo` from `Gerolano`. One minim more
-  or fewer, costed at two, made only where a known name comes out.
-* **The menu's first line (T7).** The archive's top suggestion held it and is
-  a spelling neighbour that knows nothing about the ink. Where it is distant
-  and one stroke rule reaches a name somebody has read, the ink takes the
-  line: 0.235 → 0.267 right at rank one, nothing lost deeper.
-
-**Measured and not shipped, which is the more useful half.**
-
-* **No pretrained recogniser beats the engine.** Five were scored on the same
-  crops and truth. The best, a French historical hand at CER 0.257, still
-  loses to the engine's 0.205; the English IAM models are at 0.607 and 0.785.
-  An archive's hand is worth a third of the character error over IAM, and it
-  is not enough.
-* **A second recogniser's reading, indexed beside the engine's — still
-  unanswered, and both of today's numbers are unfair.** It looked worth five
-  names at 28% pairing, and that was a selection rather than a sample: the
-  pages that paired were the hand-read ones holding every row the bench looks
-  for. Fixing coverage to 82% took the gain away — but that run fed the second
-  model the engine's *carved* crops, which it reads at CER 0.892 where it
-  reads the deskewed strip at 0.338. So the second question was asked with the
-  wrong pictures. Nothing was shipped on either number. The fix is one step:
-  export the strip crop beside the carved one and measure again.
-
-**Asked and answered, for now.** Allan's Cyrillic hypothesis — that a clerk
-who learned to write in Cyrillic carried its shapes into these Latin names.
-The confusions do not support it (4 of 210 substitutions), and two
-Cyrillic-trained recognisers put in front of the engine's own crops read
-nothing: 0 and 2 dictionary names over 601 rows against the engine's 313, both
-collapsing to short common Russian words. Neither test can see the page he was
-actually looking at, so if he names the dossier the same instruments answer it
-there. See `docs/TASKS-reading-quality.md`.
 
 ### Future work, written down when it was asked for
 
