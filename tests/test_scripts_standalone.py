@@ -100,3 +100,36 @@ def test_a_browser_that_ran_and_reported_nothing_is_a_failure():
     rc = m["main"](["--url", "http://x"],
                    runners={"absent": lambda u: None, "ok": lambda u: passing})
     assert rc == 0, "a browser that is not installed must not fail the run"
+
+
+def test_the_training_set_pairs_a_name_with_the_band_it_was_read_from():
+    """The truth block sits somewhere among a page's rows, so the labels are
+    offset onto the bands by what the engine said, the way the recogniser
+    bench does it -- not by assuming the first name is the first row."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "training_set", ROOT / "scripts" / "training_set.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    bands = [{"n": 1, "engine": "cabecalho"},
+             {"n": 2, "engine": "Guudo Camtadore"},
+             {"n": 3, "engine": "Emma Comtadore"}]
+    got = mod.labels_for_page(bands, ["GUIDO CONTADORE", "EMMA CONTADORE"])
+    assert got == {2: "GUIDO CONTADORE", 3: "EMMA CONTADORE"}
+
+
+def test_the_training_set_takes_row_numbers_a_person_wrote_as_given():
+    """One truth file writes the names against row numbers rather than as a
+    run down the page, and those are not to be second-guessed by alignment."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "training_set", ROOT / "scripts" / "training_set.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    bands = [{"n": 1, "engine": "x"}, {"n": 2, "engine": "y"}]
+    assert mod.labels_for_page(bands, {"2": "Jose Fernandes", "9": "off page"}) \
+        == {2: "Jose Fernandes"}
