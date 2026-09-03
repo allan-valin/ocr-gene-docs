@@ -587,15 +587,40 @@ real reading of real ink. It does not make anybody easier to find, because
 every row competing with them gained the same thing, and a name that 8% more
 of the corpus now matches is a name that returns 8% more rows.
 
-**So the second opinion does not ship**, and 18 hours of offline reading is
-not spent. What ships is the instrument: `export_bands.py` and
-`read_bands.py` will put any recogniser in front of exactly the ink the
-engine reads, keyed to the rows already in the index, which is what the next
-model will need too.
+**And then the null turned out to be unfair too, later the same day.**
+`spike_finetune.py` scored the same Swedish model on the same six rows before
+training anything and got **CER 0.892**, where `spike_htr.py` had measured
+**0.338** on that page. Same model, same page, same truth — different crops.
 
-The measurement that would change this answer is not more coverage — it is a
-recogniser that beats 0.205, rather than one that adds a second wrong reading
-beside the first.
+`spike_htr` cuts its rows out of `name_strip`: the deskewed name column, rows
+taken off it, each upscaled. `export_bands` hands over the engine's own
+*carved* crops, which cut each band to its own ink and nobody else's. TrOCR
+reads the carved ones far worse, and it is not the scale — upscaling them to
+height 64 moves 0.892 to 0.868 and no further.
+
+So the 82%-coverage measurement fed the second model input it reads at CER
+~0.87 rather than 0.257–0.338, and **it is not a fair test of the second
+opinion**. Neither number stands: the 28% one was biased by which rows paired,
+and the 82% one by what the crops look like.
+
+**Nothing was shipped on the strength of either**, which is the one piece of
+luck here. What is true and stands:
+
+* No pretrained recogniser beats the engine on the strip crops, where they
+  were all scored fairly (0.257 at best against 0.205).
+* `export_bands.py` and `read_bands.py` do key a second reading to the rows
+  already in the index, at 82% coverage, which is the plumbing the question
+  needs — they are just feeding it the wrong pictures.
+
+**What would settle it**, and is the first thing to do next: give
+`export_bands.py` the strip crop for each row as well as the carved one — both
+come from the same `analyze(page)`, so the row number is available on both
+sides — and run the 82%-coverage measurement again on those. Until then the
+second opinion is unanswered, not refused, and the 18 hours are still not
+spent.
+
+The fine-tune spike stands on the same bad crops and its `before` number
+should be ignored for the same reason.
 
 
 ---

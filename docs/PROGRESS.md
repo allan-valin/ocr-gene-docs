@@ -2496,13 +2496,15 @@ by what it does for a cursive page.
   loses to the engine's 0.205; the English IAM models are at 0.607 and 0.785.
   An archive's hand is worth a third of the character error over IAM, and it
   is not enough.
-* **A second recogniser's reading, indexed beside the engine's, is worth
-  nothing.** It looked worth five names until the coverage was fixed: 28%
-  pairing was a selection, not a sample, because the pages that paired were
-  the hand-read ones that hold every row the bench looks for. At 82% the gain
-  is gone. It still adds a dictionary name the engine missed on 8% of rows —
-  it just does that for the competition too. 18 hours of offline reading not
-  spent.
+* **A second recogniser's reading, indexed beside the engine's — still
+  unanswered, and both of today's numbers are unfair.** It looked worth five
+  names at 28% pairing, and that was a selection rather than a sample: the
+  pages that paired were the hand-read ones holding every row the bench looks
+  for. Fixing coverage to 82% took the gain away — but that run fed the second
+  model the engine's *carved* crops, which it reads at CER 0.892 where it
+  reads the deskewed strip at 0.338. So the second question was asked with the
+  wrong pictures. Nothing was shipped on either number. The fix is one step:
+  export the strip crop beside the carved one and measure again.
 
 **Asked and answered, for now.** Allan's Cyrillic hypothesis — that a clerk
 who learned to write in Cyrillic carried its shapes into these Latin names.
