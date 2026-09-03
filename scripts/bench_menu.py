@@ -138,7 +138,37 @@ def sources(names: Names, limit: int = 10) -> dict:
                                                 language_names=want)]
         return fn
 
+    def promoted(floor: float):
+        """The guesses, with a stroke reading allowed to take the first line.
+
+        The archive's top suggestion has held that line since T7 and is the
+        best single thing in the menu — right for 0.230 of badly-read words on
+        its own. But it is a string neighbour: it says *this reading is spelled
+        like a name these ships carried* and knows nothing about the ink. Where
+        it is only distantly similar and a single stroke rule reaches a name
+        the archive has read, the stroke reading is the better first guess,
+        because it accounts for the marks on the page.
+        """
+        def fn(word, row, i):
+            menu = menu_for(word, names, limit=limit, spoken=spoken)
+            first = next((g for g in menu if g["how"].startswith("arquivo")), None)
+            if first is not None and (first.get("score") or 0.0) >= floor:
+                return [g["name"] for g in menu]
+            ink_first = next((g for g in menu
+                              if g["how"] == "traço" and g.get("cost") == 1
+                              and fold(g["name"].replace(" ", "")) in names.counts),
+                             None)
+            if ink_first is None:
+                return [g["name"] for g in menu]
+            rest = [g for g in menu if g is not ink_first]
+            return [ink_first["name"]] + [g["name"] for g in rest]
+        return fn
+
     picked = {"alts": alts, "archive": archive, "menu": both,
+              "promote<.70": promoted(0.70),
+              "promote<.75": promoted(0.75),
+              "promote<.80": promoted(0.80),
+              "promote<.90": promoted(0.90),
               "guesses": guesses,
               "guesses+it": with_language(["it"]),
               "guesses+es": with_language(["es"]),

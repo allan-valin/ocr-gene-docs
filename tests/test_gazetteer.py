@@ -211,3 +211,30 @@ def test_the_language_list_can_be_asked_about_a_near_miss_too():
     archive = Names({"MARIA": 40})
     assert not archive.near_miss("Santosa")
     assert archive.near_miss("Santosa", spoken={"SANTOS"})
+
+
+def test_a_stroke_reading_takes_the_first_line_from_a_distant_archive_guess():
+    """The archive's top suggestion has held the first line since T7, and on
+    its own it is the best single thing in the menu. But it is a string
+    neighbour: it says this reading is *spelled like* a name these ships
+    carried and knows nothing about the ink. Where it is only distantly
+    similar and one stroke rule reaches a name the archive has read, the
+    stroke reading accounts for the marks on the page and the neighbour does
+    not.
+
+    Measured over the 217 badly-read words: right at rank one 0.267 of the
+    time against 0.235, same names found, nothing lost at three, five or ten.
+    """
+    from desembarque.gazetteer import Names, menu_for
+
+    names = Names({"JUAN": 9, "TUAR": 30})
+    menu = menu_for("Tuan", names)
+    assert menu[0]["name"] == "JUAN", [(g["name"], g["how"]) for g in menu]
+
+
+def test_a_close_archive_guess_keeps_the_first_line():
+    from desembarque.gazetteer import Names, menu_for
+
+    names = Names({"TUANS": 40, "JUAN": 2})
+    menu = menu_for("Tuan", names)
+    assert menu[0]["name"] == "TUANS", [(g["name"], g["how"]) for g in menu]

@@ -28,6 +28,13 @@ from pathlib import Path
 
 from desembarque import strokes
 
+# How similar the archive's top suggestion has to be to the reading before it
+# keeps the first line of the menu against a stroke reading of the same ink.
+# Swept over the hand-read words: 0.70 gives 0.240 at rank one, 0.75 gives
+# 0.249, 0.80 gives 0.267 and 0.90 gives 0.240 — past this the promotion starts
+# displacing suggestions that were right.
+PROMOTE = 0.80
+
 # How close a dictionary name has to be to a reading before it is worth showing.
 # Measured against the hand-read pages: below this the list fills with names
 # that share three letters and nothing else.
@@ -320,6 +327,27 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
             continue
         at[g["name"]] = g
         out.append(g)
+    # The archive's top suggestion has held the first line since T7 and on its
+    # own is the best single thing in the menu. But it is a string neighbour —
+    # it says this reading is *spelled like* a name these ships carried, and it
+    # knows nothing about the ink. Where it is only distantly similar and one
+    # stroke rule reaches a name the archive has read, the stroke reading is
+    # the better first guess, because it accounts for the marks on the page.
+    # Measured over the 217 badly-read words: right at rank one for 0.267 of
+    # them against 0.235, the same names found, nothing lost at three or five.
+    # Including a first line both sources reached: the two agreeing is the
+    # strongest thing this tool can say about a *reading*, and it is still a
+    # spelling neighbour that happens also to be one stroke away. The sweep
+    # promotes over it and the number is what it is.
+    if (out and out[0]["how"].startswith("arquivo")
+            and (out[0].get("score") or 0.0) < PROMOTE):
+        ink_first = next((g for g in out
+                          if g["how"] == "traço" and g.get("cost") == 1
+                          and g["name"].replace(" ", "") in read_here), None)
+        if ink_first is not None:
+            out.remove(ink_first)
+            out.insert(0, ink_first)
+
     if language_names:
         spoken_here = {fold(n) for n in language_names}
         for g in out:

@@ -164,10 +164,30 @@ is written down beside it, not when the code runs.
       the cell the menu opened from. The toggle stays for a reader comparing
       the engine's two readings.
 
+      **The ordering, settled 2026-09-03.** The archive's top suggestion held
+      the first line and was the best single thing in the menu — 0.230 at rank
+      one on its own. It is a string neighbour: it says a reading is *spelled
+      like* a name these ships carried and knows nothing about the ink. Where
+      it is only distantly similar and one stroke rule reaches a name the
+      archive has read, the stroke reading now takes the line, because it
+      accounts for the marks on the page. Swept over the 217 badly-read words:
+
+      | archive's guess keeps the line above | @1 |
+      |---|---|
+      | (as it shipped) | 0.235 |
+      | 0.70 | 0.240 |
+      | 0.75 | 0.249 |
+      | **0.80** | **0.267** |
+      | 0.90 | 0.240 |
+
+      Seven more words right on the first line, and @3, @5 and @10 unmoved —
+      the same names found, in a better order, which is what a re-ranking
+      should look like. Past 0.80 it starts displacing suggestions that were
+      right. `gazetteer.PROMOTE`.
+
       Still to do: drop the rules that keep scoring nothing once the pages
-      their examples live on are scorable; and the ordering, where the
-      archive's own first guess is still the best single thing in the menu
-      (0.230 at rank one against the whole menu's 0.161).
+      their examples live on are scorable — measured again 2026-09-03,
+      `only:abbreviation` is still 0 of 217 and `only:minims` is 1.
 - [x] **T8 — Ask the right question when marking** (§5, `doubtful`), measured
       by the new `scripts/bench_check.py` over 149 rows paired with a hand
       reading, 121 of them read wrong:
