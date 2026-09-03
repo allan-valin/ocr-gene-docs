@@ -170,6 +170,7 @@ class Names:
 # indistinguishable from a reading.
 WHY = {
     "minims": "os mesmos traços, divididos de outro modo",
+    "minim slip": "um traço a mais ou a menos numa perna",
     "ascender": "haste alta lida ao contrário",
     "round": "letra redonda parecida",
     "capital": "maiúscula de laço lida como duas ou três letras",
@@ -185,7 +186,8 @@ WHY = {
 # recogniser mistook a direction. So the tail is ordered by how little each
 # rule assumes.
 RULE_ORDER = {"ascender": 0, "edge": 1, "capital": 1, "round": 2,
-              "space": 2, "two changes": 3, "abbreviation": 3, "minims": 4}
+              "space": 2, "two changes": 3, "abbreviation": 3, "minims": 4,
+              "minim slip": 3}
 
 MENU_LIMIT = 12
 # How many readings backed only by the language list may sit in one menu. They

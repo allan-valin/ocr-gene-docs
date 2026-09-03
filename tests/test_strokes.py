@@ -102,3 +102,26 @@ def test_the_menu_is_capped_so_one_long_word_cannot_flood_it():
 @pytest.mark.parametrize("word", ["", "  ", "A", "AB"])
 def test_a_word_too_short_to_carry_a_reading_gets_no_candidates(word):
     assert strokes.variants(word) == []
+
+
+def test_a_dropped_minim_reaches_the_name():
+    """`Gerolano` is Gerolamo with one minim missing — the recogniser read the
+    final `m` as an `n`. A re-cut can never reach it, because a re-cut keeps
+    the stroke count and `n` and `m` do not have the same one, so the rule that
+    covers `Mania`/`Maria` is blind to the commonest slip on a faint page.
+
+    Gated on a name somebody has read: one stroke either way over an unknown
+    word is thousands of readings and says nothing.
+    """
+    from desembarque import strokes
+
+    got = strokes.variants("Gerolano", known={"GEROLAMO"}, limit=40)
+    assert "GEROLAMO" in [c.word for c in got]
+
+
+def test_a_minim_slip_that_spells_nothing_is_not_offered():
+    from desembarque import strokes
+
+    got = [c for c in strokes.variants("Gerolano", known=set(), limit=40)
+           if c.rule == "minim slip"]
+    assert got == []

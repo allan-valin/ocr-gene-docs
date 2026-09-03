@@ -50,7 +50,7 @@ from desembarque.export import (csv_filename, hits_to_csv,  # noqa: E402
 from desembarque.voyage import (is_complete, merge_voyages,  # noqa: E402
                                 parse_voyage)
 from desembarque import search as searchlib          # noqa: E402
-from desembarque.gazetteer import (Names, menu_for,   # noqa: E402
+from desembarque.gazetteer import (Names, fold, menu_for,   # noqa: E402
                                    names_by_language, spoken_names)
 from desembarque import pdf as pdflib               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
@@ -74,6 +74,23 @@ SPOKEN = spoken_names(ROOT / "data" / "language_names.json")
 # The names each language uses, read once beside `SPOKEN`. Same claim, grouped:
 # `SPOKEN` says these languages use this name, this says which of them does.
 LANGUAGE_NAMES = names_by_language(ROOT / "data" / "language_names.json")
+
+
+def known_names() -> dict[str, int]:
+    """The names the index may spell a stroke reading as (T13, the faint hand),
+    and how often each was read.
+
+    The same two sources the review menu ranks by: the archive has read this
+    name, or the languages these ships carried use it. A stroke reading that
+    spells neither is not indexed — ungated, one stroke either way over the
+    whole corpus is the fuzzy pass measured in July, worth one row in ninety.
+    The counts decide which names are too common to guess into; a name from
+    the language lists has never been read here and is counted once.
+    """
+    out = {fold(n): int(c) for n, c in current_names().counts.items()}
+    for n in SPOKEN:
+        out.setdefault(fold(n), 1)
+    return out
 
 
 def language_names_for(nationality: str | None) -> set[str] | None:
@@ -539,7 +556,8 @@ def warm_the_index(root: Path | None = None) -> None:
     still opening, so it is done then instead.
     """
     rows = searchlib.load_index(JOBS.cache, engine_only=False,
-                                ships=catalogue_ships(root or STATE["root"]))
+                                ships=catalogue_ships(root or STATE["root"]),
+                                known=known_names())
     getattr(rows, "postings", None)
     getattr(rows, "crossings", None)
 
@@ -759,7 +777,8 @@ class Handler(BaseHTTPRequestHandler):
                 # point is that the user does not know which dossier to open
                 rows = searchlib.load_index(
                     JOBS.cache, engine_only=False,
-                    ships=catalogue_ships(STATE["root"]))
+                    ships=catalogue_ships(STATE["root"]),
+                    known=known_names())
                 hits = name_the_files(
                     searchlib.search(rows, q.get("q", ""),
                                      limit=int(q.get("limit", 50))),
@@ -795,7 +814,8 @@ class Handler(BaseHTTPRequestHandler):
                 query = q.get("q", "")
                 rows = searchlib.load_index(
                     JOBS.cache, engine_only=False,
-                    ships=catalogue_ships(STATE["root"]))
+                    ships=catalogue_ships(STATE["root"]),
+                    known=known_names())
                 hits = name_the_files(
                     searchlib.search(rows, query, limit=int(q.get("limit", 500))),
                     STATE["root"])

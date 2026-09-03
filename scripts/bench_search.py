@@ -22,8 +22,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from desembarque.gazetteer import Names, fold, spoken_names  # noqa: E402
 from desembarque.identity import cached_hash        # noqa: E402
 from desembarque.search import load_index, search   # noqa: E402
+
+
+def known_names() -> dict[str, int]:
+    """The names the index may spell a stroke reading as, and how often each
+    was read.
+
+    The same two sources the review menu ranks by, and for the same reason:
+    the archive has read these names, or these languages carry them. A stroke
+    reading that spells neither is not indexed. The counts decide which names
+    are too common to be worth guessing into — see `search.COMMON_NAME`; a
+    name from the language lists has never been read here and is counted once.
+    """
+    names = Names.load(ROOT / "data" / "names.json")
+    spoken = spoken_names(ROOT / "data" / "language_names.json")
+    out = {fold(n): int(c) for n, c in names.counts.items()}
+    for n in spoken:
+        out.setdefault(fold(n), 1)
+    return out
 
 
 def catalogue_ships(scans: Path) -> dict[str, str]:
@@ -109,7 +128,8 @@ def matrix(args) -> int:
     load six times to find that out.
     """
     ships = catalogue_ships(args.scans)
-    rows = load_index(args.cache, engine_only=False, ships=ships or None)
+    rows = load_index(args.cache, engine_only=False, ships=ships or None,
+                      known=known_names())
     asked = {
         "by name alone": [(w, w["name"]) for w in
                           truth_rows(args.cache, args.scans, ships=ships)],
@@ -152,7 +172,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.matrix:
         return matrix(args)
     ships = catalogue_ships(args.scans) if args.catalogue else {}
-    rows = load_index(args.cache, engine_only=False, ships=ships or None)
+    rows = load_index(args.cache, engine_only=False, ships=ships or None,
+                      known=known_names())
     wanted = truth_rows(args.cache, args.scans, with_line=args.with_line,
                         ships=ships)
     print(f"{len(wanted)} hand-read names against {len(rows)} indexed rows")

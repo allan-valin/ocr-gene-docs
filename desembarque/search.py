@@ -311,7 +311,8 @@ def _files(cache: Path) -> list[tuple[str, os.stat_result]]:
 
 
 def _rows_of(path: str, st: os.stat_result, engine_only: bool,
-             ships: dict[str, str] | None = None, token: int = 0) -> list[dict]:
+             ships: dict[str, str] | None = None, token: int = 0,
+             known: set[str] | None = None) -> list[dict]:
     # the catalogue is part of what a row says it is, so a different catalogue
     # is a different reading and must not come out of the cache. The token is
     # computed once per load rather than once per file.
@@ -321,14 +322,15 @@ def _rows_of(path: str, st: os.stat_result, engine_only: bool,
     if hit is not None and hit[0] == stamp:
         return hit[1]
     global _VERSION
-    rows = _parse(Path(path), engine_only, ships)
+    rows = _parse(Path(path), engine_only, ships, known)
     _ROWS[key] = (stamp, rows)
     _VERSION += 1
     return rows
 
 
 def load_index(cache: Path, engine_only: bool = True,
-               ships: dict[str, str] | None = None) -> list[dict]:
+               ships: dict[str, str] | None = None,
+               known: set[str] | None = None) -> list[dict]:
     """Flatten the transcription cache into rows that can be searched.
 
     Manually typed rows are excluded by default when measuring, because they
@@ -342,7 +344,9 @@ def load_index(cache: Path, engine_only: bool = True,
     quarter of a second of copying 370,000 row references, and `/api/search`
     loads the index on every keystroke.
     """
-    token = hash(frozenset((ships or {}).items()))
+    # the dictionary is part of what a row is indexed as, so a different
+    # dictionary must not come out of the cache either
+    token = hash((frozenset((ships or {}).items()), frozenset(known or ())))
     files = _files(cache)
     suffix = f"|{int(engine_only)}"
     global _VERSION
@@ -350,7 +354,7 @@ def load_index(cache: Path, engine_only: bool = True,
     present, lists = set(), []
     for path, st in files:
         present.add(f"{path}{suffix}")
-        lists.append(_rows_of(path, st, engine_only, ships, token))
+        lists.append(_rows_of(path, st, engine_only, ships, token, known))
     # only this cache's rows: a bench pointed at a directory of its own used to
     # evict the application's index, and the application's the bench's, so
     # neither ever hit the cache the other had filled.
@@ -416,13 +420,28 @@ def unglued(word: str) -> list[str]:
     return out
 
 
-def searchable_alts(row: dict, text: str) -> list[str]:
+def searchable_alts(row: dict, text: str,
+                    known: set[str] | None = None) -> list[str]:
     """Every other spelling of this row worth indexing beside its reading.
 
     The row's second reading — the same band read with room around the ink —
-    and any glued pair of names in it. Both are candidates and neither is a
-    reading: what is stored is untouched, and a hit says which spelling it
-    matched.
+    any glued pair of names in it, and, where `known` is given, the readings a
+    stroke rule reaches that are names somebody has actually read. All three
+    are candidates and none is a reading: what is stored is untouched, and a
+    hit says which spelling it matched.
+    """
+    return spellings(row, text, known)[0]
+
+
+def spellings(row: dict, text: str, known=None,
+              vocab: tuple[_Dictionary, _Dictionary] | None = None
+              ) -> tuple[list[str], int]:
+    """The row's other spellings, and how many of them nobody read.
+
+    The count is what the index needs to weight them: the second reading and a
+    glued pair pulled apart are both readings of this ink, while a stroke
+    reading is a guess that spells a name from somewhere else, and the two must
+    not score alike. The guesses are last, so a count names them.
     """
     out = list(_second_reading(row, text))
     for word in text.split():
@@ -430,7 +449,111 @@ def searchable_alts(row: dict, text: str) -> list[str]:
             spelled = text.replace(word, split, 1)
             if spelled != text and spelled not in out:
                 out.append(spelled)
+    guesses = _stroke_spellings(text, vocab or _vocabulary(known), out)
+    return out + guesses, len(guesses)
+
+
+# How many stroke readings of one row are worth carrying. The review menu can
+# afford twelve because a person is reading them and choosing; the index
+# cannot, because nobody sees them and every one of them can be matched.
+STROKE_ALTS = 4
+STROKE_COST = 2
+# How much of a reading's score a spelling nobody read is worth.
+GUESS_WEIGHT = 0.95
+
+
+def _stroke_spellings(text: str, vocab: tuple[_Dictionary, _Dictionary] | None,
+                      taken: list[str]) -> list[str]:
+    """The stroke readings of this row that spell a name somebody has read.
+
+    The faint hand (T13): 36 of 37 rows on OL.PRJ.16030 p3 read one or two
+    letters from a name — `Tuan` for Juan, `Garpar` for Gaspar — and search
+    reached none of them, because a four-letter word shares almost no trigram
+    with another and the edit-distance pass runs only inside a crossing
+    somebody named. The rules that already know the way from `Tuan` to Juan
+    were offered to a reader with the row open and never to a searcher.
+
+    Gated on `known` throughout. An ungated pass is the corpus-wide fuzzy
+    search measured in July, which moved findability from 90 to 91 and cost an
+    index several times the size.
+    """
+    if not vocab:
+        return []
+    out: list[str] = []
+    for word in text.split():
+        for name in _stroke_names(word, *vocab):
+            spelled = text.replace(word, name.title(), 1)
+            if spelled != text and spelled not in out and spelled not in taken:
+                out.append(spelled)
+            if len(out) >= STROKE_ALTS:
+                return out
     return out
+
+
+class _Dictionary(frozenset):
+    """A hashable name set, so one word is only ever worked out once.
+
+    The corpus is 32,000 rows and a few thousand distinct words: `Nose` occurs
+    on page after page, and running the stroke rules over it again each time is
+    most of what indexing the whole archive costs.
+    """
+
+
+# How often a name has to have been read before guessing a row into it stops
+# helping. Measured 2026-09-03: the archive has read MARIA 270 times, JOSE 230,
+# ANTONIO 203, and guessing into those buried the rows that read as them —
+# `Lorenzo Maria`, read `Maria`, went from rank 4 to 13. Fourteen names of
+# 1,081 are over this line, and a searcher typing one of them needs the
+# crossing to narrow it whatever the index does.
+COMMON_NAME = 40
+
+def _vocabulary(known) -> tuple[_Dictionary, _Dictionary] | None:
+    """The names the rules may read, and the names worth being guessed into.
+
+    Given counts, the second set drops the names the archive is full of. Given
+    a bare set of names — a test, a caller with no counts — the two are the
+    same, and every name is worth guessing into.
+
+    Worked out once per file read rather than once per row: the sets are
+    thousands of names and there are tens of thousands of rows.
+    """
+    if not known:
+        return None
+    names = _Dictionary(known)
+    if isinstance(known, dict):
+        targets = _Dictionary(n for n, c in known.items() if c < COMMON_NAME)
+    else:
+        targets = names
+    return names, targets
+
+
+@functools.lru_cache(maxsize=200_000)
+def _stroke_names(word: str, known: _Dictionary,
+                  targets: _Dictionary) -> tuple[str, ...]:
+    """The names a stroke rule reaches from this word, cheapest first.
+
+    A word that already spells a name is left alone. It is findable by the
+    name it spells, and the rules would otherwise walk every common given name
+    in the archive to reach a second name nobody is going to type.
+    """
+    from . import strokes
+    from .gazetteer import fold
+
+    w = fold(word)
+    if w in known:
+        return ()
+    out = []
+    for c in strokes.variants(word, known=known, limit=strokes.LIMIT):
+        plain = c.word.replace(" ", "")
+        # A guess reads the ink that is there. The edge rule will trim
+        # `turelis` to `Lis` against a long enough name list, and that is not a
+        # reading of the word — it is what is left when most of it is thrown
+        # away. Unconstrained it put a guessed spelling on 46% of the corpus.
+        if len(plain) < GLUE_HALF or abs(len(plain) - len(w)) > 1:
+            continue
+        if c.cost <= STROKE_COST and plain in targets:
+            out.append(c.word)
+    return tuple(out)
 
 
 def _second_reading(row: dict, text: str) -> list[str]:
@@ -467,8 +590,10 @@ def _resolved(rows: list[dict]) -> list[dict]:
 
 
 def _parse(f: Path, engine_only: bool,
-           ships: dict[str, str] | None = None) -> list[dict]:
+           ships: dict[str, str] | None = None,
+           known=None) -> list[dict]:
     """One stored transcription, flattened into searchable rows."""
+    vocab = _vocabulary(known)
     try:
         d = json.loads(f.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -500,7 +625,7 @@ def _parse(f: Path, engine_only: bool,
             continue
         if len(fold(text)) < 4:
             continue
-        second = searchable_alts(r, text)
+        second, guessed = spellings(r, text, vocab=vocab)
         out.append({
             "doc": d.get("hash", f.stem),
             "notation": d.get("notation"),
@@ -513,6 +638,7 @@ def _parse(f: Path, engine_only: bool,
             "row": r.get("n"),
             "text": text,
             **({"alts": second} if second else {}),
+            **({"guessed": guessed} if guessed else {}),
             "conf": name_score(r),
         })
     return out
@@ -844,14 +970,20 @@ class RowIndex(list):
             return _POSTINGS[1]
         post: dict[str, array] = {}
         owner, size, folded = array("i"), array("i"), [[] for _ in self]
+        # which postings are spellings nobody read: the trailing `guessed` of a
+        # row's alts, put there by `searchable_alts`
+        guess = array("b")
         for i, r in enumerate(self):
-            for text in (r.get("text") or "", *(r.get("alts") or ())):
+            texts = (r.get("text") or "", *(r.get("alts") or ()))
+            invented = len(texts) - int(r.get("guessed") or 0)
+            for j, text in enumerate(texts):
                 grams = trigrams(text) if text else set()
                 if not grams:
                     continue
                 rid = len(owner)
                 owner.append(i)
                 size.append(len(grams))
+                guess.append(1 if j >= invented else 0)
                 # the accent-folded reading, kept because the letter-by-letter
                 # pass folds every row it compares and was folding them again
                 # on every keystroke. 5 MB over the 31,000 rows indexed, 50 MB
@@ -860,7 +992,7 @@ class RowIndex(list):
                 folded[i].append(fold(text))
                 for g in grams:
                     post.setdefault(g, array("i")).append(rid)
-        built = (post, owner, size, folded)
+        built = (post, owner, size, folded, guess)
         if self.version is not None:
             _POSTINGS = (key, built)
         return built
@@ -884,7 +1016,7 @@ class RowIndex(list):
         key = (self.version, len(self))
         if self.version is not None and _LETTERS and _LETTERS[0] == key:
             return _LETTERS[1]
-        _post, owner, _size, folded = self.postings
+        _post, owner, _size, folded, guess = self.postings
         flat = [t for readings in folded for t in readings]
         lens = np.fromiter((len(t) for t in flat), dtype=np.int64,
                            count=len(flat))
@@ -895,7 +1027,8 @@ class RowIndex(list):
         counts = np.bincount(whose * 32 + (blob & 31),
                              minlength=len(flat) * 32)
         counts = np.minimum(counts, 255).astype(np.uint8).reshape(len(flat), 32)
-        built = (flat, lens, counts, np.frombuffer(owner, dtype=np.int32))
+        built = (flat, lens, counts, np.frombuffer(owner, dtype=np.int32),
+                 np.frombuffer(guess, dtype=np.int8).astype(bool))
         if self.version is not None:
             _LETTERS = (key, built)
         return built
@@ -977,7 +1110,8 @@ def crossing_pool(rows: list[dict], years: tuple[int, int] | None,
 
 
 def candidates(rows: list[dict], query: str, floor: float = 0.0,
-               slack: float = 0.0) -> list[tuple[dict, float]]:
+               slack: float = 0.0, guesses: bool = True
+               ) -> list[tuple[dict, float]]:
     """The rows worth scoring against this query, with their name score.
 
     The overlap is counted off the postings and the score comes out of the
@@ -997,7 +1131,7 @@ def candidates(rows: list[dict], query: str, floor: float = 0.0,
     # trigrams a reading holds is what the score is taken against, and only the
     # postings know it without rebuilding every row.
     index = rows.postings if isinstance(rows, RowIndex) else RowIndex(rows).postings
-    post, owner, size, _folded = index
+    post, owner, size, _folded, guess = index
     grams = trigrams(query)
     lists = [post[g] for g in grams if g in post]
     if not lists:
@@ -1024,6 +1158,15 @@ def candidates(rows: list[dict], query: str, floor: float = 0.0,
     # under a thousand rows that read as nothing else.
     over = np.maximum(0.0, sizes - shared - slack * asked)
     scores = shared / (asked + over)
+    # A spelling nobody read is weaker evidence than one somebody did, and the
+    # best-of is taken over both. Indexing stroke readings found five more
+    # names by name alone and lost seven to a searcher who also named the ship
+    # (2026-09-03), because a guess that spelled the query exactly scored 1.0
+    # and pushed the row somebody had actually read down the list. Weighted
+    # below every reading, a guess can add a row and cannot displace one.
+    invented = np.frombuffer(guess, dtype=np.int8)[seen].astype(bool)
+    scores = np.where(invented, scores * GUESS_WEIGHT if guesses else 0.0,
+                      scores)
     own = np.frombuffer(owner, dtype=np.int32)[seen]
     # a row's readings were appended together, so `owner` only ever climbs and
     # the readings of one row are neighbours: the better of them is the maximum
@@ -1086,9 +1229,17 @@ def search(rows: list[dict], query: str, limit: int = 50,
     # padded, so the score of nothing against a row read as `B   B` comes out
     # at 0.25 — a page of whitespace ranked above the ship somebody typed.
     strict = bool(years or terms or lines)
+    # A guessed spelling is offered to a searcher who has only a name, and to
+    # nobody else. Measured 2026-09-03 over the 142 hand-read names: indexing
+    # them found nine more by name alone at twenty and not one more for a
+    # searcher who also named the ship, where they instead pushed six rows out
+    # of the top five. With the crossing named the pool is not cut before the
+    # ship bonus is added, so a row that spells the name only in a guess rides
+    # the right ship past the row somebody actually read.
     pool = (candidates(rows, name_q,
                        floor=min_score if strict else max(min_score, LOOSE_FLOOR),
-                       slack=0.0 if strict else SLACK)
+                       slack=0.0 if strict else SLACK,
+                       guesses=not strict)
             if len(fold(name_q)) >= MIN_QUERY else ())
     if not strict and len(pool) > limit:
         # Nothing was named for the voyage to multiply, so the order is the
@@ -1271,10 +1422,17 @@ def _letter_by_letter(rows: list[dict], name_q: str,
     letters = getattr(rows, "letters", None) if pool else None
     best: dict[int, float] = {}
     if letters is not None:
-        flat, lens, counts, owner = letters
+        flat, lens, counts, owner, invented = letters
         wanted = np.asarray(pool, dtype=np.int64)
         first = np.searchsorted(owner, wanted, side="left")
         ids = _spans(first, np.searchsorted(owner, wanted, side="right") - first)
+        # Not the guessed spellings. This pass is the one that runs when a
+        # crossing was named, and a guess helps nobody there: measured over
+        # the hand-read names it found no row that the readings did not, and
+        # cost six their place in the top five, because a row that only
+        # *might* be the name still collects the ship bonus in full.
+        if ids.size:
+            ids = ids[~invented[ids]]
         if ids.size:
             common = np.minimum(counts[ids], _letter_counts(q)).sum(axis=1)
             ids = ids[2 * common >= EDIT * (len(q) + lens[ids])]
@@ -1296,7 +1454,9 @@ def _letter_by_letter(rows: list[dict], name_q: str,
         for i in pool:
             r = rows[i]
             s = 0.0
-            for t in (fold(x) for x in (r["text"], *(r.get("alts") or ()))):
+            read = (r.get("alts") or ())[:len(r.get("alts") or ())
+                                          - int(r.get("guessed") or 0)]
+            for t in (fold(x) for x in (r["text"], *read)):
                 if not t or 2 * min(len(q), len(t)) < EDIT * (len(q) + len(t)):
                     continue
                 m.set_seq1(t)

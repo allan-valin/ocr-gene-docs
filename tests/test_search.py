@@ -1348,3 +1348,85 @@ def test_a_hit_found_by_its_own_reading_claims_nothing():
     assert "spelling" not in name_the_spelling([dict(hit)], "Palai Nello")[0]
     assert "spelling" not in name_the_spelling([{"text": "Palai Nello"}],
                                                "Palai Nello")[0]
+
+
+def test_a_reading_one_stroke_from_a_known_name_reaches_the_index_as_that_name():
+    """The faint hand (T13): `Tuan` is Juan with a tall stroke read the other
+    way, and `Garpar` is Gaspar with a round letter swapped. The review menu
+    has always offered those; search never saw them, so the row stayed
+    unfindable to anybody typing the name they actually know.
+
+    Gated on a name somebody has read: an ungated stroke rule invents
+    thousands of spellings per word, which is the corpus-wide fuzzy pass that
+    was measured in July and found worth nothing.
+    """
+    from desembarque import search as s
+
+    row = {"n": 1, "page": 2, "name_raw": "Tuan Garpar"}
+    alts = s.searchable_alts(row, "Tuan Garpar", known={"JUAN", "GASPAR"})
+    folded = {s.fold(a) for a in alts}
+    assert s.fold("Juan Garpar") in folded
+    assert s.fold("Tuan Gaspar") in folded
+
+
+def test_a_stroke_reading_nobody_has_read_is_not_indexed():
+    """`known` never decides what the ink supports — but it does decide what
+    is worth indexing. Without a name behind it a variant is noise in the
+    index, where nobody is looking at it and choosing."""
+    from desembarque import search as s
+
+    row = {"n": 1, "page": 2, "name_raw": "Tuan Garpar"}
+    alts = s.searchable_alts(row, "Tuan Garpar", known=set())
+    assert not [a for a in alts if "Juan" in a or "Gaspar" in a]
+
+
+def test_a_guessed_spelling_never_outranks_a_reading():
+    """Indexing stroke readings found five more names by name alone and lost
+    seven to somebody who also named the ship: a guess scored the same as a
+    reading, so inside a crossing the invented spelling pushed the true row
+    down the list. A guess may add a row at the tail. It may not displace one.
+    """
+    from desembarque import search as s
+
+    rows = [
+        # the guess is indexed first and spells the query exactly, so on equal
+        # footing it wins the tie and the row somebody actually read is second
+        {"doc": "b", "page": 1, "row": 2, "text": "Tuan Garpar",
+         "alts": ["Juan Gaspar"], "guessed": 1, "conf": 1.0},
+        {"doc": "a", "page": 1, "row": 1, "text": "Juan Gaspar", "conf": 1.0},
+    ]
+    hits = {h["doc"]: h["score"] for h in s.search(rows, "Juan Gaspar", limit=5)}
+    assert hits["a"] > hits["b"], hits
+
+
+def test_a_common_name_is_not_guessed_into():
+    """A guess is worth indexing when the name identifies somebody. The
+    archive has read MARIA 270 times: a searcher typing it already has
+    hundreds of rows, and every row that *might* also be a Maria buries the
+    ones that read as one. Measured — guessing into the fourteen commonest
+    names cost six of the rows a searcher naming the crossing used to find.
+    """
+    from desembarque import search as s
+
+    row = {"n": 1, "page": 2, "name_raw": "Marua Garpar"}
+    counts = {"MARIA": 270, "GASPAR": 3}
+    alts, guessed = s.spellings(row, "Marua Garpar", counts)
+    assert guessed == 1, alts
+    assert [a for a in alts if "Gaspar" in a]
+    assert not [a for a in alts if "Maria" in a]
+
+
+def test_a_guess_that_throws_away_the_ink_is_not_a_reading_of_it():
+    """The edge rule trims a stroke at a word's edge, and against a long
+    enough name list it will trim `turelis` down to `Lis` and `FidaePas` down
+    to `Pas`. Those are not readings of that ink — they are what is left after
+    most of it is discarded, and they put a guessed spelling on 46% of the
+    corpus. A guess stays within a letter of the length of the word it reads.
+    """
+    from desembarque import search as s
+
+    counts = {"LIS": 3, "GASPAR": 3}
+    _, guessed = s.spellings({}, "turelis", counts)
+    assert guessed == 0
+    _, kept = s.spellings({}, "Garpar", counts)
+    assert kept == 1

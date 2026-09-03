@@ -108,6 +108,33 @@ def _recuts(word: str) -> list[Candidate]:
     return out
 
 
+def _minim_slips(word: str, known: set[str]) -> list[Candidate]:
+    """One minim more or one fewer, where a name comes out of it.
+
+    A re-cut keeps the ink and divides it differently — `Mania` and `Maria` are
+    the same strokes. The commonest slip on a faint hand is not that: it is a
+    stroke gained or lost, `Gerolamo` read as `Gerolano`, an `m` short of a
+    shoulder. That is a stronger claim than a re-cut, so it costs two, and it
+    is made only where the archive or the language lists have the name that
+    comes out — one stroke either way over every word in the corpus is noise
+    with no reader to sift it.
+    """
+    if not known:
+        return []
+    out = []
+    for a, b in _minim_runs(word):
+        run = word[a:b]
+        n = stroke_count(run)
+        for target in (n - 1, n + 1):
+            if target < 1 or target > MAX_RUN_STROKES:
+                continue
+            for alt in _compositions(target):
+                made = word[:a] + alt + word[b:]
+                if made != word and made in known:
+                    out.append(Candidate(made, 2, "minim slip"))
+    return out
+
+
 def _swaps(word: str, groups: list[set[str]], rule: str) -> list[Candidate]:
     out = []
     for i, c in enumerate(word):
@@ -221,6 +248,7 @@ def variants(word: str, known: set[str] | None = None,
 
     made: list[Candidate] = []
     made += _recuts(w)
+    made += _minim_slips(w, known)
     made += _swaps(w, ASCENDERS, "ascender")
     made += _swaps(w, ROUND, "round")
     made += _expansions(word)
