@@ -45,7 +45,7 @@ def known_names() -> dict[str, int]:
     return out
 
 
-def add_second_opinion(rows, path: Path) -> str:
+def add_second_opinion(rows, path: Path, as_guess: bool = False) -> str:
     """Put a second recogniser's reading of a row beside the engine's own.
 
     A reading, not a guess: another recogniser read it off the same crop, so it
@@ -69,9 +69,15 @@ def add_second_opinion(rows, path: Path) -> str:
                     missing += 1
                     continue
                 r["alts"] = list(r.get("alts") or ())
-                # ahead of the guesses, which are counted from the end
-                at = len(r["alts"]) - int(r.get("guessed") or 0)
-                r["alts"].insert(at, text)
+                if as_guess:
+                    # counted with the guesses, so it is weighted below every
+                    # reading and kept out of the pass that runs when a
+                    # crossing was named
+                    r["alts"].append(text)
+                    r["guessed"] = int(r.get("guessed") or 0) + 1
+                else:
+                    at = len(r["alts"]) - int(r.get("guessed") or 0)
+                    r["alts"].insert(at, text)
                 used += 1
     return f"second opinion: {used} rows read twice, {missing} unpaired"
 
@@ -162,7 +168,8 @@ def matrix(args) -> int:
     rows = load_index(args.cache, engine_only=False, ships=ships or None,
                       known=known_names())
     if getattr(args, "second_opinion", None):
-        print(add_second_opinion(rows, args.second_opinion))
+        print(add_second_opinion(rows, args.second_opinion,
+                                 getattr(args, "second_as_guess", False)))
         # a different index: the postings and the letter counts were built
         # before these readings existed, and both are cached by version
         rows.version = (rows.version or 0) + 1_000_000
@@ -202,6 +209,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--second-opinion", type=Path, default=None,
                     help="a sidecar of another recogniser's readings, put "
                          "beside the engine's own before searching")
+    ap.add_argument("--second-as-guess", action="store_true",
+                    help="count the second recogniser's readings with the "
+                         "guesses: weighted below every reading, and kept out "
+                         "of the pass that runs when a crossing was named")
     ap.add_argument("--matrix", action="store_true",
                     help="both questions at three cutoffs, on one load of the "
                          "index — what a scoring change has to be judged by")

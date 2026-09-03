@@ -541,11 +541,30 @@ and the top 14 of them only 17% — so patching the competitors is not
 available either.
 
 **The fair measurement** is a subcorpus read twice in full, targets and
-competitors alike: 15 dossiers, 1,038 indexed rows, which the Swedish model
-can read in about three quarters of an hour where the French one would take
-two hours. Its baseline is 121/125/127 by name alone and 122/130/133 with the
-crossing named, out of 142 — higher than the whole archive's because there is
-so much less to be confused with.
+competitors alike: 15 dossiers, 1,038 indexed rows, read again by the Swedish
+model (2 s a row against the French one's 6.6). 62 of its 65 pages read; 294
+rows paired to a band, which is 28% of the corpus and the number to improve
+next — the sidecar is cut by `name_strip` and the index by the engine's own
+row cutting, and where those disagree the row keeps only one reading.
+
+| | top 5 | top 10 | top 20 |
+|---|---|---|---|
+| by name alone | 121 → **126** | 125 → **129** | 127 → **129** |
+| naming the crossing | 122 → 122 | 130 → 130 | 133 → 133 |
+
+**Counted with the guesses**, which is the finding. Put in as a reading it
+gained the same five names and cost three of the top five to a searcher who
+named the crossing — the same regression, through the same edit-distance
+pass, as the stroke spellings. A recogniser did read it off the page, but it
+is a recogniser that is worse on average than the one that ships (0.338
+against 0.205), so it is weaker evidence, and weighting it below every
+reading and keeping it out of the crossing pass costs nothing and returns
+those three rows.
+
+So a second opinion is worth about five of 142 names at the top five, on 28%
+coverage, for 2 seconds a row — roughly 18 hours of offline reading over the
+whole archive, or far less if it is run only on the pages that read as
+cursive.
 ---
 
 ## What the reference set says to do next (2026-08-29 evening)

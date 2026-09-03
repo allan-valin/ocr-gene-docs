@@ -66,7 +66,19 @@ def main() -> None:
             want.append({"pdf": d["pdf"], "page": int(d["page"]),
                          "label": tf.name})
 
+    # Written after every page and resumed from what is already there. The
+    # first run of this over a small corpus died at 45 minutes with nothing on
+    # disk, and a spike that can only be run in one sitting is a spike nobody
+    # runs twice.
     out: dict[str, dict] = {}
+    if args.out.exists():
+        try:
+            was = json.loads(args.out.read_text(encoding="utf-8"))
+            if was.get("model") == args.model:
+                out = was.get("read") or {}
+                print(f"resuming: {sum(len(v) for v in out.values())} pages read")
+        except ValueError:
+            pass
     t0 = time.time()
     for job in want:
         pdf = args.scans / job["pdf"]
@@ -74,12 +86,30 @@ def main() -> None:
             print(f"  no scan for {job['label']}", flush=True)
             continue
         page = int(job["page"])
-        crops = crops_for(pdf, page, args.work, args.target_h)
-        dt, said = run_trocr(crops, args.model, args.beams, args.batch)
         doc = cached_hash(pdf)
-        # keyed by the band's position on the page: the crops come out of the
-        # same geometry the engine cut its rows with, so band i is row i
+        if str(page) in out.get(doc, {}):
+            continue
+        # Marked before it is read, not after, so a page that cannot be cut is
+        # skipped on the next run rather than retried for ever. `name_strip`
+        # says `raise SystemExit("no grid detected")` on a page with no ruled
+        # table, which is not an Exception and takes the whole process with it
+        # -- caught here, because one page of a corpus having no grid is not a
+        # reason to stop reading the other sixty-four.
+        out.setdefault(doc, {})[str(page)] = {}
+        args.out.write_text(json.dumps(
+            {"model": args.model, "read": out}, ensure_ascii=False, indent=2))
+        try:
+            crops = crops_for(pdf, page, args.work, args.target_h)
+        except (Exception, SystemExit) as e:  # noqa: BLE001 - a spike
+            print(f"  {job['label']} p{page}: crop failed, {e}", flush=True)
+            continue
+        dt, said = run_trocr(crops, args.model, args.beams, args.batch)
+        # keyed by the band's position on the page; `map_sidecar` pairs those
+        # with the rows in an index, which drops headings and short rows
         out.setdefault(doc, {})[str(page)] = {str(i): t for i, t in said.items()}
+        args.out.write_text(json.dumps(
+            {"model": args.model, "seconds": round(time.time() - t0, 1),
+             "read": out}, ensure_ascii=False, indent=2))
         print(f"  {job['label']} p{page}: {len(crops)} bands in {dt:.0f}s",
               flush=True)
 
