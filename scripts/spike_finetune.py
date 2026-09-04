@@ -35,6 +35,11 @@ def main() -> None:
     ap.add_argument("--trainset", type=Path, required=True)
     ap.add_argument("--model",
                     default="Riksarkivet/trocr-base-handwritten-hist-swe-2")
+    ap.add_argument("--held-out", default=HELD_OUT,
+                    help="the source file whose rows are kept out of training "
+                         "and scored. The default is the page every other "
+                         "model in the plan was scored on, which is six rows; "
+                         "a bigger page says more about a small set")
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--batch", type=int, default=2)
     ap.add_argument("--lr", type=float, default=5e-5)
@@ -47,10 +52,10 @@ def main() -> None:
 
     rows = [json.loads(l) for l in
             (args.trainset / "labels.jsonl").open(encoding="utf-8")]
-    train = [r for r in rows if r["source"] != HELD_OUT]
-    test = [r for r in rows if r["source"] == HELD_OUT]
+    train = [r for r in rows if r["source"] != args.held_out]
+    test = [r for r in rows if r["source"] == args.held_out]
     if not test:
-        raise SystemExit(f"nothing held out: no rows from {HELD_OUT}")
+        raise SystemExit(f"nothing held out: no rows from {args.held_out}")
     print(f"{len(train)} to train on, {len(test)} held out", flush=True)
 
     proc = TrOCRProcessor.from_pretrained(args.model)
@@ -104,10 +109,12 @@ def main() -> None:
     after = score(f"after {args.epochs} epochs")
     args.out.write_text(json.dumps(
         {"model": args.model, "train": len(train), "held_out": len(test),
+         "held_out_source": args.held_out,
          "epochs": args.epochs, "lr": args.lr,
          "cer_before": round(before, 3), "cer_after": round(after, 3),
          "seconds": round(time.time() - t0, 1)}, indent=2))
-    print(f"\nCER {before:.3f} -> {after:.3f} (engine reads this page at 0.205)")
+    print(f"\nCER {before:.3f} -> {after:.3f} on {args.held_out}, "
+          f"{len(test)} rows held out of {len(train) + len(test)}")
 
 
 if __name__ == "__main__":

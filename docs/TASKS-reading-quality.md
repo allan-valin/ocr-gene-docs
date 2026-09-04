@@ -625,6 +625,41 @@ should be ignored for the same reason.
 
 ---
 
+## 155 crops are not enough, and 3 epochs are worse than none (2026-09-04)
+
+The training set is built right now — the crop is the ink the engine read, the
+label is what a person said, and the pairing has been fixed — so the question
+it was built for could finally be asked honestly. `spike_finetune.py` over the
+strip crops, `Riksarkivet/trocr-base-handwritten-hist-swe-2`:
+
+| held out | rows | train | settings | before | after |
+|---|---|---|---|---|---|
+| BS_ENT_014541-p2 | 6 | 149 | 3 epochs, lr 5e-5 | 0.340 | **0.451** |
+| BS_ENT_013947-p3 | 48 | 107 | 1 epoch, lr 2e-5 | 0.606 | **0.605** |
+
+Three epochs make it **worse**, and the training loss says why: 1.708 → 0.622
+→ 0.314, a model learning the 149 crops by heart. What it learns is the
+archive's *vocabulary* rather than its hands — `GUIDO CONTADORE` reads as
+`Gaudi Santos` after training where it read `Gusti Cantadore.` before, and
+`A. VIEIRA MIRANDA` collapses to `Santa`. One epoch at a lower rate over a
+48-row held-out page moves nothing at all: 0.606 → 0.605.
+
+So the answer to *"is 142 enough to say?"* is **no, and it is not close** —
+the honest number to quote is that a set this size cannot move a pretrained
+recogniser off its prior, and a search over epochs and rates would be tuning
+noise on six rows. The `before` numbers are worth keeping, though: 0.340 on the
+reference page is what this model reads the plain band at with labels that are
+right, against the 0.892 quoted last week, and the engine reads that page at
+0.205.
+
+What this changes about the direction: nothing about *whether* an archive-
+trained recogniser is the lever — it is still the only one left — but the
+first cost is now known. It wants labels in the hundreds at least, which is
+`training_set.py --records` and people using the review screen, not another
+afternoon of spikes.
+
+---
+
 ## The second opinion, asked with the right pictures (2026-09-04)
 
 The plumbing was the easy half: `export_bands.py` writes the carved crop and

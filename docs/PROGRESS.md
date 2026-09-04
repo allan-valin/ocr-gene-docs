@@ -76,18 +76,33 @@ was the bench's idea of which row each hand-read name sits on.
   readings disagree (486 of 1,213), which costs one name; that is a guard, not
   fairness. `export_bands.py --write-records` closes it in one pass next time.
 
+* **155 labelled crops are not enough to train on, and that is now measured.**
+  With the crops right and the labels right, `spike_finetune.py` was asked the
+  question the set was built for. Three epochs on 149 crops take the held-out
+  page from CER 0.340 to **0.451** — the training loss falls 1.708 → 0.314 and
+  what the model learns is the archive's vocabulary, not its hands: `GUIDO
+  CONTADORE` reads as `Gaudi Santos` after training and `A. VIEIRA MIRANDA`
+  collapses to `Santa`. One epoch at a lower rate, scored on a 48-row page
+  instead of a 6-row one, moves nothing: 0.606 → 0.605. The direction stands
+  and the price of it is now known: labels in the hundreds, from people using
+  the review screen, not another afternoon of spikes.
+
 ### Start here next time, in order
 
 1. **Run the subcorpus once more with `--write-records`, into a copy of the
    whole cache**, and re-run the three matrix rows. That is the only thing
    between today's numbers and a number worth shipping on, and it is one pass
    of the engine (2.5 h) plus one of TrOCR (2.5 h), both resumable.
-2. **Measure whether 155 labelled crops are enough**, with `spike_finetune.py`
-   over `--variant strip` — its `before` number was taken on the carved crops
-   *and* on the old labels, so it means nothing yet.
-3. **Then fine-tune and score it like everything else**: `read_bands.py` puts
-   any model in front of the same ink, `score_crops.py` says what it read, and
-   `bench_search.py --matrix` says whether anybody is easier to find.
+2. **Grow the labelled set**, which is the only thing standing between here
+   and an archive-trained recogniser. `training_set.py --records` harvests
+   every correction in the corpus and there are four; the set is otherwise the
+   151 hand-read rows. Fine-tuning on that many is measured and it does not
+   work, so what is wanted is people at the review screen, or another page or
+   two read by hand.
+3. **Then fine-tune again and score it like everything else**: `read_bands.py`
+   puts any model in front of the same ink, `score_crops.py` says what it
+   read, and `bench_search.py --matrix` says whether anybody is easier to
+   find.
 4. Still open and untouched by any of this: T3's `bench_columns.py` and
    per-column truth, and T10's other columns. Both want a cursive page whose
    columns read at all, which T11 measured and found they do not.
