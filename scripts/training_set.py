@@ -126,6 +126,12 @@ def main() -> None:
                     help="take a label from every row somebody has retyped in "
                          "these records, cutting its crop from the geometry "
                          "the page stores")
+    ap.add_argument("--variant", choices=("carved", "strip"), default="strip",
+                    help="which picture of the row to keep: the engine's own "
+                         "carved crop, or the plain rectangle of the band. "
+                         "TrOCR reads the carved crop of a cursive name at "
+                         "CER 0.892 and the band at 0.338, so a set built for "
+                         "a pretrained model wants the band")
     ap.add_argument("--verified", action="store_true",
                     help="count a row merely marked verified as a label too, "
                          "which is weaker evidence: the person may have been "
@@ -167,13 +173,16 @@ def main() -> None:
         at = {r["n"]: r for r in rows}
         truth = d.get("rows") or d.get("names") or []
         for n, name in labels_for_page(rows, truth).items():
-            src = args.bands / at[n]["file"]
+            key = "strip" if args.variant == "strip" else "file"
+            named = at[n].get(key) or at[n].get("file")
+            src = args.bands / named
             if not src.exists():
                 continue
             dst = images / f"{doc[:8]}_{d['page']}_{n}.png"
             shutil.copy(src, dst)
             pairs[dst.name] = {"image": f"images/{dst.name}", "label": name,
                                "engine": at[n]["engine"], "how": "hand-read",
+                               "doc": doc, "page": d["page"], "n": n,
                                "source": tf.name}
 
     uncut = 0
@@ -204,10 +213,11 @@ def main() -> None:
                     uncut += 1
                     continue
                 dst = images / f"{doc[:8]}_{page}_{c['n']}.png"
-                band["carved"].convert("RGB").save(dst)
+                band[args.variant].convert("RGB").save(dst)
                 pairs[dst.name] = {"image": f"images/{dst.name}",
                                    "label": c["label"], "engine": c["engine"],
-                                   "how": c["how"], "source": rf.name}
+                                   "how": c["how"], "doc": doc, "page": page,
+                                   "n": c["n"], "source": rf.name}
 
     out = args.out / "labels.jsonl"
     rows = sorted(pairs.values(), key=lambda p: p["image"])
@@ -215,6 +225,7 @@ def main() -> None:
         for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     words = sum(len(p["label"].split()) for p in rows)
+    print(f"the {args.variant} crop of each row")
     by_how = Counter(p["how"] for p in rows)
     print(f"{len(rows)} labelled crops, {words} words, "
           f"{len({p['source'] for p in rows})} sources; {missing} skipped"
