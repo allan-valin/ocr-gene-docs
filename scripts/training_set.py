@@ -7,17 +7,19 @@ archive already has them: `export_bands.py` saves exactly the image the engine
 read, and the hand-read truth pages say what each of those rows says.
 
 The other source is every row somebody has retyped on the review screen, and
-that is the one that grows: the truth pages are a fixed 142 names and a
-correction is made every time anybody uses the tool. Those crops were never
+that is the one that grows: the truth pages are a fixed six and a correction
+is made every time anybody uses the tool. Those crops were never
 kept, but since T4 each page stores the geometry its rows were cut from, so
 the same ink can be cut again from the record -- retroactively, for
 corrections made months ago, and without a recogniser. See
 `desembarque.bandcrops`.
 
 Nothing here trains anything. It builds the set and says how big it is, which
-is the honest first question -- 142 hand-read names is either enough to move
-CER 0.205 or it is not, and that is measurable before anybody is asked to
-label more.
+was the honest first question -- and it has been answered: 155 crops is not
+enough. Three epochs on them take a held-out page from CER 0.340 to 0.451,
+because what a set that size teaches is the archive's vocabulary rather than
+its hands (docs/TASKS-reading-quality.md, 2026-09-04). So the number this
+prints is the one to grow.
 
     .venv-ocr/bin/python scripts/export_bands.py --records data/transcriptions --out data/bands
     .venv/bin/python scripts/training_set.py --bands data/bands \
