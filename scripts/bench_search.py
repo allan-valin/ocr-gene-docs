@@ -15,6 +15,7 @@ whole index, exactly as the app searches it.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import sys
 from pathlib import Path
@@ -46,7 +47,24 @@ def known_names() -> dict[str, int]:
     return out
 
 
-def add_second_opinion(rows, path: Path, as_guess: bool = False) -> str:
+def exported_readings(bands: Path) -> dict[tuple, str]:
+    """What the engine said about each row on the day the crops were cut."""
+    index = json.loads((bands / "bands.json").read_text(encoding="utf-8"))
+    out = {}
+    for key, got in index.items():
+        doc, _, page = key.partition("/")
+        for r in got or ():
+            out[(doc, int(page), r["n"])] = r.get("engine") or ""
+    return out
+
+
+def same_row(a: str, b: str, floor: float = 0.8) -> bool:
+    """Whether two readings are of the same ink, near enough to pair on."""
+    return difflib.SequenceMatcher(None, fold(a), fold(b)).ratio() >= floor
+
+
+def add_second_opinion(rows, path: Path, as_guess: bool = False,
+                       bands: Path | None = None) -> str:
     """Put a second recogniser's reading of a row beside the engine's own.
 
     A reading, not a guess: another recogniser read it off the same crop, so it
@@ -61,10 +79,18 @@ def add_second_opinion(rows, path: Path, as_guess: bool = False) -> str:
     """
     d = json.loads(path.read_text(encoding="utf-8"))
     said, mapped = d.get("read") or {}, d.get("map") or {}
+    # What the engine said when the crops were cut, if it is on hand. The
+    # sidecar's row numbers are that reading's; the index's are from whenever
+    # the dossier was last read, and on the subcorpus those agree on 100% of
+    # the hand-read pages and 58% of the rest, because the engine has moved on
+    # and the corpus has not. Pasting a reading onto a row that no longer holds
+    # the same name is how a second opinion lands on a stranger, so a row whose
+    # two readings disagree is refused rather than paired.
+    exported = exported_readings(bands) if bands else {}
+    used = missing = stale = 0
     at_row: dict[tuple, dict] = {}
     for r in rows:
         at_row[(r.get("doc"), r.get("page"), r.get("row"))] = r
-    used = missing = 0
     for doc, pages_of in (mapped or said).items():
         for page, bands in pages_of.items():
             for band, value in bands.items():
@@ -73,6 +99,10 @@ def add_second_opinion(rows, path: Path, as_guess: bool = False) -> str:
                 text = ((said.get(doc, {}).get(page, {}) or {}).get(band) or "").strip()
                 if r is None or not text or text == r.get("text"):
                     missing += 1
+                    continue
+                was = exported.get((doc, int(page), row_n))
+                if was is not None and not same_row(was, r.get("text") or ""):
+                    stale += 1
                     continue
                 r["alts"] = list(r.get("alts") or ())
                 if as_guess:
@@ -85,7 +115,8 @@ def add_second_opinion(rows, path: Path, as_guess: bool = False) -> str:
                     at = len(r["alts"]) - int(r.get("guessed") or 0)
                     r["alts"].insert(at, text)
                 used += 1
-    return f"second opinion: {used} rows read twice, {missing} unpaired"
+    return (f"second opinion: {used} rows read twice, {missing} unpaired"
+            + (f", {stale} refused as read from a stale row" if stale else ""))
 
 
 def catalogue_ships(scans: Path) -> dict[str, str]:
@@ -174,7 +205,8 @@ def matrix(args) -> int:
                       known=known_names())
     if getattr(args, "second_opinion", None):
         print(add_second_opinion(rows, args.second_opinion,
-                                 getattr(args, "second_as_guess", False)))
+                                 getattr(args, "second_as_guess", False),
+                                 bands=getattr(args, "second_bands", None)))
         # a different index: the postings and the letter counts were built
         # before these readings existed, and both are cached by version
         rows.version = (rows.version or 0) + 1_000_000
@@ -214,6 +246,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--second-opinion", type=Path, default=None,
                     help="a sidecar of another recogniser's readings, put "
                          "beside the engine's own before searching")
+    ap.add_argument("--second-bands", type=Path, default=None,
+                    help="the `export_bands.py` directory the sidecar was read "
+                         "from; a row whose index reading disagrees with what "
+                         "the engine said when the crop was cut is refused "
+                         "rather than paired")
     ap.add_argument("--second-as-guess", action="store_true",
                     help="count the second recogniser's readings with the "
                          "guesses: weighted below every reading, and kept out "

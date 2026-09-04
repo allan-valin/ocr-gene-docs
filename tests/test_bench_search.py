@@ -63,3 +63,36 @@ def test_as_a_guess_it_goes_behind_the_readings(tmp_path):
     add_second_opinion(rows, path, as_guess=True)
     assert rows[0]["alts"] == ["GUIDO", "Guiso"]
     assert rows[0]["guessed"] == 1
+
+
+def bands_dir(tmp_path, index):
+    d = tmp_path / "bands"
+    d.mkdir()
+    (d / "bands.json").write_text(json.dumps(index), encoding="utf-8")
+    return d
+
+
+def test_a_row_the_export_read_differently_is_refused(tmp_path):
+    """The sidecar's row numbers come from a reading taken today; the index's
+    come from whenever that dossier was last read. On the subcorpus those agree
+    on 100% of the hand-read pages and 58% of the rest — the engine has moved
+    on and the corpus has not — so pasting a reading onto a row that no longer
+    holds the same name is how a second opinion lands on a stranger."""
+    rows = [{"doc": "abc", "page": 2, "row": 4, "text": "LISTA dos passag"}]
+    side = sidecar(tmp_path, {"by": "row",
+                              "read": {"abc": {"2": {"4": "Edwina Bennett"}}}})
+    bands = bands_dir(tmp_path, {"abc/2": [{"n": 4, "file": "x.png",
+                                            "engine": "Edwina Beunett"}]})
+    said = add_second_opinion(rows, side, bands=bands)
+    assert "alts" not in rows[0]
+    assert "1 refused" in said
+
+
+def test_a_row_the_export_read_the_same_way_is_paired(tmp_path):
+    rows = [{"doc": "abc", "page": 2, "row": 4, "text": "Edwina Beunett"}]
+    side = sidecar(tmp_path, {"by": "row",
+                              "read": {"abc": {"2": {"4": "Edwina Bennett"}}}})
+    bands = bands_dir(tmp_path, {"abc/2": [{"n": 4, "file": "x.png",
+                                            "engine": "Edwina Beunett"}]})
+    add_second_opinion(rows, side, bands=bands)
+    assert rows[0]["alts"] == ["Edwina Bennett"]

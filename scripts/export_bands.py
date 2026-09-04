@@ -30,9 +30,32 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "scripts")]
 
+from desembarque.batch import typed_by_a_person       # noqa: E402
 from desembarque.engine_paddle import PaddleEngine    # noqa: E402
 from desembarque.identity import cached_hash          # noqa: E402
 from page_geometry import page_image                  # noqa: E402
+
+
+def merged_rows(existing: list[dict], fresh: dict[int, list[dict]]) -> list[dict]:
+    """A record's rows with this run's reading in place of the pages it read.
+
+    Every page this run read is replaced by what it read, including a page that
+    now reads as nothing -- that is a reading and not an absence, and a record
+    left holding last month's names for it would be paired against a sidecar
+    that has none. Pages the run did not touch are left exactly as they were.
+
+    A row a person typed into, chose a reading for, or ticked is theirs and
+    comes through untouched, which is T4's rule and holds here too: this is a
+    re-read like any other, and a re-read does not get to take somebody's work.
+    """
+    theirs = {(r.get("page"), r.get("n")): r for r in existing or ()
+              if typed_by_a_person(r)}
+    out = [r for r in existing or () if r.get("page") not in fresh]
+    for page, rows in sorted(fresh.items()):
+        for r in rows:
+            was = theirs.get((page, r.get("n")))
+            out.append(dict(was) if was else {**r, "page": page})
+    return sorted(out, key=lambda r: (r.get("page") or 0, r.get("n") or 0))
 
 
 def main() -> None:
@@ -41,7 +64,16 @@ def main() -> None:
     ap.add_argument("--scans", type=Path, default=ROOT / "data" / "scans")
     ap.add_argument("--work", type=Path, default=ROOT / "data" / "pagecache")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--write-records", type=Path, default=None,
+                    help="write each record again into this directory with "
+                         "the reading this run took, so a bench pairing the "
+                         "crops to the corpus is pairing them to the same "
+                         "reading. Point a bench at this directory rather than "
+                         "at `data/transcriptions`, and give it a fresh --out "
+                         "so no page is skipped as already done")
     args = ap.parse_args()
+    if args.write_records:
+        args.write_records.mkdir(parents=True, exist_ok=True)
     args.out.mkdir(parents=True, exist_ok=True)
 
     index_path = args.out / "bands.json"
@@ -59,6 +91,7 @@ def main() -> None:
         if not pdf.exists():
             continue
         doc = cached_hash(pdf)
+        fresh: dict[int, list[dict]] = {}
         for page in sorted({r.get("page") for r in rec.get("rows") or []
                             if r.get("page")}):
             key = f"{doc}/{page}"
@@ -77,6 +110,7 @@ def main() -> None:
                 continue
             finally:
                 eng.band_sink = None
+            fresh[page] = [dict(r) for r in (res.rows or [])]
             read = [r for r in (res.rows or []) if (r.get("name_raw") or "").strip()]
             # by band index rather than by position: a page is read more than
             # once -- the render fallback, the looser second reading -- and
@@ -100,6 +134,11 @@ def main() -> None:
             index_path.write_text(json.dumps(done))
             print(f"  {doc[:8]} p{page}: {len(pairs)} rows of {len(sink)} bands",
                   flush=True)
+
+        if args.write_records and fresh:
+            again = {**rec, "rows": merged_rows(rec.get("rows") or [], fresh)}
+            (args.write_records / rf.name).write_text(
+                json.dumps(again, ensure_ascii=False), encoding="utf-8")
 
     print(f"wrote {index_path}")
 
