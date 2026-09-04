@@ -10,9 +10,16 @@ records around them carry the current schema stamp, so an index run skips all
 660 dossiers and reports success, which is why this needs a pass of its own.
 
 It is the cheap half of a re-index: 301 pages against 660 dossiers, half an hour
-against eleven hours. That is the right trade because a dossier with no unknown
-pages was measured to read exactly what is already on disk — there is nothing
-for the rest of the corpus to gain from being read again.
+against eleven hours, and when this was written that was the whole of the
+trade: a dossier with no unknown pages read exactly what was already on disk.
+
+**That stopped being true on 2026-09-04.** Fifteen dossiers with no unknown
+pages were read again and 565 rows came back carrying a name where the record
+had none — 1,327 named rows became 1,865 — because the carving, the printed
+table and the derule pass have all moved since the corpus was read in August
+and no stamp records that. So the rest of the corpus does have something to
+gain now, and this script is the cheap half of a job worth doing whole. See
+`docs/TASKS-reading-quality.md`.
 
 What it will not do is quietly replace work: a page that reads nothing is left
 alone, a page that already has rows is never given a second set, and the schema
