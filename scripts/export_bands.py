@@ -15,8 +15,8 @@ engine, which alignment does well: 94% on the hand-read pages against 28%.
 Two pictures of every row come out, because they are not read alike: the
 carved crop the engine hands its own recogniser, cut to the row's ink, and the
 plain rectangle of the same band. A historical-hand TrOCR reads the carved
-crop at CER 0.892 and the plain band at 0.338, so a second opinion measured on
-the carved crop measures the carving and nothing else.
+crop at CER 0.609 and the plain band at 0.567, so a measurement of a second
+recogniser has to say which of them it was given.
 
     .venv-ocr/bin/python scripts/export_bands.py --records DIR --out DIR
 """

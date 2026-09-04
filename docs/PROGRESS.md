@@ -57,6 +57,41 @@ was the bench's idea of which row each hand-read name sits on.
   findable; it never said whether the second recogniser read the ink at all,
   which is exactly what went wrong last week.
 
+**Measured.**
+
+* **The second opinion, finally asked with the right pictures.** The subcorpus
+  was cut and read again on the plain band crop: CER 0.567 against the carved
+  crop's 0.609 and the engine's 0.365 on the same 152 labelled rows. Last week
+  that gap was quoted as 0.892 against 0.338 and it was mostly the mislabelling
+  above. In the index, counted with the guesses, the second reading is worth
+  **87/97/105 → 90/103/110** by name alone and costs nothing when the crossing
+  is named. It reaches a name the archive knows, where the engine's reading
+  reaches none, on 30 of 152 rows.
+* **And it is still not fair, in a new way.** The sidecar is keyed to the
+  reading taken when the crops were cut; the index holds whatever each dossier
+  was last read as, and today's reading agrees with the stored one on **100% of
+  the hand-read pages and 58% of the rest**. The targets are read twice more
+  reliably than their competitors — the 28% bias wearing another hat, and it
+  runs in favour of the number above. `--second-bands` refuses the rows whose
+  readings disagree (486 of 1,213), which costs one name; that is a guard, not
+  fairness. `export_bands.py --write-records` closes it in one pass next time.
+
+### Start here next time, in order
+
+1. **Run the subcorpus once more with `--write-records`, into a copy of the
+   whole cache**, and re-run the three matrix rows. That is the only thing
+   between today's numbers and a number worth shipping on, and it is one pass
+   of the engine (2.5 h) plus one of TrOCR (2.5 h), both resumable.
+2. **Measure whether 155 labelled crops are enough**, with `spike_finetune.py`
+   over `--variant strip` — its `before` number was taken on the carved crops
+   *and* on the old labels, so it means nothing yet.
+3. **Then fine-tune and score it like everything else**: `read_bands.py` puts
+   any model in front of the same ink, `score_crops.py` says what it read, and
+   `bench_search.py --matrix` says whether anybody is easier to find.
+4. Still open and untouched by any of this: T3's `bench_columns.py` and
+   per-column truth, and T10's other columns. Both want a cursive page whose
+   columns read at all, which T11 measured and found they do not.
+
 ## 2026-09-03 — the day handwriting became the only question
 
 Allan settled the open question at the top of the day — handwriting is the
@@ -112,7 +147,9 @@ learned to write in Cyrillic carried its shapes into these Latin names.
 So: no support in what can be seen, and naming the dossier would settle it
 faster than any of this. See `docs/TASKS-reading-quality.md`.
 
-### Start here next time, in order
+### Where the old list stood, before today
+
+
 
 1. **Give `export_bands.py` the strip crop as well as the carved one.** This is
    the one thing blocking a real answer on the second opinion, and it is

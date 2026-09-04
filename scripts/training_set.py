@@ -131,7 +131,7 @@ def main() -> None:
                     help="which picture of the row to keep: the engine's own "
                          "carved crop, or the plain rectangle of the band. "
                          "TrOCR reads the carved crop of a cursive name at "
-                         "CER 0.892 and the band at 0.338, so a set built for "
+                         "CER 0.609 and the band at 0.567, so a set built for "
                          "a pretrained model wants the band")
     ap.add_argument("--verified", action="store_true",
                     help="count a row merely marked verified as a label too, "

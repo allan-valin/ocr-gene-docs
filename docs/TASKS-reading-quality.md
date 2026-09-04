@@ -625,6 +625,86 @@ should be ignored for the same reason.
 
 ---
 
+## The second opinion, asked with the right pictures (2026-09-04)
+
+The plumbing was the easy half: `export_bands.py` writes the carved crop and
+the plain band of every row, `read_bands.py --variant strip --refine 64` reads
+whichever is asked for, and the bench understands a sidecar keyed by row
+number. The subcorpus — 15 dossiers, 70 pages, 1,865 rows with a reading — was
+cut and read again by `Riksarkivet/trocr-base-handwritten-hist-swe-2`, which
+is 2.5 hours of engine and 2.5 hours of TrOCR on this machine.
+
+**The crops do differ, and by far less than last week's numbers said.** Over
+the 152 labelled rows, same model, same rows, same labels:
+
+| crop | second opinion CER | median | engine on the same rows |
+|---|---|---|---|
+| carved (the engine's own) | 0.609 | 0.538 | 0.365 |
+| plain band, trimmed and upscaled | **0.567** | 0.500 | 0.365 |
+
+Last week this gap was quoted as **0.892 against 0.338**, and that was almost
+entirely the labelling fault above: the 0.892 was six rows of a page whose
+labels had slid three rows down. On today's labels the same page reads 0.515
+carved and 0.368 on the band. So the carved crop *is* the worse picture for a
+pretrained model — it keeps 71% of the band's height at the median, trimmed to
+the ink, and TrOCR was trained on lines with air around them — but it is worth
+about four points of character error, not fifty-five.
+
+**And the engine still wins**, 0.365 against 0.567, on the crops that suit the
+challenger best. That has now been true of six pretrained models.
+
+**What it is worth to a searcher.** The subcorpus's 727 pairable rows were put
+into the index beside the engine's own reading, and the matrix run again over
+the whole corpus, 138 hand-read names against 32,322 rows:
+
+| | top 5 | top 10 | top 20 |
+|---|---|---|---|
+| the index as it ships | 87 | 97 | 105 |
+| second reading, as a reading | **92** | **104** | **112** |
+| second reading, counted with the guesses | 90 | 103 | 110 |
+
+Naming the crossing: 118/123/129 unmoved when it is counted as a guess, and
+117/123/128 when it is counted as a reading — the same small regression, in
+the same pass, as the stroke spellings, and for the same reason. **Counted
+with the guesses it gains three to six names and costs nothing**, which is
+where it belongs: a recogniser worse on average than the one that ships is
+weaker evidence, and weighting it below every reading keeps it out of the pass
+that runs when somebody names the ship.
+
+On the reading itself: it differs from the engine on every row, is closer to
+the truth on 35 of 152, and on **30 of 152 it spells a name the archive has
+read or its languages carry where the engine's reading spells none**. That is
+what a second opinion can do for a searcher, and it is the mechanism behind
+the five names.
+
+### Why this is still not the number to ship on
+
+The sidecar's row numbers come from the reading taken the day the crops were
+cut. The index's come from whenever each dossier was last read, and **the
+engine has moved on while the corpus has not**: across the subcorpus today's
+reading agrees with the stored one on **100% of the hand-read pages and 58% of
+the rest**. Whole dossiers now read as names where the record holds `''`, `w`,
+`D10`.
+
+That is the bias of the 28%-coverage run wearing another hat — the rows being
+searched for keep their second reading, the rows competing with them lose it —
+and it runs in favour of the gain above. `--second-bands` refuses a row whose
+two readings disagree (486 of 1,213 here) rather than pasting a reading onto a
+row that no longer holds the same name; refusing them costs one name of the
+twenty at rank twenty, so the stale pastings were noise rather than ruin. But
+refusing is not fairness: it leaves the targets read twice and the competitors
+not.
+
+**What settles it, and it is now one flag.** `export_bands.py --write-records`
+writes what it read as it cuts, so the pass that produces the crops also
+produces a corpus that agrees with them. Copy the cache, write the fifteen
+refreshed records over the copy, point the bench at that, and the same three
+rows of the table above mean what they say. Until then the honest statement is:
+*counted as a guess it is worth somewhere between nothing and six names of 138,
+measured with the odds in its favour.*
+
+---
+
 ## The labels were partly somebody else's (2026-09-04)
 
 Fixing the crops turned up something underneath them. A hand-read page comes

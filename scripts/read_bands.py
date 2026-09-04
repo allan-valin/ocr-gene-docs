@@ -7,8 +7,8 @@ the first attempt could not do, and why it reached only 28% of rows.
 
 Two pictures of each row are on disk. `--variant carved` is the engine's own
 crop, cut to the row's ink; `--variant strip` is the plain rectangle of the
-band. A historical-hand TrOCR reads the carved crop at CER 0.892 and the strip
-at 0.338, so a second opinion is worth measuring on the strip:
+band. A historical-hand TrOCR reads the carved crop at CER 0.609 and the strip
+at 0.567, so a second opinion is worth measuring on the strip:
 
     .venv-htr/bin/python scripts/read_bands.py --bands DIR --out sidecar.json \
         --variant strip --refine 64

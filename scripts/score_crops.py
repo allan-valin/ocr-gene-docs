@@ -101,18 +101,19 @@ def main() -> None:
     print(f"  engine          CER {engine:.3f} mean, {mid('cer_engine'):.3f} median")
     won = sum(1 for r in rows if r["cer_second"] < r["cer_engine"])
     print(f"  the second reading is closer on {won} of {len(rows)} rows")
-    got = reached(rows, known_names())
+    known_hit = reached(rows, known_names())
     print(f"  it spells a name the archive knows, where the engine's reading "
-          f"does not, on {got} of {len(rows)} rows")
+          f"does not, on {known_hit} of {len(rows)} rows")
     # per page, because the number this is being compared with was taken on
     # one page and a mean over six hides which hand it was taken on
     per: dict[str, list] = {}
     for r in rows:
         per.setdefault(r["source"], []).append(r)
-    for src, got in sorted(per.items()):
-        s2 = sum(r["cer_second"] for r in got) / len(got)
-        e2 = sum(r["cer_engine"] for r in got) / len(got)
-        print(f"    {src:24} {len(got):>4} rows  second {s2:.3f}  engine {e2:.3f}")
+    for src, page_rows in sorted(per.items()):
+        s2 = sum(r["cer_second"] for r in page_rows) / len(page_rows)
+        e2 = sum(r["cer_engine"] for r in page_rows) / len(page_rows)
+        print(f"    {src:24} {len(page_rows):>4} rows  "
+              f"second {s2:.3f}  engine {e2:.3f}")
     for r in sorted(rows, key=lambda r: r["cer_second"])[:args.show]:
         print(f"     {r['label']!r} -> {r['second']!r} "
               f"(engine {r['engine']!r})")
@@ -123,7 +124,8 @@ def main() -> None:
              "cer_second": round(second, 3), "cer_engine": round(engine, 3),
              "median_second": round(mid("cer_second"), 3),
              "median_engine": round(mid("cer_engine"), 3),
-             "second_closer": won, "reached_a_known_name": got}, indent=2))
+             "second_closer": won,
+             "reached_a_known_name": known_hit}, indent=2))
 
 
 if __name__ == "__main__":

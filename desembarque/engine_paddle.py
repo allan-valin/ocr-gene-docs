@@ -483,9 +483,11 @@ def carved_crops(im, geo, margin: int = INK_MARGIN, sink: dict | None = None
 
     `sink`, when given, keeps both pictures of every band it cuts, by band
     index: the carved crop the recogniser is handed, and the plain rectangle.
-    They are not read alike -- a historical-hand TrOCR reads the carved crop of
-    a cursive name at CER 0.892 and the plain band at 0.338 -- so anything
-    measuring a second recogniser needs to say which it fed it.
+    They are not read alike -- the carved crop keeps 71% of the band's height
+    at the median, trimmed to the ink, and a historical-hand TrOCR reads it at
+    CER 0.609 where it reads the plain band at 0.567 (2026-09-04, 152 labelled
+    rows) -- so anything measuring a second recogniser has to say which of them
+    it fed it.
     """
     import numpy as np
     from PIL import Image
@@ -722,9 +724,9 @@ class PaddleEngine:
         # the crop function touches leaves both pictures of itself behind,
         # keyed by band index: the carved crop the recogniser was handed, and
         # the plain rectangle of the same band. A second recogniser reads the
-        # carved crop of a cursive name at CER 0.892 and the plain band at
-        # 0.338, so a second opinion measured on the carved crop measures the
-        # carving. Keyed rather than collected in order, because a page is read
+        # carved crop of a cursive name at CER 0.609 and the plain band at
+        # 0.567, so a measurement of one has to say which it was given. Keyed
+        # rather than collected in order, because a page is read
         # more than once — the render fallback, the looser second reading — and
         # positional pairing across those passes is what made the first
         # second-opinion run unfair.
