@@ -800,13 +800,38 @@ fifths of them repetition marks.
 But refusing is not fairness: it leaves the targets read twice and the
 competitors not.
 
-**What settles it, and it is now one flag.** `export_bands.py --write-records`
+### It was settled the same day, and the answer did not move
+
+The fair run finished at 13:55: `data/freshcache` holds the fifteen dossiers as
+the same pass read them, so the sidecar and the index are one reading — 1,787
+of 1,865 rows paired, and `--second-bands` refused **21**, which is 1.2% where
+the stale index refused 42%.
+
+| over the refreshed cache | top 5 | top 10 | top 20 | with the crossing named |
+|---|---|---|---|---|
+| the index as it is | 87 | 97 | 105 | 118 / 123 / 129 |
+| second reading, as a reading | 93 | 105 | 113 | 115 / 119 / 126 |
+| second reading, with the guesses | **91** | **104** | **111** | 118 / 123 / 129 |
+
+**The same three rows as the biased run, to the name.** So the bias was real
+and it was not what was carrying the result: a second reading of the ink,
+counted with the guesses, finds four to seven more people of 138 and costs
+nothing to anybody who names the ship. Counted as a reading it finds two more
+still and loses three when the crossing is named, which is the trade the
+stroke spellings make in the same edit-distance pass, and it is not worth
+making.
+
+**So it is worth shipping, as a guess.** What that costs: the second reading is
+2 seconds a row on this machine against the engine's own ~1.5, so it belongs
+in the offline batch and probably only on the rows the check flags — that
+sizing is the open question, not whether the reading is worth having.
+
+**What settled it, and it is now one flag.** `export_bands.py --write-records`
 writes what it read as it cuts, so the pass that produces the crops also
 produces a corpus that agrees with them. Copy the cache, write the fifteen
 refreshed records over the copy, point the bench at that, and the same three
-rows of the table above mean what they say. Until then the honest statement is:
-*counted as a guess it is worth somewhere between nothing and seven names of
-138, measured with the odds in its favour.*
+rows of the table above mean what they say. That run has now happened, and the section above is its
+result.
 
 ---
 

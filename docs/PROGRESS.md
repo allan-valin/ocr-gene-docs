@@ -8,6 +8,14 @@ and next actions.
 
 ## 2026-09-04 — the labels were wrong, and that came first
 
+**Where things stand at the end of the day.** Tree clean, 742 Python
+assertions green, 23 commits, nothing pushed. Nothing is running: the engine
+pass and the second reading both finished (`data/bands-fair`,
+`data/side-fair.json`, `data/freshcache`, and their logs `data/export-fair.log`
+and `data/read-fair.log`). The second opinion is answered and worth shipping as
+a guess; the biggest thing on the list is a decision, not a measurement — see
+*Start here next time*.
+
 The day's list was the three steps left on the second opinion and the training
 set. Doing the first one turned up something that had to be fixed before any
 of the rest meant anything: **the labelled set was partly mislabelled**, and so
@@ -67,16 +75,20 @@ was the bench's idea of which row each hand-read name sits on.
   **87/97/105 → 90/103/110** by name alone and costs nothing when the crossing
   is named. It reaches a name the archive knows, where the engine's reading
   reaches none, on 30 of 152 rows.
-* **And it is still not fair, in a new way.** The sidecar is keyed to the
-  reading taken when the crops were cut; the index holds whatever each dossier
-  was last read as, and today's reading agrees with the stored one on **100% of
-  the hand-read pages and 58% of the rest**. The targets are read twice more
-  reliably than their competitors — the 28% bias wearing another hat, and it
-  runs in favour of the number above. `--second-bands` refuses the rows whose
-  readings disagree, 97 of 1,213 — it compares the reading against the tail of
-  the indexed text as well, since a row written with a repetition mark is
-  indexed as the words above it followed by its own, and without that it
-  refused 486. A guard, not fairness. `export_bands.py --write-records` closes it in one pass next time.
+* **It was measured unfairly first, then fairly, and the answer did not move.**
+  The sidecar is keyed to the reading taken when the crops were cut; the index
+  held whatever each dossier was last read as, and today's reading agrees with
+  the stored one on **100% of the hand-read pages and 58% of the rest** — the
+  targets read twice more reliably than their competitors, the 28% bias wearing
+  another hat, and running in favour of the gain. So the subcorpus was read
+  again with `--write-records`, which writes the reading beside the crops
+  (`data/freshcache`), and the whole thing was run over that: 1,787 of 1,865
+  rows paired, 21 refused where the stale index refused 42%, and **the same
+  three rows to the name**. `--second-bands` is what refuses a row whose two
+  readings disagree; it compares the reading against the tail of the indexed
+  text as well, since a row written with a repetition mark is indexed as the
+  words above it followed by its own, and without that it refused 486 instead
+  of 97. `export_bands.py --write-records` closes it in one pass next time.
 
 * **155 labelled crops are not enough to train on, and that is now measured.**
   With the crops right and the labels right, `spike_finetune.py` was asked the
@@ -128,34 +140,34 @@ was the bench's idea of which row each hand-read name sits on.
    through untouched (T4), and the schema stamps are unchanged, so nothing
    downstream thinks it happened by itself.
 
-1. **Finish the fair run — the reading was started at 11:36 on 2026-09-04 and
-   takes about two and a half hours, so it is very likely done.** The engine
-   pass is already finished: `data/bands-fair` holds the crops and
-   `data/freshcache` is a copy of the whole corpus cache with the fifteen
-   dossiers rewritten as they were read, and **its rows agree with the crops on
-   1,865 of 1,865** — the pairing gap that spoils the number is closed by
-   construction there. The reading writes `data/side-fair.json`; its log is
-   `data/read-fair.log` and its pid `data/read-fair.pid`. It checkpoints per
-   page and resumes, so a killed run costs one page. Then all that is left is:
+1. **Ship the second reading as a guess.** The fair run finished at 13:55 and
+   answered it: over `data/freshcache`, where the sidecar and the index are the
+   same reading (1,787 of 1,865 rows paired, 21 refused against the stale
+   index's 42%), a second reading counted with the guesses is worth
+   **87/97/105 → 91/104/111** by name alone and costs nothing when the crossing
+   is named — the same three rows as the biased run, to the name. Counted as a
+   *reading* it is 93/105/113 and loses three when the crossing is named, which
+   is the stroke spellings' trade and not worth making.
+
+   What is left is not the measurement, it is the plumbing: the second reading
+   is ~2 s a row (`Riksarkivet/trocr-base-handwritten-hist-swe-2`, plain band
+   crop, `--refine 64`), so it belongs in the offline batch and probably only
+   on the rows the check flags. Sizing that is the open question. Everything
+   needed to redo the numbers is on disk: `data/bands-fair` (crops),
+   `data/side-fair.json` (the second reading), `data/freshcache` (the corpus
+   with those fifteen dossiers as they were read), and
 
    ```sh
-   # the same line resumes the reading if it was interrupted
-   .venv-htr/bin/python scripts/read_bands.py --bands data/bands-fair \\
-       --out data/side-fair.json --variant strip --refine 64
-   .venv/bin/python scripts/bench_search.py --matrix --cache data/freshcache \\
-       --second-opinion data/side-fair.json --second-bands data/bands-fair \\
+   .venv/bin/python scripts/bench_search.py --matrix --cache data/freshcache \
+       --second-opinion data/side-fair.json --second-bands data/bands-fair \
        [--second-as-guess]
    ```
 
-   `--second-bands` should now refuse almost nothing, and those three rows
-   finally mean what they say. One caveat about that copy: it was written
-   before `--write-records` learned to refresh a page's geometry as well as its
-   rows, so its grids are August's beside this morning's readings. The bench
-   never looks at geometry — but do not cut a crop from `data/freshcache`, and
-   a re-run of the export now writes both correctly. Today's answer, measured with the odds in its
-   favour, was 87/97/105 → 91/104/111 by name alone counted as a guess, and
-   93/105/113 counted as a reading at the cost of three names when the crossing
-   is named. **If the fair run says the same thing, ship it as a guess.**
+   One caveat about that copy: it was written before `--write-records` learned
+   to refresh a page's geometry as well as its rows, so its grids are August's
+   beside this morning's readings. The bench never looks at geometry — but do
+   not cut a crop from `data/freshcache`, and a re-run of the export now writes
+   both correctly.
 2. **Grow the labelled set**, which is the only thing standing between here
    and an archive-trained recogniser. `training_set.py --records` harvests
    every correction in the corpus and there are four; the set is otherwise the
