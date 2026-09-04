@@ -110,6 +110,24 @@ was the bench's idea of which row each hand-read name sits on.
 
 ### Start here next time, in order
 
+0. **Read the corpus again — this is the biggest thing on the list and it is
+   Allan's to say yes to.** Fifteen dossiers read again gained 565 rows
+   carrying a name, and it costs half an hour of engine per fifteen, so the
+   whole corpus is somewhere around eleven hours of background pass. It writes
+   into a copy and cannot touch what is there:
+
+   ```sh
+   cp -r data/transcriptions data/reread          # copy, never hardlink
+   .venv-ocr/bin/python scripts/export_bands.py --records data/transcriptions \
+       --out data/reread-index --write-records data/reread --no-crops
+   ```
+
+   Then compare `data/reread` with `data/transcriptions` — rows carrying a
+   name, and `bench_search.py --matrix --cache data/reread` — and if it holds
+   up, that copy becomes the corpus. Rows anybody typed, chose or ticked come
+   through untouched (T4), and the schema stamps are unchanged, so nothing
+   downstream thinks it happened by itself.
+
 1. **Finish the fair run — the reading was started at 11:36 on 2026-09-04 and
    takes about two and a half hours, so it is very likely done.** The engine
    pass is already finished: `data/bands-fair` holds the crops and
