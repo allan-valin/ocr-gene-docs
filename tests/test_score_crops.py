@@ -34,3 +34,15 @@ def test_a_row_the_sidecar_never_read_is_not_scored_as_empty():
 def test_a_label_from_a_set_that_cannot_be_joined_is_skipped():
     assert scored([{"label": "Maria", "engine": "Maria",
                     "image": "images/abc_2_4.png"}], SAID) == []
+
+
+def test_a_word_only_the_second_reading_spells_is_counted():
+    """CER says how close a reading is; this says whether it reached a name
+    the archive knows and the engine's reading did not, which is the only way
+    a second opinion can make somebody findable."""
+    found = runpy.run_path(str(ROOT / "scripts" / "score_crops.py"))["reached"]
+    known = {"CANTADORE", "MARIA"}
+    rows = [{"second": "Guiso Cantadore", "engine": "Guudo Camtadore"},
+            {"second": "Maria", "engine": "Maria"},
+            {"second": "nothing here", "engine": "nor here"}]
+    assert found(rows, known) == 1

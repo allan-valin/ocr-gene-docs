@@ -22,7 +22,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "scripts")]
 
+from desembarque.gazetteer import Names, fold, spoken_names   # noqa: E402
 from spike_ocr import cer                              # noqa: E402
+
+
+def known_names() -> set[str]:
+    """The names the archive has read, and the ones its languages carry."""
+    names = Names.load(ROOT / "data" / "names.json")
+    out = {fold(n) for n in names.counts}
+    out |= {fold(n) for n in spoken_names(ROOT / "data" / "language_names.json")}
+    return out
 
 
 def scored(labels: list[dict], said: dict) -> list[dict]:
@@ -40,6 +49,24 @@ def scored(labels: list[dict], said: dict) -> list[dict]:
                     "source": row.get("source") or "",
                     "cer_second": cer(row["label"], text),
                     "cer_engine": cer(row["label"], row.get("engine") or "")})
+    return out
+
+
+def reached(rows: list[dict], known: set[str]) -> int:
+    """How many rows the second reading spells a known name on and the engine's
+    does not.
+
+    Character error ranks recognisers; this is the only thing a second reading
+    can do for a searcher — put a word on the row that the archive's own names
+    or the language lists carry, where the engine's reading has none. It is
+    counted per row and not per word, because a row is what a search returns.
+    """
+    out = 0
+    for r in rows:
+        mine = {fold(w) for w in (r["second"] or "").split()} & known
+        theirs = {fold(w) for w in (r["engine"] or "").split()} & known
+        if mine - theirs:
+            out += 1
     return out
 
 
@@ -74,6 +101,9 @@ def main() -> None:
     print(f"  engine          CER {engine:.3f} mean, {mid('cer_engine'):.3f} median")
     won = sum(1 for r in rows if r["cer_second"] < r["cer_engine"])
     print(f"  the second reading is closer on {won} of {len(rows)} rows")
+    got = reached(rows, known_names())
+    print(f"  it spells a name the archive knows, where the engine's reading "
+          f"does not, on {got} of {len(rows)} rows")
     # per page, because the number this is being compared with was taken on
     # one page and a mean over six hides which hand it was taken on
     per: dict[str, list] = {}
@@ -93,7 +123,7 @@ def main() -> None:
              "cer_second": round(second, 3), "cer_engine": round(engine, 3),
              "median_second": round(mid("cer_second"), 3),
              "median_engine": round(mid("cer_engine"), 3),
-             "second_closer": won}, indent=2))
+             "second_closer": won, "reached_a_known_name": got}, indent=2))
 
 
 if __name__ == "__main__":
