@@ -148,7 +148,11 @@ was the bench's idea of which row each hand-read name sits on.
    ```
 
    `--second-bands` should now refuse almost nothing, and those three rows
-   finally mean what they say. Today's answer, measured with the odds in its
+   finally mean what they say. One caveat about that copy: it was written
+   before `--write-records` learned to refresh a page's geometry as well as its
+   rows, so its grids are August's beside this morning's readings. The bench
+   never looks at geometry — but do not cut a crop from `data/freshcache`, and
+   a re-run of the export now writes both correctly. Today's answer, measured with the odds in its
    favour, was 87/97/105 → 91/104/111 by name alone counted as a guess, and
    93/105/113 counted as a reading at the cost of three names when the crossing
    is named. **If the fair run says the same thing, ship it as a guess.**
