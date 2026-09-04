@@ -116,7 +116,8 @@ def test_the_training_set_pairs_a_name_with_the_band_it_was_read_from():
     bands = [{"n": 1, "engine": "cabecalho"},
              {"n": 2, "engine": "Guudo Camtadore"},
              {"n": 3, "engine": "Emma Comtadore"}]
-    got = mod.labels_for_page(bands, ["GUIDO CONTADORE", "EMMA CONTADORE"])
+    got = mod.labels_for_page(
+        bands, {"names": ["GUIDO CONTADORE", "EMMA CONTADORE"]})
     assert got == {2: "GUIDO CONTADORE", 3: "EMMA CONTADORE"}
 
 
@@ -131,5 +132,6 @@ def test_the_training_set_takes_row_numbers_a_person_wrote_as_given():
     spec.loader.exec_module(mod)
 
     bands = [{"n": 1, "engine": "x"}, {"n": 2, "engine": "y"}]
-    assert mod.labels_for_page(bands, {"2": "Jose Fernandes", "9": "off page"}) \
+    assert mod.labels_for_page(
+        bands, {"rows": {"2": "Jose Fernandes", "9": "off page"}}) \
         == {2: "Jose Fernandes"}
