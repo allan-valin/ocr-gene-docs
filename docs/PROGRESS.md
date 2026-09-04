@@ -6,6 +6,57 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-09-04 — the labels were wrong, and that came first
+
+The day's list was the three steps left on the second opinion and the training
+set. Doing the first one turned up something that had to be fixed before any
+of the rest meant anything: **the labelled set was partly mislabelled**, and so
+was the bench's idea of which row each hand-read name sits on.
+
+**Shipped.**
+
+* **Both pictures of every row.** The engine's crop function keeps the carved
+  crop *and* the plain band rectangle when a caller asks, keyed by band index
+  rather than collected in order — a page is read more than once (the render
+  fallback, the looser second reading) and pairing by position across those
+  passes hands a name somebody else's ink. `export_bands.py` writes both,
+  `read_bands.py` takes `--variant strip --refine 64`, and `bench_search.py`
+  now understands a sidecar keyed by row number, which is what `read_bands.py`
+  has always written and what its 82% coverage depends on.
+* **The corrections, without keeping anything.** The plan was to save the crop
+  when somebody retypes a row. Not needed: since T4 every page stores the
+  geometry its rows were cut from, so `desembarque.bandcrops` cuts the same
+  ink again — byte-for-byte the engine's own crop, held to it by a test — and
+  `training_set.py --records` harvests every correction in the corpus,
+  including ones made months ago. There are four today, all made by choosing
+  an offered reading rather than typing, and cutting their crops immediately
+  earned its keep: one of them labels ink that reads *Raymundo Cassaudii* as
+  *Nayomgo Cassaudi*. A person's word is not always right, so the set records
+  how each label was made.
+* **Each name on the row it was written on.** Two faults, and each cure was the
+  other's poison. `first_row` goes stale — BS_ENT_014541-p2 records 4 because
+  the comb that read it in July counted the header bands — so counting from it
+  labels every crop with the name three rows above. A single best-fit offset
+  fixes that and then drifts past the first row carrying no reading:
+  BS_ENT_015061-p6 had 42 rows scoring CER above 1 for the engine's own
+  reading, which is the signature of a mislabelled set and not of a bad
+  recogniser. `truthset.aligned` places a run monotonically, paying for each
+  mismatch and free to skip a row nobody wrote a name against. That page now
+  reads 0.506 against the engine's 0.349. **Every number taken on the training
+  set before today was taken on labels that were partly somebody else's.**
+* **One pairing in the repository rather than three.** The menu bench, the
+  search bench and the training set now pair through `truthset.pairs`. The
+  matrix is unmoved — 87/97/105 by name alone, 118/123/129 with the crossing
+  named — over 138 hand-read names rather than 142: four sit on no row the
+  engine read, and counting them against a neighbour's row was the only way
+  they were ever counted.
+* **An instrument for the reading itself.** `score_crops.py` joins a sidecar to
+  the labelled set by document, page and row and reports character error for
+  both readings of the same rows, the second recogniser's beside the engine's.
+  `bench_search.py --matrix` says whether a second opinion makes anybody
+  findable; it never said whether the second recogniser read the ink at all,
+  which is exactly what went wrong last week.
+
 ## 2026-09-03 — the day handwriting became the only question
 
 Allan settled the open question at the top of the day — handwriting is the

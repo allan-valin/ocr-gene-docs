@@ -625,6 +625,51 @@ should be ignored for the same reason.
 
 ---
 
+## The labels were partly somebody else's (2026-09-04)
+
+Fixing the crops turned up something underneath them. A hand-read page comes
+in two shapes: `rows`, keyed by the row numbers somebody wrote names against,
+and `names`, a run read straight down the column. The run has to be put
+against the rows the page was cut into, and every instrument here did it a
+different way.
+
+* **Counting from `first_row` goes stale.** `data/truth/BS_ENT_014541-p2.json`
+  records 4, because the comb that read it in July put those six passengers on
+  rows four to nine; measured from the printing they are rows one to six. The
+  menu bench counted from it and scored six names against the rows below them.
+* **A single best-fit offset drifts.** `bench_rec.align` finds the offset that
+  fits best, which cures the stale number and then walks off the first row that
+  carries no reading. BS_ENT_015061-p6 has such rows, and its 42 truth names
+  were scoring **CER above 1 for the engine's own stored reading** — a reading
+  cannot be worse than empty, so that number was never about the recogniser.
+  The search bench and the training set both used this.
+
+`desembarque.truthset.aligned` places a run monotonically: name by name, in
+order, paying for each mismatch and free to skip a row nobody wrote a name
+against, which is what a person comparing the two lists does. Skipping a row is
+free because a page is mostly rows the truth says nothing about; skipping a
+*name* costs a whole name, because every name in the run is on the page
+somewhere. The menu bench, the search bench and the training set all pair
+through it now, so there is one pairing in the repository rather than three.
+
+What moved:
+
+| | before | after |
+|---|---|---|
+| BS_ENT_015061-p6, engine CER over 42 rows | 1.048 | **0.349** |
+| BS_ENT_014541-p2, rows in the labelled set | 3 | **6** |
+| hand-read names the search bench scores | 142 | 138 |
+| labelled crops | 152 | **155** |
+
+The four names the search bench lost sit on no row the engine read; counting
+them against a neighbour's row was the only way they were ever counted. The
+matrix itself is unmoved at 87/97/105 by name alone and 118/123/129 with the
+crossing named, so the published retrieval numbers stand — but **every CER
+taken on the training set before today was taken on labels that were partly
+somebody else's**, including the fine-tune spike's `before`.
+
+---
+
 ## What to do next, after 2026-09-03
 
 Today closed a direction, so this says plainly what is left.
