@@ -96,3 +96,17 @@ def test_a_row_the_export_read_the_same_way_is_paired(tmp_path):
                                             "engine": "Edwina Beunett"}]})
     add_second_opinion(rows, side, bands=bands)
     assert rows[0]["alts"] == ["Edwina Bennett"]
+
+
+def test_a_repetition_mark_is_not_a_stale_row(tmp_path):
+    """The index carries what a row is searched by, and for a row written with
+    a repetition mark that is the words above it followed by its own: `"
+    Maria` is indexed as `Martinez Maria`. The export carries the reading. They
+    are the same row and the guard has to say so."""
+    rows = [{"doc": "abc", "page": 2, "row": 4, "text": "Martinez Maria"}]
+    side = sidecar(tmp_path, {"by": "row",
+                              "read": {"abc": {"2": {"4": "Martimez Maria"}}}})
+    bands = bands_dir(tmp_path, {"abc/2": [{"n": 4, "file": "x.png",
+                                            "engine": "Maria"}]})
+    add_second_opinion(rows, side, bands=bands)
+    assert rows[0]["alts"] == ["Martimez Maria"]

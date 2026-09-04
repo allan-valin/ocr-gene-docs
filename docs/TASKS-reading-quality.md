@@ -739,19 +739,19 @@ challenger best. That has now been true of six pretrained models.
 into the index beside the engine's own reading, and the matrix run again over
 the whole corpus, 138 hand-read names against 32,322 rows:
 
-| | top 5 | top 10 | top 20 |
-|---|---|---|---|
-| the index as it ships | 87 | 97 | 105 |
-| second reading, as a reading | **92** | **104** | **112** |
-| second reading, counted with the guesses | 90 | 103 | 110 |
+| | top 5 | top 10 | top 20 | with the crossing named |
+|---|---|---|---|---|
+| the index as it ships | 87 | 97 | 105 | 118 / 123 / 129 |
+| second reading, as a reading | **93** | **105** | **113** | 115 / 119 / 126 |
+| second reading, counted with the guesses | 91 | 104 | 111 | 118 / 123 / 129 |
 
-Naming the crossing: 118/123/129 unmoved when it is counted as a guess, and
-117/123/128 when it is counted as a reading — the same small regression, in
-the same pass, as the stroke spellings, and for the same reason. **Counted
-with the guesses it gains three to six names and costs nothing**, which is
-where it belongs: a recogniser worse on average than the one that ships is
-weaker evidence, and weighting it below every reading keeps it out of the pass
-that runs when somebody names the ship.
+Counted as a reading it finds six to eight more names typed alone and **costs
+three to four when the crossing is named** — the same trade, through the same
+edit-distance pass, as the stroke spellings. **Counted with the guesses it
+gains four to seven and costs nothing**, which is where it belongs: a
+recogniser worse on average than the one that ships is weaker evidence, so it
+is weighted below every reading and kept out of the pass that runs when
+somebody names the ship.
 
 On the reading itself: it differs from the engine on every row, is closer to
 the truth on 35 of 152, and on **30 of 152 it spells a name the archive has
@@ -771,19 +771,24 @@ the rest**. Whole dossiers now read as names where the record holds `''`, `w`,
 That is the bias of the 28%-coverage run wearing another hat — the rows being
 searched for keep their second reading, the rows competing with them lose it —
 and it runs in favour of the gain above. `--second-bands` refuses a row whose
-two readings disagree (486 of 1,213 here) rather than pasting a reading onto a
-row that no longer holds the same name; refusing them costs one name of the
-twenty at rank twenty, so the stale pastings were noise rather than ruin. But
-refusing is not fairness: it leaves the targets read twice and the competitors
-not.
+two readings disagree — 97 of 1,213 — rather than pasting a reading onto a row
+that no longer holds the same name. The comparison has to know what it is
+comparing: the export carries what the recogniser said and the index carries
+what the row is *searched by*, which for a row written with a repetition mark
+is the words above it followed by its own, so the reading is tried against the
+tail of the indexed text as well. Before that it refused 486 rows, four
+fifths of them repetition marks.
+
+But refusing is not fairness: it leaves the targets read twice and the
+competitors not.
 
 **What settles it, and it is now one flag.** `export_bands.py --write-records`
 writes what it read as it cuts, so the pass that produces the crops also
 produces a corpus that agrees with them. Copy the cache, write the fifteen
 refreshed records over the copy, point the bench at that, and the same three
 rows of the table above mean what they say. Until then the honest statement is:
-*counted as a guess it is worth somewhere between nothing and six names of 138,
-measured with the odds in its favour.*
+*counted as a guess it is worth somewhere between nothing and seven names of
+138, measured with the odds in its favour.*
 
 ---
 

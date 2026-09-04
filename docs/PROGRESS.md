@@ -73,8 +73,10 @@ was the bench's idea of which row each hand-read name sits on.
   the hand-read pages and 58% of the rest**. The targets are read twice more
   reliably than their competitors — the 28% bias wearing another hat, and it
   runs in favour of the number above. `--second-bands` refuses the rows whose
-  readings disagree (486 of 1,213), which costs one name; that is a guard, not
-  fairness. `export_bands.py --write-records` closes it in one pass next time.
+  readings disagree, 97 of 1,213 — it compares the reading against the tail of
+  the indexed text as well, since a row written with a repetition mark is
+  indexed as the words above it followed by its own, and without that it
+  refused 486. A guard, not fairness. `export_bands.py --write-records` closes it in one pass next time.
 
 * **155 labelled crops are not enough to train on, and that is now measured.**
   With the crops right and the labels right, `spike_finetune.py` was asked the

@@ -58,9 +58,24 @@ def exported_readings(bands: Path) -> dict[tuple, str]:
     return out
 
 
-def same_row(a: str, b: str, floor: float = 0.8) -> bool:
-    """Whether two readings are of the same ink, near enough to pair on."""
-    return difflib.SequenceMatcher(None, fold(a), fold(b)).ratio() >= floor
+def same_row(reading: str, text: str, floor: float = 0.8) -> bool:
+    """Whether an exported reading and an indexed row are the same ink.
+
+    Not a plain comparison, because the two are not the same kind of string.
+    The export carries what the recogniser said; the index carries what the row
+    is *searched by*, and for a row written with a repetition mark that is the
+    words above it followed by its own — `" Maria` is indexed as `Martinez
+    Maria`. So the reading is also tried against the tail of the indexed text,
+    word for word, and the better of the two decides.
+    """
+    a, b = fold(reading), fold(text)
+    best = difflib.SequenceMatcher(None, a, b).ratio()
+    words = b.split()
+    mine = a.split()
+    if len(words) > len(mine) >= 1:
+        tail = " ".join(words[-len(mine):])
+        best = max(best, difflib.SequenceMatcher(None, a, tail).ratio())
+    return best >= floor
 
 
 def add_second_opinion(rows, path: Path, as_guess: bool = False,
