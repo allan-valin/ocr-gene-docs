@@ -102,26 +102,30 @@ was the bench's idea of which row each hand-read name sits on.
 
 ### Start here next time, in order
 
-1. **Finish the fair run — it was started at 11:09 on 2026-09-04 and is
-   probably still going or done.** The engine pass is writing to
-   `data/bands-fair` and refreshing `data/freshcache` (a copy of the whole
-   corpus cache, so the competitors are still in it); its log is
-   `data/export-fair.log` and its pid is in `data/export-fair.pid`. It
-   checkpoints per page and resumes, so a killed run costs one page. When it
-   ends:
+1. **Finish the fair run — the reading was started at 11:36 on 2026-09-04 and
+   takes about two and a half hours, so it is very likely done.** The engine
+   pass is already finished: `data/bands-fair` holds the crops and
+   `data/freshcache` is a copy of the whole corpus cache with the fifteen
+   dossiers rewritten as they were read, and **its rows agree with the crops on
+   1,865 of 1,865** — the pairing gap that spoils the number is closed by
+   construction there. The reading writes `data/side-fair.json`; its log is
+   `data/read-fair.log` and its pid `data/read-fair.pid`. It checkpoints per
+   page and resumes, so a killed run costs one page. Then all that is left is:
 
    ```sh
-   .venv-htr/bin/python scripts/read_bands.py --bands data/bands-fair \
-       --out data/side-fair.json --variant strip --refine 64        # ~2.5 h
-   .venv/bin/python scripts/bench_search.py --matrix --cache data/freshcache \
-       --second-opinion data/side-fair.json --second-bands data/bands-fair \
+   # the same line resumes the reading if it was interrupted
+   .venv-htr/bin/python scripts/read_bands.py --bands data/bands-fair \\
+       --out data/side-fair.json --variant strip --refine 64
+   .venv/bin/python scripts/bench_search.py --matrix --cache data/freshcache \\
+       --second-opinion data/side-fair.json --second-bands data/bands-fair \\
        [--second-as-guess]
    ```
 
-   With the index and the sidecar taken from the same reading, `--second-bands`
-   should refuse almost nothing, and the three rows of that table finally mean
-   what they say. Today's answer, measured with the odds in its favour, was
-   87/97/105 → 90/103/110 by name alone counted as a guess.
+   `--second-bands` should now refuse almost nothing, and those three rows
+   finally mean what they say. Today's answer, measured with the odds in its
+   favour, was 87/97/105 → 91/104/111 by name alone counted as a guess, and
+   93/105/113 counted as a reading at the cost of three names when the crossing
+   is named. **If the fair run says the same thing, ship it as a guess.**
 2. **Grow the labelled set**, which is the only thing standing between here
    and an archive-trained recogniser. `training_set.py --records` harvests
    every correction in the corpus and there are four; the set is otherwise the
@@ -225,9 +229,9 @@ everything below is cheap to rebuild and all of it checkpoints and resumes.
 # hand-read page, then the rest in hash order until there are fifteen
 .venv/bin/python scripts/subcorpus.py --out data/subcache
 .venv-ocr/bin/python scripts/export_bands.py --records data/subcache --out <bands> \
-    --write-records <freshcache>       # cut the crops, and keep what was read
+    --write-records <freshcache>       # ~30 min: crops, and what was read
 .venv-htr/bin/python scripts/read_bands.py --bands <bands> --out <sidecar> \
-    --variant strip --refine 64        # the plain band, which TrOCR can read
+    --variant strip --refine 64        # ~2.5 h, and the long pole of the day
 .venv/bin/python scripts/training_set.py --bands <bands> \
     --records data/transcriptions --out <trainset> --variant strip
 .venv/bin/python scripts/score_crops.py --sidecar <sidecar> --trainset <trainset>

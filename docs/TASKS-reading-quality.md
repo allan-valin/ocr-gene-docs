@@ -712,9 +712,10 @@ afternoon of spikes.
 The plumbing was the easy half: `export_bands.py` writes the carved crop and
 the plain band of every row, `read_bands.py --variant strip --refine 64` reads
 whichever is asked for, and the bench understands a sidecar keyed by row
-number. The subcorpus — 15 dossiers, 70 pages, 1,865 rows with a reading — was
-cut and read again by `Riksarkivet/trocr-base-handwritten-hist-swe-2`, which
-is 2.5 hours of engine and 2.5 hours of TrOCR on this machine.
+number. The subcorpus — 15 dossiers, 70 pages, 1,865 rows with a reading, chosen by
+`scripts/subcorpus.py` — was cut and read again by
+`Riksarkivet/trocr-base-handwritten-hist-swe-2`: half an hour of engine and two
+and a half hours of TrOCR on this machine, both resumable.
 
 **The crops do differ, and by far less than last week's numbers said.** Over
 the 152 labelled rows, same model, same rows, same labels:
