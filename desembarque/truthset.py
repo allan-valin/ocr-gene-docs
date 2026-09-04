@@ -54,6 +54,66 @@ def pairs(truth: dict, rows: list[dict]) -> list[dict]:
     return out
 
 
+def aligned(readings: list[str], names: list[str]) -> dict[int, str]:
+    """Which reading each hand-read name belongs to, allowing skipped rows.
+
+    A run of names read straight down a page has to be put against the rows the
+    page was cut into, and two things go wrong at once. The stored `first_row`
+    goes stale — `data/truth/BS_ENT_014541-p2.json` says 4 because the comb
+    that read it in July counted the header bands, and measured from the
+    printing those passengers are rows one to six — so a stored offset labels
+    every row with the name three above it. And a page whose middle rows carry
+    no reading has gaps, so a single best-fit offset drifts past the first gap
+    and labels everything after it with the name above.
+
+    So the two lists are aligned the way two sequences are: monotonically, name
+    by name, paying for the mismatch and allowed to skip a row that nobody
+    wrote a name against. Skipping a row is free, since a page is mostly rows
+    the truth says nothing about; skipping a *name* costs a whole name, since
+    every name in the run is on the page somewhere.
+    """
+    if not readings or not names:
+        return {}
+    R, N = len(readings), len(names)
+    folded = [fold(r) for r in readings]
+    want = [fold(n) for n in names]
+
+    def cost(i: int, j: int) -> float:
+        if not folded[i]:
+            return 1.0
+        return 1.0 - difflib.SequenceMatcher(None, folded[i], want[j]).ratio()
+
+    # best[i][j]: the cheapest way to place the first j names among the first
+    # i rows. A name costs 1.0 unplaced, which is dearer than any mismatch.
+    big = float(N + R + 1)
+    best = [[big] * (N + 1) for _ in range(R + 1)]
+    back = [[None] * (N + 1) for _ in range(R + 1)]
+    for i in range(R + 1):
+        best[i][0] = 0.0
+    for i in range(1, R + 1):
+        for j in range(1, N + 1):
+            skip_row = best[i - 1][j]
+            take = best[i - 1][j - 1] + cost(i - 1, j - 1)
+            drop_name = best[i][j - 1] + 1.0
+            best[i][j] = min(skip_row, take, drop_name)
+            back[i][j] = ("row" if best[i][j] == skip_row else
+                          "take" if best[i][j] == take else "name")
+
+    out: dict[int, str] = {}
+    i, j = R, N
+    while i > 0 and j > 0:
+        step = back[i][j]
+        if step == "row":
+            i -= 1
+        elif step == "take":
+            out[i - 1] = names[j - 1]
+            i -= 1
+            j -= 1
+        else:
+            j -= 1
+    return out
+
+
 def word_pairs(truth: str, read: str) -> list[dict]:
     """The words of a truth name beside the words of the reading.
 

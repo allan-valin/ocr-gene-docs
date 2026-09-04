@@ -639,14 +639,29 @@ few names of 142. They are worth having and they are not the answer.
 which is what `spike_htr.py` concluded in August and what today's numbers
 confirm from the other side. The work that leads there, cheapest first:
 
-1. **Keep the corrections.** Every time somebody retypes a row on the review
-   screen, that is a labelled crop — the image the engine read and the name a
-   person says it is. The rows are already stored with `edits` and their
-   provenance (T4, T5); what is missing is the crop beside them.
-   `export_bands.py` already saves exactly the ink the engine read, keyed to
-   the row number, so this is a matter of keeping those crops for corrected
-   rows rather than throwing them away. Nothing else on this list is possible
-   without it, and it costs nothing to start.
+1. **Keep the corrections.** *Done 2026-09-04, and nothing is kept.* Every
+   time somebody retypes a row on the review screen that is a labelled crop —
+   the image the engine read and the name a person says it is — and the plan
+   here was to save the crop at the moment they type. That turned out to be
+   the expensive way round: since T4 every page stores the geometry its rows
+   were cut from, and a crop is a pure function of that geometry and the page
+   image, so it can be cut again whenever anybody asks. `desembarque.bandcrops`
+   does the cutting with the engine's own `carved_crops` and `band_boxes`, and
+   a unit test holds it to being byte-for-byte the crop the engine read —
+   a pair whose picture is the neighbouring row is a mislabelled pair.
+   `training_set.py --records` then harvests every correction in the corpus,
+   including ones made months ago, with nothing stored at save time and no
+   recogniser run.
+
+   There are **four** of them today, all made by choosing one of the offered
+   readings rather than typing. Cutting their crops immediately earned its
+   keep: the ink of one reads *Raymundo Cassaudii*, which is what somebody
+   typed on two other records of the same page, and the label on it says
+   *Nayomgo Cassaudi*. A chosen alternative is a person's word about the row
+   and it is not always right, so the set records **how** each label was
+   made — `typed`, `chosen`, `hand-read` — and a row merely marked verified is
+   not a label at all unless `--verified` asks for it, since the person may
+   have been checking another column.
 2. **Count what a training set would need.** 142 hand-read names exist today.
    Fine-tuning a TrOCR base on a few hundred crops of one archive's hands is
    the smallest experiment that could beat 0.205, and the honest first step is

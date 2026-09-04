@@ -101,3 +101,45 @@ def test_a_truth_page_may_name_the_rows_it_read_rather_than_run_from_the_first()
     got = bench.pairs(truth, rows)
     assert [(p["truth"], p["read"]) for p in got] == [
         ("José Fernandes", "Yosé Fernandes"), ("Maria Sanchez", "Mania Danchez")]
+
+
+# --- a run of hand-read names against the rows a page was cut into -----------
+#
+# Two things go wrong at once and each cure is the other's poison. The stored
+# `first_row` goes stale — BS_ENT_014541-p2 says 4 because the comb that read
+# it in July counted the header bands, and measured from the printing those
+# passengers are rows one to six — so pairing on it labels every crop with the
+# name three rows above. And a page whose middle rows carry no reading has gaps
+# — BS_ENT_015061-p6 — so a single best-fit offset drifts past the first gap
+# and labels every later crop with the name above it. Both were happening: the
+# first to the bench, the second to the training set, which is worse, because a
+# mislabelled pair teaches a recogniser the wrong name and no measurement of it
+# says so.
+
+
+def test_a_run_finds_its_place_when_the_stored_row_number_is_stale():
+    got = bench.aligned(["Gudo Camtadome", "Pgmia,lamtadie", "bmike Meesoo"],
+                        ["GUIDO CONTADORE", "EMMA CONTADORE", "EMILI MUESSO"])
+    assert got == {0: "GUIDO CONTADORE", 1: "EMMA CONTADORE",
+                   2: "EMILI MUESSO"}
+
+
+def test_a_run_skips_the_rows_that_carry_no_reading_of_their_own():
+    got = bench.aligned(["Palmira Ie Yesus", "Maria Yose de Yesus",
+                         "", "Ignez Marqnes"],
+                        ["Palmira de Jesus", "Maria Jose de Jesus",
+                         "Albertina Jorge Ferreira", "Ignez Marques"])
+    assert got[0] == "Palmira de Jesus"
+    assert got[1] == "Maria Jose de Jesus"
+    assert got[3] == "Ignez Marques", "the gap must not shift the rest"
+
+
+def test_a_run_that_starts_below_the_header_is_not_pulled_up_to_it():
+    got = bench.aligned(["Nome e Cognomes", "", "GUIDO Camtadore"],
+                        ["GUIDO CONTADORE"])
+    assert got == {2: "GUIDO CONTADORE"}
+
+
+def test_nothing_to_align_is_nothing():
+    assert bench.aligned([], ["A"]) == {}
+    assert bench.aligned(["a"], []) == {}

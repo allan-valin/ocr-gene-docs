@@ -87,3 +87,28 @@ def test_the_rows_of_a_page_read_like_an_exported_band_index():
                   {"n": 3, "page": 2, "name_raw": ""}])
     assert band_rows_of(rec, 2) == [{"n": 1, "engine": "MARTINEZ"},
                                     {"n": 2, "engine": "ROCA"}]
+
+
+def test_a_run_of_names_is_labelled_by_row_number_not_by_position():
+    """A page the engine cut into fewer bands has rows missing in the middle.
+    Aligning the run against what the engine said finds one offset and then
+    drifts past the gap, which puts a name on the row below it — on
+    BS_ENT_015061-p6 that scored 42 rows at CER above 1, both readings, which
+    is the signature of a mislabelled set rather than a bad recogniser."""
+    labels_for_page = ts["labels_for_page"]
+    band_rows = [{"n": 1, "engine": "Palmira Ie Yesus"},
+                 {"n": 2, "engine": "Maria Yose de Yesus"},
+                 # row 3 carries no reading and was never exported
+                 {"n": 4, "engine": "Ignez Marqnes"}]
+    truth = {"first_row": 1,
+             "names": ["Palmira de Jesus", "Maria Jose de Jesus",
+                       "Albertina Jorge Ferreira", "Ignez Marques"]}
+    assert labels_for_page(band_rows, truth) == {
+        1: "Palmira de Jesus", 2: "Maria Jose de Jesus", 4: "Ignez Marques"}
+
+
+def test_a_page_keyed_by_row_is_taken_as_it_is():
+    labels_for_page = ts["labels_for_page"]
+    band_rows = [{"n": 4, "engine": "x"}, {"n": 9, "engine": "y"}]
+    truth = {"rows": {"4": "Rossi Mario", "7": "not exported"}}
+    assert labels_for_page(band_rows, truth) == {4: "Rossi Mario"}

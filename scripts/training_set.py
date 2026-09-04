@@ -35,8 +35,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "scripts")]
 
-from bench_rec import align                           # noqa: E402
-from desembarque import bandcrops                     # noqa: E402
+from desembarque import bandcrops, truthset           # noqa: E402
 from desembarque.identity import cached_hash          # noqa: E402
 from page_geometry import page_image                  # noqa: E402
 
@@ -95,26 +94,28 @@ def band_rows_of(record: dict, page: int) -> list[dict]:
                   key=lambda r: r["n"])
 
 
-def labels_for_page(band_rows: list[dict], truth) -> dict[int, str]:
-    """Which band each hand-read name belongs to.
+def labels_for_page(band_rows: list[dict], truth: dict) -> dict[int, str]:
+    """Which row each hand-read name belongs to, by row number.
 
-    A truth file says either `rows` — the row numbers a person wrote the names
-    against, which need no guessing — or `names`, a run of them read straight
-    down the page. For the run, the block sits somewhere among the page's rows
-    and the engine's reading is beside it, so the offset is found the way the
-    recogniser bench finds it, on what the engine said.
+    Two shapes, because the pages come in two kinds. `rows` is keyed by the row
+    numbers somebody wrote the names against and is taken as it stands. `names`
+    is a run read straight down the page, and it is aligned to the rows rather
+    than counted from `first_row` or from a single best-fit offset: the stored
+    first row goes stale, and one offset drifts past the first row that carries
+    no reading. Both were happening, and on BS_ENT_015061-p6 the drift put 42
+    rows at CER above 1 for the engine and the second recogniser alike — the
+    signature of a mislabelled set, not of a bad recogniser. See
+    `desembarque.truthset.aligned`.
     """
     rows = sorted(band_rows, key=lambda r: r["n"])
-    if isinstance(truth, dict):
+    if truth.get("rows"):
         have = {r["n"] for r in rows}
-        return {int(n): name for n, name in truth.items()
-                if name and int(n) in have}
-    off = align([r["engine"] for r in rows], list(truth))
-    out: dict[int, str] = {}
-    for i, name in enumerate(truth):
-        if 0 <= off + i < len(rows):
-            out[rows[off + i]["n"]] = name
-    return out
+        return {int(n): name for n, name in truth["rows"].items()
+                if name and str(name).strip() and int(n) in have}
+    names = [n for n in (truth.get("names") or ()) if n and str(n).strip()]
+    placed = truthset.aligned([r["engine"] for r in rows], names)
+    return {rows[i]["n"]: name for i, name in placed.items()}
+
 
 
 def main() -> None:
@@ -171,8 +172,7 @@ def main() -> None:
             print(f"  {tf.name}: no crops exported for this page")
             continue
         at = {r["n"]: r for r in rows}
-        truth = d.get("rows") or d.get("names") or []
-        for n, name in labels_for_page(rows, truth).items():
+        for n, name in labels_for_page(rows, d).items():
             key = "strip" if args.variant == "strip" else "file"
             named = at[n].get(key) or at[n].get("file")
             src = args.bands / named

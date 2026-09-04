@@ -37,6 +37,7 @@ def scored(labels: list[dict], said: dict) -> list[dict]:
             continue
         out.append({"label": row["label"], "second": text,
                     "engine": row.get("engine") or "",
+                    "source": row.get("source") or "",
                     "cer_second": cer(row["label"], text),
                     "cer_engine": cer(row["label"], row.get("engine") or "")})
     return out
@@ -57,14 +58,31 @@ def main() -> None:
     if not rows:
         raise SystemExit("no labelled row was read by this sidecar")
 
+    def mid(key: str) -> float:
+        got = sorted(r[key] for r in rows)
+        return got[len(got) // 2]
+
+    # A mean over this set is pulled about by a handful of rows whose truth
+    # label is a word where the ink is a whole name, so both readings score
+    # above 1 on them; the median says what a typical row reads like and the
+    # mean is kept because every other number in the plan is one.
     second = sum(r["cer_second"] for r in rows) / len(rows)
     engine = sum(r["cer_engine"] for r in rows) / len(rows)
     print(f"{len(rows)} labelled rows read by {d.get('model')} "
           f"({d.get('variant', 'carved')} crop, refine {d.get('refine', 0)})")
-    print(f"  second opinion CER {second:.3f}")
-    print(f"  engine          CER {engine:.3f}")
+    print(f"  second opinion CER {second:.3f} mean, {mid('cer_second'):.3f} median")
+    print(f"  engine          CER {engine:.3f} mean, {mid('cer_engine'):.3f} median")
     won = sum(1 for r in rows if r["cer_second"] < r["cer_engine"])
     print(f"  the second reading is closer on {won} of {len(rows)} rows")
+    # per page, because the number this is being compared with was taken on
+    # one page and a mean over six hides which hand it was taken on
+    per: dict[str, list] = {}
+    for r in rows:
+        per.setdefault(r["source"], []).append(r)
+    for src, got in sorted(per.items()):
+        s2 = sum(r["cer_second"] for r in got) / len(got)
+        e2 = sum(r["cer_engine"] for r in got) / len(got)
+        print(f"    {src:24} {len(got):>4} rows  second {s2:.3f}  engine {e2:.3f}")
     for r in sorted(rows, key=lambda r: r["cer_second"])[:args.show]:
         print(f"     {r['label']!r} -> {r['second']!r} "
               f"(engine {r['engine']!r})")
@@ -73,6 +91,8 @@ def main() -> None:
             {"model": d.get("model"), "variant": d.get("variant", "carved"),
              "refine": d.get("refine", 0), "rows": len(rows),
              "cer_second": round(second, 3), "cer_engine": round(engine, 3),
+             "median_second": round(mid("cer_second"), 3),
+             "median_engine": round(mid("cer_engine"), 3),
              "second_closer": won}, indent=2))
 
 
