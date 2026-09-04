@@ -87,6 +87,17 @@ was the bench's idea of which row each hand-read name sits on.
   and the price of it is now known: labels in the hundreds, from people using
   the review screen, not another afternoon of spikes.
 
+* **The corpus is a fortnight behind the reader, and no stamp can see it.**
+  Today's reading agrees with the stored one on 58% of the subcorpus's
+  non-hand-read rows, and where they differ it is usually better now — 431 of
+  660 records were read on 08-21, 162 on 08-28, and the reader has had 27
+  commits since 08-20. `read_schema: 18` is current on every record because
+  that stamp moves when the *parse* changes, not when the crop or the geometry
+  does. So the search is worse than the engine is, and every measurement that
+  pairs a fresh reading with the stored corpus is biased by which pages happen
+  to have been re-read. Options are written up in the tasks file; a re-read is
+  34 hours of background pass and is Allan's call.
+
 ### Start here next time, in order
 
 1. **Finish the fair run — it was started at 11:09 on 2026-09-04 and is

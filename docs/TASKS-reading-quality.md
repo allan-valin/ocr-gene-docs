@@ -625,6 +625,53 @@ should be ignored for the same reason.
 
 ---
 
+## The corpus is a fortnight behind the reader, and the stamp cannot see it
+(found 2026-09-04)
+
+Measuring the second opinion turned this up sideways. Over the 15-dossier
+subcorpus, what the engine reads **today** agrees with what the record holds on
+**100% of the hand-read pages and 58% of the rest**. Whole dossiers now read as
+names where the record holds `''`, `w`, `D10` — and it is not a numbering
+drift, it is a better reading: `05edf625` p5 comes back with 42 named rows
+where the record has 46 rows of noise.
+
+The record dates say why. 431 of the 660 records were read on 2026-08-21 and
+162 more on 08-28, and since 08-20 there have been **27 commits to
+`engine_paddle`, `rowcut` and `tablegrid`** — the carving, the printed-table
+geometry, the column measurement, the derule pass. Every record carries
+`read_schema: 18`, which is current, because that stamp is bumped when the
+*parse* changes and the reader's improvements do not touch it. So the corpus
+looks fresh and is not, and nothing in the system says so.
+
+What this costs:
+
+* **The search is worse than the engine is.** The names those dossiers now read
+  are not in the index, so nobody can find them; the improvements shipped in
+  the last fortnight reach only documents opened since.
+* **Every measurement pairing a fresh reading to the stored corpus is
+  biased**, in the direction of whichever pages happen to have been re-read —
+  which is exactly the second-opinion fault, twice over now.
+
+Three ways out, cheapest first:
+
+1. **Re-read the corpus.** Measured at 34 hours in August, and it is a
+   background pass that resumes. It is the only thing that makes the index
+   agree with the engine.
+2. **Stamp the read.** A version for the reading path, bumped when the crop or
+   the geometry changes, so `batch.py` knows which records are behind and can
+   re-read them in the background instead of all of them. This is the same
+   guard `read_schema` was introduced to be, pointed at the half of the
+   pipeline that actually moved.
+3. **Measure the drift rather than assume it.** `export_bands.py
+   --write-records` now reads a slice and writes what it read; comparing that
+   with the stored rows is the number above, and it can be taken over any
+   slice at any time.
+
+Not decided here: (1) is Allan's call, since it is a day of the machine and
+the corpus is his.
+
+---
+
 ## 155 crops are not enough, and 3 epochs are worse than none (2026-09-04)
 
 The training set is built right now — the crop is the ink the engine read, the
