@@ -217,7 +217,15 @@ def main() -> None:
                 pairs[dst.name] = {"image": f"images/{dst.name}",
                                    "label": c["label"], "engine": c["engine"],
                                    "how": c["how"], "doc": doc, "page": page,
-                                   "n": c["n"], "source": rf.name}
+                                   "n": c["n"], "source": rf.name,
+                                   # how the page was measured, because a
+                                   # geometry put back by `backfill_geometry.py`
+                                   # is a fresh measurement of the page rather
+                                   # than the one its rows were cut from, and a
+                                   # crop cut from it is only as good as that
+                                   # agreement
+                                   "geometry": (geo.get(page) or {}).get(
+                                       "measured_by")}
 
     out = args.out / "labels.jsonl"
     rows = sorted(pairs.values(), key=lambda p: p["image"])

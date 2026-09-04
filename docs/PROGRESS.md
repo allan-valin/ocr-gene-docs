@@ -140,11 +140,26 @@ The scratch data lives outside the repo and is gone when `/tmp` is cleared;
 everything below is cheap to rebuild and all of it checkpoints and resumes.
 
 ```sh
-# the 15-dossier subcorpus, its crops, and a second reading of them
-.venv-ocr/bin/python scripts/export_bands.py --records <subcache> --out <bands>
-.venv-htr/bin/python scripts/read_bands.py  --bands <bands> --out <sidecar>
-.venv/bin/python     scripts/training_set.py --bands <bands> --out <trainset>
+# the 15-dossier subcorpus: a directory of the record files to read, which is
+# the truth dossiers plus the rest in hash order until there are fifteen
+.venv-ocr/bin/python scripts/export_bands.py --records <subcache> --out <bands> \
+    --write-records <freshcache>       # cut the crops, and keep what was read
+.venv-htr/bin/python scripts/read_bands.py --bands <bands> --out <sidecar> \
+    --variant strip --refine 64        # the plain band, which TrOCR can read
+.venv/bin/python scripts/training_set.py --bands <bands> \
+    --records data/transcriptions --out <trainset> --variant strip
+.venv/bin/python scripts/score_crops.py --sidecar <sidecar> --trainset <trainset>
+.venv/bin/python scripts/bench_search.py --matrix --cache <freshcache-or-corpus> \
+    --second-opinion <sidecar> --second-bands <bands> [--second-as-guess]
 ```
+
+`<freshcache>` has to be a **copy of the whole corpus cache** with the fifteen
+refreshed records written over it — `cp -r data/transcriptions <freshcache>`
+first, and copy rather than hardlink, or the write lands on the original — so
+the rows competing with the targets are still there. Point the bench at that,
+or the sidecar is pasted onto a reading taken weeks earlier: without it,
+`--second-bands` refuses every row whose two readings disagree, which is 42%
+of the subcorpus and almost none of the pages being searched for.
 
 `read_bands.py` and `spike_second_opinion.py` write after every page and skip
 what is already done, so a killed run loses one page. Two things took a run
