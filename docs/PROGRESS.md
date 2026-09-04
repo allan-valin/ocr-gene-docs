@@ -89,6 +89,14 @@ was the bench's idea of which row each hand-read name sits on.
   and the price of it is now known: labels in the hundreds, from people using
   the review screen, not another afternoon of spikes.
 
+* **Re-reading is worth more than anything measured today.** The fifteen
+  dossiers were read again with today's engine: 1,327 rows carrying a name
+  became **1,865**, so 565 rows now hold a name where the record had none —
+  and the matrix over the refreshed cache is unmoved at 87/97/105 and
+  118/123/129 against an index 577 rows bigger, so the extra competition costs
+  nothing. A third of that slice was already fresh, so the corpus-wide figure
+  is likely larger. The second opinion, for comparison, is worth four to seven
+  names of 138.
 * **The corpus is a fortnight behind the reader, and no stamp can see it.**
   Today's reading agrees with the stored one on 58% of the subcorpus's
   non-hand-read rows, and where they differ it is usually better now — 431 of

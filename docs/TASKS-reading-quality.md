@@ -643,7 +643,24 @@ geometry, the column measurement, the derule pass. Every record carries
 *parse* changes and the reader's improvements do not touch it. So the corpus
 looks fresh and is not, and nothing in the system says so.
 
-What this costs:
+What this costs, measured on the fifteen dossiers after re-reading them
+(`export_bands.py --write-records`, half an hour):
+
+| | stored | re-read |
+|---|---|---|
+| rows | 2,130 | 2,536 |
+| rows carrying a name | 1,327 | **1,865** |
+
+**565 rows now carry a name where the record had none** — a 40% increase in
+findable people, on a slice where a third of the dossiers were already fresh,
+so the corpus-wide figure is likely larger. Nothing was lost to the extra
+competition: the matrix over the refreshed cache is 87/97/105 and 118/123/129,
+unmoved, against an index 577 rows bigger.
+
+That is the largest number on this page, and it is not a recogniser change: it
+is the recogniser changes of the last fortnight reaching the documents that
+were read before them. The second opinion, by comparison, is worth four to
+seven names of 138.
 
 * **The search is worse than the engine is.** The names those dossiers now read
   are not in the index, so nobody can find them; the improvements shipped in
