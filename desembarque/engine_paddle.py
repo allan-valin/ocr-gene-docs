@@ -469,6 +469,84 @@ def stored_geometry(geo, measured_by: str, read_from: str) -> dict:
     return out
 
 
+def carved_crops(im, geo, margin: int = INK_MARGIN, sink: dict | None = None
+                 ) -> Callable[[int, tuple], object]:
+    """A crop function that hands each band its own ink and nobody else's.
+
+    The page is carved once: the name column is cut into rows along paths of
+    least ink rather than along the ruled line, so the tail of a `y` stays with
+    the row it was written on instead of landing inside the name below it. See
+    `desembarque.rowcut`.
+
+    Falls back to the plain rectangle if carving cannot be done, because a
+    rectangular crop is the old behaviour and still a usable one.
+
+    `sink`, when given, keeps both pictures of every band it cuts, by band
+    index: the carved crop the recogniser is handed, and the plain rectangle.
+    They are not read alike -- a historical-hand TrOCR reads the carved crop of
+    a cursive name at CER 0.892 and the plain band at 0.338 -- so anything
+    measuring a second recogniser needs to say which it fed it.
+    """
+    import numpy as np
+    from PIL import Image
+    from .rowcut import carve
+
+    W, H = im.size
+    bands = geo.normalized_rows()
+    x0, x1 = name_strip_box(geo, im.size)
+    try:
+        top = max(0, int(bands[0][0] * H) - PAD_PX)
+        bottom = min(H, int(bands[-1][1] * H) + PAD_PX)
+        strip = np.asarray(im.crop((x0, top, x1, bottom)).convert("L"))
+        edges = [(max(0, int(bt * H) - PAD_PX - top),
+                  min(bottom - top, int(bb * H) + PAD_PX - top))
+                 for bt, bb in bands]
+        cuts = carve(strip, edges)
+    except Exception:
+        cuts = []
+
+    indents: dict[int, float] = {}
+
+    def crop(i: int, box: tuple) -> object:
+        band = (Image.fromarray(cuts[i]) if i < len(cuts) and cuts[i].size
+                else im.crop(box))
+        # measured before trimming, because trimming is what removes the blank
+        # the indent consists of
+        start = ink_start(band)
+        if start is not None:
+            indents[i] = start
+        out = refine(derule(band) if DERULE else band, margin)
+        if sink is not None and i not in sink:
+            # the first pass wins: the looser second reading crops the same
+            # bands again at a wider margin, and those are the alternatives,
+            # not the ink the row's own reading came off
+            sink[i] = {"carved": out, "strip": im.crop(box)}
+        return out
+    crop.indents = indents
+    return crop
+
+
+def band_boxes(geo, size: tuple[int, int]) -> list[tuple[int, tuple]]:
+    """Each row band's rectangle in the name column, with the band it came from.
+
+    Kept apart from the reading because a crop is worth cutting again long
+    after the page was read: a row somebody retypes on the review screen is a
+    labelled example, and the record stores the geometry it was cut from.
+    A band too short to hold writing is dropped here and nowhere else, so
+    anything cutting bands drops the same ones.
+    """
+    W, H = size
+    x0, x1 = name_strip_box(geo, size)
+    out = []
+    for i, (bt, bb) in enumerate(geo.normalized_rows()):
+        a = max(0, int(bt * H) - PAD_PX)
+        b = min(H, int(bb * H) + PAD_PX)
+        if b - a < MIN_ROW_PX:
+            continue
+        out.append((i, (x0, a, x1, b)))
+    return out
+
+
 def rows_from_bands(geo, size: tuple[int, int],
                     recognize: Callable[[list], list[tuple[str, float]]],
                     crop: Callable[[int, tuple[int, int, int, int]], object],
@@ -479,20 +557,11 @@ def rows_from_bands(geo, size: tuple[int, int],
     model. A short result from the recogniser pads with nulls rather than
     shifting later names up a row, which would be a silent corruption.
     """
-    W, H = size
     bands = geo.normalized_rows()
-    x0, x1 = name_strip_box(geo, size)
+    cut = band_boxes(geo, size)
+    keep = [i for i, _box in cut]
 
-    boxes, keep = [], []
-    for i, (bt, bb) in enumerate(bands):
-        a = max(0, int(bt * H) - PAD_PX)
-        b = min(H, int(bb * H) + PAD_PX)
-        if b - a < MIN_ROW_PX:
-            continue
-        boxes.append((x0, a, x1, b))
-        keep.append(i)
-
-    crops = [crop(i, box) for i, box in zip(keep, boxes)]
+    crops = [crop(i, box) for i, box in cut]
     indents = getattr(crop, "indents", {})
     # An empty ruled row is the commonest thing on these pages. Reading it costs
     # as much as reading a name and can only ever say nothing.
@@ -649,6 +718,17 @@ class PaddleEngine:
         # `READABLE_COLUMNS` are the ones measured to read anything at all.
         self.columns = tuple(columns)
         self._vocabulary = None
+        # Off, and a corpus pass keeps nothing. Set to a dict and every band
+        # the crop function touches leaves both pictures of itself behind,
+        # keyed by band index: the carved crop the recogniser was handed, and
+        # the plain rectangle of the same band. A second recogniser reads the
+        # carved crop of a cursive name at CER 0.892 and the plain band at
+        # 0.338, so a second opinion measured on the carved crop measures the
+        # carving. Keyed rather than collected in order, because a page is read
+        # more than once — the render fallback, the looser second reading — and
+        # positional pairing across those passes is what made the first
+        # second-opinion run unfair.
+        self.band_sink: dict[int, dict] | None = None
 
     def _vocab(self):
         """The closed lists, loaded once. Absent is a legitimate answer: a cell
@@ -885,47 +965,8 @@ class PaddleEngine:
 
     def _carved_crops(self, im, geo, margin: int = INK_MARGIN
                       ) -> Callable[[int, tuple], object]:
-        """A crop function that hands each band its own ink and nobody else's.
-
-        The page is carved once: the name column is cut into rows along paths
-        of least ink rather than along the ruled line, so the tail of a `y`
-        stays with the row it was written on instead of landing inside the name
-        below it. See `desembarque.rowcut`.
-
-        Falls back to the plain rectangle if carving cannot be done, because a
-        rectangular crop is the old behaviour and still a usable one.
-        """
-        import numpy as np
-        from PIL import Image
-        from .rowcut import carve
-
-        W, H = im.size
-        bands = geo.normalized_rows()
-        x0, x1 = name_strip_box(geo, im.size)
-        try:
-            top = max(0, int(bands[0][0] * H) - PAD_PX)
-            bottom = min(H, int(bands[-1][1] * H) + PAD_PX)
-            strip = np.asarray(im.crop((x0, top, x1, bottom)).convert("L"))
-            edges = [(max(0, int(bt * H) - PAD_PX - top),
-                      min(bottom - top, int(bb * H) + PAD_PX - top))
-                     for bt, bb in bands]
-            cuts = carve(strip, edges)
-        except Exception:
-            cuts = []
-
-        indents: dict[int, float] = {}
-
-        def crop(i: int, box: tuple) -> object:
-            band = (Image.fromarray(cuts[i]) if i < len(cuts) and cuts[i].size
-                    else im.crop(box))
-            # measured before trimming, because trimming is what removes the
-            # blank the indent consists of
-            start = ink_start(band)
-            if start is not None:
-                indents[i] = start
-            return refine(derule(band) if DERULE else band, margin)
-        crop.indents = indents
-        return crop
+        """The engine's own crop function, keeping what `band_sink` asks for."""
+        return carved_crops(im, geo, margin, sink=self.band_sink)
 
     # ---- the table, measured from what is printed on it ---------------------
 

@@ -50,9 +50,13 @@ def add_second_opinion(rows, path: Path, as_guess: bool = False) -> str:
 
     A reading, not a guess: another recogniser read it off the same crop, so it
     goes where the engine's own second reading goes and is scored the same way.
-    The sidecar is keyed by the band's position on the page, which is the order
-    the engine cut its rows in, so the check below refuses a page whose stored
-    row count and band count disagree rather than pairing readings blindly.
+    Two shapes of sidecar reach this. `spike_second_opinion.py` cuts its own
+    rows off the page, so its readings are keyed by a band's position and it
+    carries a `map` saying which stored row each band became. `read_bands.py`
+    reads the crops the engine itself exported, which are named by the row
+    number the engine gave them, so its keys *are* row numbers and the map is
+    the identity — pairing is engine against engine and needs no alignment at
+    all, which is why its coverage is 82% against the other's 28%.
     """
     d = json.loads(path.read_text(encoding="utf-8"))
     said, mapped = d.get("read") or {}, d.get("map") or {}
@@ -60,9 +64,10 @@ def add_second_opinion(rows, path: Path, as_guess: bool = False) -> str:
     for r in rows:
         at_row[(r.get("doc"), r.get("page"), r.get("row"))] = r
     used = missing = 0
-    for doc, pages_of in mapped.items():
+    for doc, pages_of in (mapped or said).items():
         for page, bands in pages_of.items():
-            for band, row_n in bands.items():
+            for band, value in bands.items():
+                row_n = value if mapped else int(band)
                 r = at_row.get((doc, int(page), row_n))
                 text = ((said.get(doc, {}).get(page, {}) or {}).get(band) or "").strip()
                 if r is None or not text or text == r.get("text"):

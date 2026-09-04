@@ -892,3 +892,63 @@ def test_lifting_a_page_that_cannot_be_lifted_gives_the_page_back():
     flat = Image.new("L", (40, 10), 255)
     assert lift(flat).size == (40, 10)
     assert lift(None) is None
+
+
+def test_the_band_sink_keeps_the_plain_rectangle_beside_the_carved_crop():
+    """Both pictures of the same row, keyed by the band they came from.
+
+    A second recogniser reads the engine's carved crop at CER 0.892 and the
+    plain deskewed band of the same row at 0.338, so the second-opinion bench
+    needs both — and pairing them by position across the engine's several
+    passes is what made the first attempt unfair. The sink is keyed by band
+    index and is off unless a caller asks for it, so a corpus pass pays
+    nothing for it.
+    """
+    from PIL import Image, ImageDraw
+    from desembarque.engine_paddle import (PAD_PX, PaddleEngine,
+                                           name_strip_box, rows_from_bands)
+
+    W, H = 400, 300
+    page = Image.new("L", (W, H), 255)
+    ImageDraw.Draw(page).text((20, 40), "MARTINEZ FRANCISCO", fill=0)
+
+    class Geo:
+        skew = 0.0
+
+        def normalized_rows(self):
+            return [(0.0, 0.33), (0.34, 0.66), (0.67, 1.0)]
+
+        def name_column(self, i=0):
+            return (0.0, 1.0)
+
+    geo = Geo()
+    eng = PaddleEngine()
+    assert eng.band_sink is None, "a corpus pass keeps no images"
+
+    seen = []
+
+    def recognize(crops):
+        seen.extend(crops)
+        return [("MARTINEZ FRANCISCO", 0.9)] * len(crops)
+
+    rows_from_bands(geo, (W, H), recognize, eng._carved_crops(page, geo))
+    assert eng.band_sink is None, "still nothing kept when nobody asked"
+
+    eng.band_sink = {}
+    seen.clear()
+    rows_from_bands(geo, (W, H), recognize, eng._carved_crops(page, geo))
+
+    assert sorted(eng.band_sink) == [0, 1, 2], "one entry per band, by index"
+    x0, x1 = name_strip_box(geo, (W, H))
+    top = max(0, 0 - PAD_PX)
+    bottom = min(H, int(0.33 * H) + PAD_PX)
+    assert eng.band_sink[0]["strip"].size == (x1 - x0, bottom - top), \
+        "the strip is the band's own rectangle, uncarved and untrimmed"
+    assert eng.band_sink[0]["carved"] is seen[0], \
+        "the carved crop is the image the recogniser was handed"
+
+    first = eng.band_sink[0]["carved"]
+    rows_from_bands(geo, (W, H), recognize,
+                    eng._carved_crops(page, geo, margin=40))
+    assert eng.band_sink[0]["carved"] is first, \
+        "the looser second reading is the alternatives, not the row's own ink"
