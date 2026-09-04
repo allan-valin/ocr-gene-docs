@@ -22,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from desembarque import truthset                    # noqa: E402
 from desembarque.gazetteer import Names, fold, spoken_names  # noqa: E402
 from desembarque.identity import cached_hash        # noqa: E402
 from desembarque.search import load_index, search   # noqa: E402
@@ -125,32 +126,31 @@ def truth_rows(cache: Path, scans: Path, with_line: bool = False,
         rows = [r for r in record.get("rows", []) if r.get("page") == t["page"]]
         if not rows:
             continue
-        # the truth block sits somewhere among the page's rows; find where by
-        # fit, the same way the recogniser bench does
-        from bench_rec import align
-        texts = [r.get("name_raw") or "" for r in rows]
-        off = align(texts, t["names"])
-        for i, name in enumerate(t["names"]):
-            if off + i < len(rows):
-                # what somebody who knows the crossing would add: the ship if
-                # the dossier states one, otherwise the year
-                voyage = record.get("voyage") or {}
-                # a third of the corpus names a ship and two thirds name the
-                # line printed on the letterhead, so for most dossiers the line
-                # is the only crossing somebody could type
-                extra = voyage.get("ship") or ""
-                if not extra and ships:
-                    # what the archive filed it under, typed and unmangled —
-                    # and the name a person searching actually knows
-                    extra = ships.get(t["pdf"], "")
-                if with_line and not extra:
-                    extra = voyage.get("line") or ""
-                if not extra and voyage.get("year"):
-                    extra = str(voyage["year"])
-                out.append({"name": name, "doc": doc, "page": t["page"],
-                            "row": rows[off + i].get("n"),
-                            "read": rows[off + i].get("name_raw") or "",
-                            "voyage": extra, "pdf": t["pdf"]})
+        # the truth block sits somewhere among the page's rows; the pairing is
+        # `desembarque.truthset`'s, which the menu bench and the training set
+        # also use -- a single best-fit offset drifts past the first row that
+        # carries no reading and scores every later name against somebody
+        # else's row
+        for pair in truthset.pairs(t, rows):
+            # what somebody who knows the crossing would add: the ship if
+            # the dossier states one, otherwise the year
+            voyage = record.get("voyage") or {}
+            # a third of the corpus names a ship and two thirds name the
+            # line printed on the letterhead, so for most dossiers the line
+            # is the only crossing somebody could type
+            extra = voyage.get("ship") or ""
+            if not extra and ships:
+                # what the archive filed it under, typed and unmangled —
+                # and the name a person searching actually knows
+                extra = ships.get(t["pdf"], "")
+            if with_line and not extra:
+                extra = voyage.get("line") or ""
+            if not extra and voyage.get("year"):
+                extra = str(voyage["year"])
+            out.append({"name": pair["truth"], "doc": doc,
+                        "page": t["page"], "row": pair["row"].get("n"),
+                        "read": pair["row"].get("name_raw") or "",
+                        "voyage": extra, "pdf": t["pdf"]})
     return out
 
 

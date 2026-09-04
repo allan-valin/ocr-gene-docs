@@ -143,3 +143,29 @@ def test_a_run_that_starts_below_the_header_is_not_pulled_up_to_it():
 def test_nothing_to_align_is_nothing():
     assert bench.aligned([], ["A"]) == {}
     assert bench.aligned(["a"], []) == {}
+
+
+def test_a_page_with_a_gap_pairs_the_names_after_it_with_their_own_rows():
+    """The bench pairs the same way the training set does, and for the same
+    reason: on a page whose middle rows carry no reading, counting a run down
+    from `first_row` — or from any single offset — scores every later name
+    against somebody else's row."""
+    truth = {"page": 2, "first_row": 1,
+             "names": ["Rossi Mario", "Turino Ana", "Vieira Miranda"]}
+    rows = [{"page": 2, "n": 1, "name_raw": "Rossi Wario"},
+            {"page": 2, "n": 2, "name_raw": "Turino Ana"},
+            {"page": 2, "n": 3, "name_raw": ""},
+            {"page": 2, "n": 4, "name_raw": "Vieina Mirandu"}]
+    got = bench.pairs(truth, rows)
+    assert [(p["truth"], p["read"]) for p in got] == [
+        ("Rossi Mario", "Rossi Wario"), ("Turino Ana", "Turino Ana"),
+        ("Vieira Miranda", "Vieina Mirandu")]
+
+
+def test_a_stale_first_row_does_not_move_the_names_off_their_rows():
+    truth = {"page": 2, "first_row": 4, "names": ["GUIDO CONTADORE"]}
+    rows = [{"page": 2, "n": 1, "name_raw": "Gudo Camtadome"},
+            {"page": 2, "n": 2, "name_raw": "Pgmia,lamtadie"}]
+    got = bench.pairs(truth, rows)
+    assert [(p["truth"], p["read"]) for p in got] == [
+        ("GUIDO CONTADORE", "Gudo Camtadome")]

@@ -31,16 +31,22 @@ def pairs(truth: dict, rows: list[dict]) -> list[dict]:
     differently has rows missing in the middle, and pairing by position would
     then compare every later name with somebody else's.
     """
-    by_n = {r.get("n"): r for r in rows if r.get("page") == truth.get("page")}
-    # Two shapes, because pages come in two kinds. A page read straight down
-    # gives `names` and the row its first one sits on; a page where somebody
-    # was sure of eleven rows out of forty-one gives `rows`, keyed by row
-    # number, and is scored on those.
+    on_page = sorted((r for r in rows if r.get("page") == truth.get("page")),
+                     key=lambda r: r.get("n") or 0)
+    by_n = {r.get("n"): r for r in on_page}
+    # Two shapes, because pages come in two kinds. A page where somebody was
+    # sure of eleven rows out of forty-one gives `rows`, keyed by the row
+    # numbers they wrote against, and those are taken as they stand. A page
+    # read straight down gives `names`, a run, and the run is aligned to the
+    # readings rather than counted from `first_row`: that number goes stale
+    # when a page is cut differently, and a run counted from anywhere drifts
+    # past the first row that carries no reading. See `aligned`.
     if truth.get("rows"):
         wanted = [(int(n), name) for n, name in truth["rows"].items()]
     else:
-        wanted = [(int(truth.get("first_row", 1)) + k, name)
-                  for k, name in enumerate(truth.get("names") or [])]
+        placed = aligned([r.get("name_raw") or "" for r in on_page],
+                         [n for n in (truth.get("names") or []) if n])
+        wanted = [(on_page[i].get("n"), name) for i, name in placed.items()]
     out = []
     for n, name in sorted(wanted):
         row = by_n.get(n)
