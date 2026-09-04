@@ -89,10 +89,26 @@ was the bench's idea of which row each hand-read name sits on.
 
 ### Start here next time, in order
 
-1. **Run the subcorpus once more with `--write-records`, into a copy of the
-   whole cache**, and re-run the three matrix rows. That is the only thing
-   between today's numbers and a number worth shipping on, and it is one pass
-   of the engine (2.5 h) plus one of TrOCR (2.5 h), both resumable.
+1. **Finish the fair run — it was started at 11:09 on 2026-09-04 and is
+   probably still going or done.** The engine pass is writing to
+   `data/bands-fair` and refreshing `data/freshcache` (a copy of the whole
+   corpus cache, so the competitors are still in it); its log is
+   `data/export-fair.log` and its pid is in `data/export-fair.pid`. It
+   checkpoints per page and resumes, so a killed run costs one page. When it
+   ends:
+
+   ```sh
+   .venv-htr/bin/python scripts/read_bands.py --bands data/bands-fair \
+       --out data/side-fair.json --variant strip --refine 64        # ~2.5 h
+   .venv/bin/python scripts/bench_search.py --matrix --cache data/freshcache \
+       --second-opinion data/side-fair.json --second-bands data/bands-fair \
+       [--second-as-guess]
+   ```
+
+   With the index and the sidecar taken from the same reading, `--second-bands`
+   should refuse almost nothing, and the three rows of that table finally mean
+   what they say. Today's answer, measured with the odds in its favour, was
+   87/97/105 → 90/103/110 by name alone counted as a guess.
 2. **Grow the labelled set**, which is the only thing standing between here
    and an archive-trained recogniser. `training_set.py --records` harvests
    every correction in the corpus and there are four; the set is otherwise the
@@ -192,9 +208,10 @@ The scratch data lives outside the repo and is gone when `/tmp` is cleared;
 everything below is cheap to rebuild and all of it checkpoints and resumes.
 
 ```sh
-# the 15-dossier subcorpus: a directory of the record files to read, which is
-# the truth dossiers plus the rest in hash order until there are fifteen
-.venv-ocr/bin/python scripts/export_bands.py --records <subcache> --out <bands> \
+# the 15-dossier subcorpus, chosen the same way every time: the dossiers with a
+# hand-read page, then the rest in hash order until there are fifteen
+.venv/bin/python scripts/subcorpus.py --out data/subcache
+.venv-ocr/bin/python scripts/export_bands.py --records data/subcache --out <bands> \
     --write-records <freshcache>       # cut the crops, and keep what was read
 .venv-htr/bin/python scripts/read_bands.py --bands <bands> --out <sidecar> \
     --variant strip --refine 64        # the plain band, which TrOCR can read
