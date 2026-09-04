@@ -19,6 +19,14 @@ crop at CER 0.609 and the plain band at 0.567, so a measurement of a second
 recogniser has to say which of them it was given.
 
     .venv-ocr/bin/python scripts/export_bands.py --records DIR --out DIR
+
+The same pass reads pages and can write down what it read, so it is also how
+the corpus is read again after the engine has changed -- with `--no-crops`,
+which keeps the reading and none of the images:
+
+    cp -r data/transcriptions data/reread          # copy, never hardlink
+    .venv-ocr/bin/python scripts/export_bands.py --records data/transcriptions \
+        --out data/reread-index --write-records data/reread --no-crops
 """
 from __future__ import annotations
 
@@ -64,6 +72,12 @@ def main() -> None:
     ap.add_argument("--scans", type=Path, default=ROOT / "data" / "scans")
     ap.add_argument("--work", type=Path, default=ROOT / "data" / "pagecache")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--no-crops", action="store_true",
+                    help="read the pages and write the records, and keep no "
+                         "images. A re-read of the whole corpus is worth 565 "
+                         "rows of names on fifteen dossiers "
+                         "(docs/TASKS-reading-quality.md) and its crops would "
+                         "be a gigabyte and a half nobody asked for")
     ap.add_argument("--write-records", type=Path, default=None,
                     help="write each record again into this directory with "
                          "the reading this run took, so a bench pairing the "
@@ -118,15 +132,17 @@ def main() -> None:
             # name with somebody else's ink
             pairs = []
             folder = args.out / doc / str(page)
-            folder.mkdir(parents=True, exist_ok=True)
+            if not args.no_crops:
+                folder.mkdir(parents=True, exist_ok=True)
             for r in read:
                 band = sink.get(r["n"] - 1)
                 if not band:
                     continue
                 name = f"{r['n']}.png"
                 strip = f"{r['n']}-strip.png"
-                band["carved"].convert("RGB").save(folder / name)
-                band["strip"].convert("RGB").save(folder / strip)
+                if not args.no_crops:
+                    band["carved"].convert("RGB").save(folder / name)
+                    band["strip"].convert("RGB").save(folder / strip)
                 pairs.append({"n": r["n"], "file": f"{doc}/{page}/{name}",
                               "strip": f"{doc}/{page}/{strip}",
                               "engine": r.get("name_raw") or ""})
