@@ -68,3 +68,29 @@ def test_a_row_somebody_typed_survives_the_refresh():
     assert got[0]["name_raw"] == "Raymundo Cassaudii"
     assert got[0]["edits"], "the provenance travels with the row"
     assert got[1]["name_raw"] == "re-read, and welcome"
+
+
+def test_a_refreshed_record_carries_the_geometry_it_was_read_with():
+    """The rows come from today's cut, so the geometry stored beside them has
+    to be today's too: a crop cut later from a record whose rows and grid
+    disagree is a name against the neighbouring row's ink."""
+    mod = load()
+    if mod is None:
+        import pytest
+        pytest.skip("the OCR engine is not importable in this environment")
+    pages = [{"n": 2, "kind": "list", "geometry": {"rows": [[0, 1]], "columns": [0, 1]}},
+             {"n": 3, "kind": "list", "geometry": {"rows": [[0, 0.5]]}}]
+    fresh = {2: {"rows": [[0.1, 0.2]], "columns": [0.1, 0.3], "measured_by": "printing"}}
+    got = mod.merged_pages(pages, fresh)
+    assert got[0]["geometry"] == fresh[2], "the page read again carries today's grid"
+    assert got[0]["kind"] == "list", "and everything else it said about the page"
+    assert got[1]["geometry"] == {"rows": [[0, 0.5]]}, "a page not read is untouched"
+
+
+def test_a_page_read_for_the_first_time_gains_a_geometry():
+    mod = load()
+    if mod is None:
+        import pytest
+        pytest.skip("the OCR engine is not importable in this environment")
+    got = mod.merged_pages([], {4: {"rows": [[0, 1]]}})
+    assert got == [{"n": 4, "geometry": {"rows": [[0, 1]]}}]

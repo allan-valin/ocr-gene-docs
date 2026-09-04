@@ -66,6 +66,26 @@ def merged_rows(existing: list[dict], fresh: dict[int, list[dict]]) -> list[dict
     return sorted(out, key=lambda r: (r.get("page") or 0, r.get("n") or 0))
 
 
+def merged_pages(pages: list[dict], fresh: dict[int, dict]) -> list[dict]:
+    """A record's pages with the grid each one was read with this time.
+
+    The rows written beside them are today's cut, so the geometry has to be
+    today's as well: `desembarque.bandcrops` cuts a row's ink again from what
+    the record says, and a record whose rows and grid disagree hands back the
+    neighbouring row's writing. A page this run did not read keeps what it had.
+    """
+    out = [dict(p) for p in pages or ()]
+    at = {p.get("n"): p for p in out}
+    for page, geo in sorted(fresh.items()):
+        if not geo:
+            continue
+        if page in at:
+            at[page]["geometry"] = geo
+        else:
+            out.append({"n": page, "geometry": geo})
+    return sorted(out, key=lambda p: p.get("n") or 0)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--records", type=Path, required=True)
@@ -106,6 +126,7 @@ def main() -> None:
             continue
         doc = cached_hash(pdf)
         fresh: dict[int, list[dict]] = {}
+        grids: dict[int, dict] = {}
         for page in sorted({r.get("page") for r in rec.get("rows") or []
                             if r.get("page")}):
             key = f"{doc}/{page}"
@@ -125,6 +146,8 @@ def main() -> None:
             finally:
                 eng.band_sink = None
             fresh[page] = [dict(r) for r in (res.rows or [])]
+            if res.geometry:
+                grids[page] = res.geometry
             read = [r for r in (res.rows or []) if (r.get("name_raw") or "").strip()]
             # by band index rather than by position: a page is read more than
             # once -- the render fallback, the looser second reading -- and
@@ -152,7 +175,9 @@ def main() -> None:
                   flush=True)
 
         if args.write_records and fresh:
-            again = {**rec, "rows": merged_rows(rec.get("rows") or [], fresh)}
+            again = {**rec,
+                     "rows": merged_rows(rec.get("rows") or [], fresh),
+                     "pages": merged_pages(rec.get("pages") or [], grids)}
             (args.write_records / rf.name).write_text(
                 json.dumps(again, ensure_ascii=False), encoding="utf-8")
 
