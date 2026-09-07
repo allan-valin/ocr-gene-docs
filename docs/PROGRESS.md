@@ -72,6 +72,28 @@ worth having and is not the one the plan expected.
   12 of those 56 rows against the beam search's 13. Batch size is not a lever
   at all — 8 is slower than 3, on a CPU with no room to widen. So the number
   to decide on is a day of machine, not three and a half.
+* **A sidecar belongs to the reading its crops were cut from, and the write now
+  knows it.** `apply_second_opinion.py --bands` refuses a row the engine no
+  longer reads the same way, which is what stops a reading landing on a
+  stranger when a page has been renumbered. Of the 1,865 rows
+  `data/side-fair.json` offers:
+
+  | records | rows that land |
+  |---|---|
+  | `data/transcriptions`, the live corpus | 1,149 — 38% refused |
+  | `data/freshcache`, the reading it was cut from | 1,843 |
+  | `data/reread`, today's pass | 1,818 |
+
+  So the order is settled: **do not spend the second reading before the
+  re-read lands.** Applied to the corpus as it stands, a third of it is thrown
+  away; applied after, 97% of it survives, because the re-read reproduces the
+  reading the crops were cut from. One dossier makes the case on its own —
+  05edf625 lands 18 rows on the live corpus and 599 on the re-read.
+* **An interim reading on the re-read itself**, from the eleven of the fifteen
+  fair dossiers it had reached by 10:58: rows carrying a name go **662 → 1,197**
+  on those eleven, and 05edf625 alone goes 543 rows to 933 and 89 named to 602.
+  Two dossiers lose a little — 00d7a50a 61 → 59 named, 06f844e8 142 → 139 — so
+  the comparison at the end is a real comparison and not a formality.
 
 
 **Running right now.** The corpus re-read, which Allan said yes to on the
