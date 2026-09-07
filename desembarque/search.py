@@ -30,8 +30,12 @@ import numpy as np
 # The row comb is fitted to the written lines, and the printed column heading is
 # one of them. Left alone it is indexed as a passenger and scores 1.0 against
 # anyone searching for "nome".
+# The archive files French-printed manifests as well as Portuguese and Italian
+# ones, and their caption was indexed as a passenger — 0a8e192e carries `NOMS ET
+# PRENOMS` on both its pages and a search returned it as a person.
 COLUMN_HEADINGS = ("NOMES E COGNOMES", "NOME E COGNOME", "NOMES", "COGNOMES",
-                   "NOME", "NOMES E SOBRENOMES")
+                   "NOME", "NOMES E SOBRENOMES", "NOMS ET PRENOMS",
+                   "NOM ET PRENOM", "NOMS", "PRENOMS")
 # Stored transcriptions carry a schema number from now on. Records written
 # before this have none, and are read as version 1 — the first schema change
 # must not silently drop everything already indexed.
@@ -648,6 +652,13 @@ def _parse(f: Path, engine_only: bool,
         if r.get("header") or is_heading(text):
             continue
         if len(fold(text)) < 4:
+            continue
+        # `22222222` and `1R2 22 4` are the comb reading a ruled line, and they
+        # were indexed and searched exactly like names. The shortest name this
+        # archive carries in quantity is four letters (ANNA, ROSA, JOSE, LUIS);
+        # three is the floor because a row can be read down to a fragment of
+        # one, and a single letter beside a column of digits is not a person.
+        if sum(1 for c in fold(text) if c.isalpha()) < 3:
             continue
         second, guessed = spellings(r, text, vocab=vocab)
         out.append({

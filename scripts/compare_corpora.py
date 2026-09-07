@@ -28,13 +28,28 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from desembarque.batch import typed_by_a_person   # noqa: E402
-from desembarque.search import row_text           # noqa: E402
+from desembarque.gazetteer import fold            # noqa: E402
+from desembarque.search import is_heading, row_text  # noqa: E402
 
 
 def named(record: dict) -> int:
-    """Rows carrying a name somebody could search for."""
-    return sum(1 for r in record.get("rows") or ()
-               if not r.get("header") and (row_text(r) or "").strip())
+    """Rows carrying a name somebody could search for.
+
+    The index's own rule, not a looser one — `search._parse` drops a heading
+    and anything under four folded characters, so counting those credits the
+    corpus with rows nobody can reach. The first version of this counted them
+    and read 0a8e192e as four names lost, when what the re-read did there was
+    read the names better and throw away `22222222` and the column caption.
+    """
+    out = 0
+    for r in record.get("rows") or ():
+        text = row_text(r) or ""
+        if r.get("header") or is_heading(text):
+            continue
+        if len(fold(text)) < 4:
+            continue
+        out += 1
+    return out
 
 
 def _typed(record: dict) -> dict[tuple, dict]:

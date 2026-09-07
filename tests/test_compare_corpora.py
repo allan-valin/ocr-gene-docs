@@ -76,3 +76,35 @@ def test_a_changed_document_is_not_called_unchanged():
     before = rec([{"n": 1, "page": 2, "name_raw": "MARIA"}])
     after = rec([{"n": 1, "page": 2, "name_raw": "MARIA GONSALVES"}])
     assert compare({"h": before}, {"h": after})["identical"] == []
+
+
+# What counts as a row carrying a name is the index's rule, not a looser one:
+# the verdict on a twenty-hour pass must not turn on whether `22222222` counts.
+
+def test_a_printed_heading_is_not_a_name():
+    got = compare({"h": rec([{"n": 1, "page": 2, "name_raw": "NOMS ET PRENOMS"}])},
+                  {"h": rec([{"n": 1, "page": 2, "name_raw": "Carlos Fayet"}])})
+    assert (got["named_before"], got["named_after"]) == (0, 1)
+
+
+def test_a_row_too_short_to_index_is_not_a_name():
+    """`load_index` drops a row under four folded characters, so counting it
+    here would credit the corpus with a row nobody can ever search."""
+    got = compare({"h": rec([{"n": 1, "page": 2, "name_raw": "1R"}])},
+                  {"h": rec([{"n": 1, "page": 2, "name_raw": ""}])})
+    assert (got["named_before"], got["named_after"]) == (0, 0)
+    assert got["lost"] == []
+
+
+def test_the_re_read_that_only_dropped_junk_is_not_counted_as_a_loss():
+    """0a8e192e on the run of 2026-09-07: the pass read the names better and
+    threw away `22222222` and the column caption, and the first count called
+    that four names lost."""
+    before = rec([{"n": 1, "page": 2, "name_raw": "NOMS ET PRENOMS"},
+                  {"n": 2, "page": 2, "name_raw": "Carlos Fayet"},
+                  {"n": 3, "page": 2, "name_raw": "22222222"}])
+    after = rec([{"n": 1, "page": 2, "name_raw": "Carlos Fayet23"},
+                 {"n": 2, "page": 2, "name_raw": "Deri Somis 60"}])
+    got = compare({"h": before}, {"h": after})
+    assert got["docs"][0]["gained"] == 1
+    assert got["lost"] == []

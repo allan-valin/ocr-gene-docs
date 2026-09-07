@@ -1478,3 +1478,30 @@ def test_a_second_recogniser_reading_is_counted_with_the_guesses():
     assert "Guiso Cantadore" in alts
     # it is a guess, so it sits in the tail the count names
     assert "Guiso Cantadore" in alts[len(alts) - guessed:]
+
+
+def test_a_french_form_names_its_column_in_french():
+    """The archive files French-printed manifests too, and their caption was
+    indexed as a passenger: 0a8e192e carries `NOMS ET PRENOMS` on both pages
+    and search returned it as a person."""
+    from desembarque.search import is_heading
+    assert is_heading("NOMS ET PRENOMS")
+    assert is_heading("Noms et Prénoms")
+    assert not is_heading("JOSE MUESSO")
+
+
+def test_a_row_with_no_letters_in_it_is_not_a_person():
+    """`22222222` and `1R` are the comb reading a ruled line, and they were
+    indexed and searched like names. A person's name has letters in it."""
+    import json
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        (tmp / "a.json").write_text(json.dumps({
+            "hash": "h", "file": "d.pdf", "engine": "paddle",
+            "rows": [{"n": 1, "page": 2, "name_raw": "22222222"},
+                     {"n": 2, "page": 2, "name_raw": "1R2 22 4"},
+                     {"n": 3, "page": 2, "name_raw": "Carlos Fayet"}]}))
+        rows = load_index(tmp)
+        assert [r["row"] for r in rows] == [3]
