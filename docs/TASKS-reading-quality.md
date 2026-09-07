@@ -1147,6 +1147,11 @@ what fails:
       asking the spoken-name lists and the screen not, so the yellow bar was
       measured on a rule it was not running. `bench_check.py --json` is
       byte-for-byte unchanged by the consolidation, which is the only proof
-      worth having that a refactor refactored. The screen still asks only about
-      the archive's own names — handing it the language lists changes what a
-      person is stopped on and is a decision, not a refactor.
+      worth having that a refactor refactored.
+
+      **And the drift is closed rather than left open.** The screen still asks
+      only about the archive's own names, because handing it the language lists
+      is worth nothing on the bar: `bench_check.py` puts `quase-lista` at
+      catches 0.008, stops 0.000 — one badly-read row in 124, and a mark whose
+      meaning has to be explained in the legend to earn it. Not shipped, and
+      not to be re-proposed without a number that moved.
