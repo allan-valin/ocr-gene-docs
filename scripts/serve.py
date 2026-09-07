@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desembarque import engine as engines          # noqa: E402
 from desembarque.identity import identify, cached_hash  # noqa: E402
-from desembarque.rowfields import name_score   # noqa: E402
+from desembarque.recheck import why_check       # noqa: E402
 from desembarque.vocab import language_for     # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
 from desembarque.batch import (BatchIndexer, collect_pdfs, is_indexed,  # noqa: E402
@@ -105,43 +105,18 @@ def language_names_for(nationality: str | None) -> set[str] | None:
     return LANGUAGE_NAMES.get(lang) if lang else None
 
 
-# Which rows to look at first, and why. Measured against 139 hand-read rows, of
-# which 67 were badly read: the recogniser's own score below 0.85 catches 81% of
-# them (71% of what it flags is wrong), and a surname inherited from a row's
-# position is wrong 94% of the time it is flagged. A reading that resembles no
-# name in the archive is nearly always wrong and nearly never fires — 3 rows of
-# 139 — so it is kept as a third reason rather than the only one.
-CHECK_SCORE = 0.85
+# Which rows to look at first, and why: `desembarque.recheck`, which the bench
+# and the offline batch ask the same question of. It lived here and was written
+# again in `scripts/bench_check.py`, and the two drifted — the bench asked the
+# spoken-name lists as well and the screen did not, so the screen was measured
+# on a rule it was not running. The screen still asks only about the archive's
+# own names; handing `spoken` in adds a flag to the yellow bar and is a change
+# to what a person is stopped on, not a refactor.
 
 
 def _why_check(row: dict, names: Names) -> list[str]:
     """The reasons this row is worth a second look, in the order they matter."""
-    out = []
-    score = name_score(row)
-    if score is not None and score < CHECK_SCORE:
-        out.append("score")
-    if row.get("ditto_source") == "position":
-        out.append("inferido")
-    from desembarque import search as _s
-    text = _s.row_text(row)
-    if names.doubtful(text):
-        out.append("desconhecido")
-    # And the reason the flag was missing: a reading that *is* near a name but
-    # is not one. `YOSE` resembles `JOSE`, so the row passed as fine. Measured
-    # by `scripts/bench_check.py` over the hand-read pages: the three reasons
-    # above catch 74% of the badly-read rows, this one catches 56% on its own
-    # and takes the four together to 86%. It stops a person on one correctly
-    # read row in five, which is the price of the twelve points and is why the
-    # legend says what the mark means.
-    if names.near_miss(text):
-        out.append("quase")
-    # Two names the recogniser ran into one word. Search reaches such a row
-    # through the split it indexes beside the reading (T13); a person scanning
-    # the page has nothing to tell `MarcelloNittoms` from a long surname, and
-    # it is the row where retyping buys the most.
-    if any(_s.unglued(w) for w in text.split()):
-        out.append("colado")
-    return out
+    return why_check(row, names)
 
 
 def current_names() -> Names:
