@@ -175,6 +175,27 @@ def _is_printed_word(word: str) -> bool:
     return False
 
 
+def searchable(text: str) -> bool:
+    """Whether this reading is a row somebody could be found by.
+
+    The index's own rule, in one place because it is asked in two: `_parse`
+    decides what to index and `scripts/compare_corpora.py` decides what a
+    re-read gained, and a re-read that threw away a caption and a ruled line
+    read as four names lost while the two rules disagreed.
+
+    Not a person: the printed caption of the name column, anything under four
+    folded characters, and a reading with fewer than three letters in it —
+    `22222222` and `1R2 22 4` are the comb reading a ruled line, and the
+    shortest name this archive carries in quantity is four letters.
+    """
+    if is_heading(text):
+        return False
+    folded = fold(text)
+    if len(folded) < 4:
+        return False
+    return sum(1 for c in folded if c.isalpha()) >= 3
+
+
 def is_heading(text: str) -> bool:
     """The printed caption of the name column, not a person.
 
@@ -649,16 +670,7 @@ def _parse(f: Path, engine_only: bool,
         text = row_text(r)
         # the flag covers documents indexed since headings were noticed; the
         # text check covers everything indexed before that
-        if r.get("header") or is_heading(text):
-            continue
-        if len(fold(text)) < 4:
-            continue
-        # `22222222` and `1R2 22 4` are the comb reading a ruled line, and they
-        # were indexed and searched exactly like names. The shortest name this
-        # archive carries in quantity is four letters (ANNA, ROSA, JOSE, LUIS);
-        # three is the floor because a row can be read down to a fragment of
-        # one, and a single letter beside a column of digits is not a person.
-        if sum(1 for c in fold(text) if c.isalpha()) < 3:
+        if r.get("header") or not searchable(text):
             continue
         second, guessed = spellings(r, text, vocab=vocab)
         out.append({
