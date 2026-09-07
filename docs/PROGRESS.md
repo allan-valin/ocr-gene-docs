@@ -89,11 +89,22 @@ worth having and is not the one the plan expected.
   away; applied after, 97% of it survives, because the re-read reproduces the
   reading the crops were cut from. One dossier makes the case on its own —
   05edf625 lands 18 rows on the live corpus and 599 on the re-read.
-* **An interim reading on the re-read itself**, from the eleven of the fifteen
-  fair dossiers it had reached by 10:58: rows carrying a name go **662 → 1,197**
-  on those eleven, and 05edf625 alone goes 543 rows to 933 and 89 named to 602.
-  Two dossiers lose a little — 00d7a50a 61 → 59 named, 06f844e8 142 → 139 — so
-  the comparison at the end is a real comparison and not a formality.
+* **An interim reading on the re-read itself.** `scripts/compare_corpora.py`
+  is the verdict in one command — rows carrying a name per document, and
+  underneath it the property no gain buys back: every row a person typed still
+  saying what they typed. Fifty-three documents in, at 11:00:
+
+  ```
+  rows              71449 -> 72963
+  carrying a name   37341 -> 39649  (+2308)
+  6 documents came back with fewer names (worst -4)
+  every row a person typed survived verbatim
+  ```
+
+  Held over 660 documents that is the corpus roughly doubling in searchable
+  rows. Six documents came back slightly worse, which is why the comparison at
+  the end is a comparison and not a formality. 05edf625 makes the case on its
+  own: 543 rows to 933, 89 carrying a name to 602.
 
 
 **Running right now.** The corpus re-read, which Allan said yes to on the
