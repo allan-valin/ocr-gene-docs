@@ -35,10 +35,24 @@ data/transcriptions/
 data/pagecache/
 data/spike_*.json
 
-# ...and hand-read ground truth is versioned: it is the only check on whether
-# the engine can be trusted on handwriting, and it took eyes to make.
-!data/truth/
-!data/truth/*.json
+# ...and hand-read ground truth is NOT versioned, whatever it costs the tests.
+# It was, for a while, directly under the comment above forbidding it: six
+# files, 156 passenger names off Brazilian arrival lists of the 1920s, pushed
+# to a public remote. Allan settled it on 2026-09-07 — the truth set stays on
+# the machine that made it. A fixture that has to live in git is a document old
+# enough that nobody on it can be harmed by it; see data/fixtures below.
+
+# The single exception, and the reason it is allowed is in its own file: one
+# page of a Philadelphia arrival manifest of 1800. A work of the United States
+# federal government, so uncopyrighted, and 226 years old, so nobody named on
+# it can be harmed by it. It carries ruled columns, repetition marks in three
+# notations and a braced family sharing a surname — nearly everything the code
+# is written against — so the tests need not reach into a corpus that lives on
+# one machine. See data/fixtures/PROVENANCE.md.
+!data/fixtures/
+!data/fixtures/*.md
+!data/fixtures/*.json
+!data/fixtures/*.jpg
 
 # Nothing else under data/ is versioned, including the lists written by hand.
 # Names belong to people in public records and this remote is public: a list of

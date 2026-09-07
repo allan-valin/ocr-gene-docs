@@ -1,0 +1,30 @@
+{
+  "image": "philadelphia-1800-schooner-phebe-manifest.jpg",
+  "what": "Schooner Phebe, Philadelphia, 28 April 1800 — the passenger block at the foot of the cargo manifest",
+  "reader": "assistant",
+  "read_on": "2026-09-07",
+  "hand": "cursive",
+  "complete": true,
+  "not_ground_truth": "Transcribed by the assistant, not by a person. It exists so tests have a document to open, and no claim about reading quality may be made from it. See PROVENANCE.md.",
+  "preamble": "Five Passengers with their trunks & Baggage",
+  "rows": {
+    "1": "Jacob Perere",
+    "2": "Isabella Perere",
+    "3": "Rebecca Perere",
+    "4": "Peter Perere",
+    "5": "?Joseph Baragon"
+  },
+  "brace": {
+    "rows": ["1", "2", "3", "4"],
+    "says": "above family",
+    "why": "The clerk braced four rows as one family: the surname is written on every line here, but the brace is the same claim a repetition mark makes, and it is what `desembarque/ditto.py` resolves elsewhere."
+  },
+  "repetition_marks": {
+    "why": "Three notations on one sheet, which is why this page was chosen.",
+    "word": "Ditto",
+    "abbreviation": "Do",
+    "mark": "\"",
+    "columns_carrying_the_mark": ["by whom Shipped", "to whom consigned", "place of consignee's Residence", "Port of Destination"]
+  },
+  "column_headings": ["Marks", "Numbers", "Packages & Contents", "by whom Shipped", "to whom consigned", "place of consignee's Residence", "Port of Destination"]
+}
