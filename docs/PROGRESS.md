@@ -117,11 +117,17 @@ worth having and is not the one the plan expected.
   saying what they typed. Fifty-three documents in, at 11:00:
 
   ```
-  rows              71449 -> 73025
-  carrying a name   29718 -> 32780  (+3062)
-  5 documents came back with fewer names (worst -2)
+  rows              71449 -> 79888
+  carrying a name   29718 -> 43066  (+13348)
+  23 documents came back with fewer names, 46 rows between them
   every row a person typed survived verbatim
   ```
+
+  **Stated as the percentage it is**, which is the number that decides whether
+  the pass is worth the machine: on the 172 documents it actually re-read,
+  findable rows go **8,045 → 21,393, +166%**. Across the whole corpus with a
+  quarter of it done it is already **+45%**. Reporting this as "+3,062 rows"
+  earlier in the day hid the size of it and nearly got the pass cancelled.
 
   Held over 660 documents that is the corpus more than doubling in findable
   rows. 05edf625 makes the case on its own: 543 rows to 933, and 89 carrying a
@@ -135,24 +141,26 @@ worth having and is not the one the plan expected.
   29,718 and the worst document loses two.
 
 
-**Running right now.** The corpus re-read, which Allan said yes to on the
-morning of 2026-09-07 — the item that stood at the top of the last section:
+**Stopped, a quarter done, and resumable.** The corpus re-read ran 09:23-16:20
+on 2026-09-07 and was stopped because the machine goes back to Allan at the end
+of a stated window. 172 of 660 documents are re-read and their gains are on
+disk in `data/reread`; re-running the same command continues from where it
+stopped, because a page already in `data/reread-index` is skipped:
 
 ```sh
 .venv-ocr/bin/python scripts/export_bands.py --records data/transcriptions \
     --out data/reread-index --write-records data/reread --no-crops
 ```
 
-started 09:23, PID in `data/reread.pid`, log `data/reread.log`, writing into
-`data/reread` (a copy of `data/transcriptions`, never a hardlink) and touching
-nothing that is there. It is slower than the half-hour-per-fifteen estimate
-because it shared the machine with the benches above for its first hour: eight
-dossiers in the first four minutes alone, eleven by the eighteenth. A page
-already in `data/reread-index` is skipped, so an interrupted run resumes.
+It writes into `data/reread` (a copy of `data/transcriptions`, never a
+hardlink) and touches nothing that is there. Seven hours bought a quarter of
+the corpus; the rest is roughly ten more with the machine to itself, and it is
+the sort of thing to start when nobody needs the machine.
 
-When it finishes: compare `data/reread` with `data/transcriptions` for rows
-carrying a name, run `bench_search.py --matrix --cache data/reread`, and if it
-holds up that copy becomes the corpus.
+Nothing is lost by stopping: the 172 documents already done keep their gains,
+and `scripts/compare_corpora.py` scores whatever has been reached at any time.
+When it does finish: run that comparison, run `bench_search.py --matrix --cache
+data/reread`, and if it holds up that copy becomes the corpus.
 
 ### Start here next time, in order
 
