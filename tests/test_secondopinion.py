@@ -140,3 +140,59 @@ def test_a_document_the_sidecar_names_and_the_corpus_does_not_is_reported(
         "read": {"gone": {"2": {"1": "Guiso Cantadore"}}}})
     apply_script["main"](["--sidecar", str(side), "--records", str(records)])
     assert "1 documents in the sidecar are not in" in capsys.readouterr().out
+
+
+# What the engine said when the crop was cut, which is the only thing that
+# says the row still holds the ink the second recogniser read.
+
+def test_a_row_the_engine_now_reads_differently_is_refused(tmp_path):
+    """The sidecar's row numbers are the reading the crops were cut from. The
+    corpus moves on — a re-read renumbers a page — and pasting a reading onto
+    a row that no longer holds the same name is how a second opinion lands on
+    a stranger. The bench refuses those; so must the write.
+    """
+    rec = record()
+    got, n = with_second_readings(rec, {2: {1: "Guiso Cantadore"}}, MODEL,
+                                  was={(2, 1): "Somebody Entirely Else"})
+    assert n == 0
+    assert "second_read" not in got["rows"][0]
+
+
+def test_a_row_the_engine_still_reads_the_same_way_is_kept(tmp_path):
+    got, n = with_second_readings(record(), {2: {1: "Guiso Cantadore"}}, MODEL,
+                                  was={(2, 1): "GUUDO CAMTADORE"})
+    assert n == 1
+
+
+def test_a_row_the_crops_say_nothing_about_is_paired_as_before(tmp_path):
+    """`was` covers the rows the export knew; a row missing from it is not a
+    row that disagrees."""
+    got, n = with_second_readings(record(), {2: {1: "Guiso Cantadore"}}, MODEL,
+                                  was={(2, 9): "Anything"})
+    assert n == 1
+
+
+def test_a_repetition_mark_is_not_a_disagreement(tmp_path):
+    """The export carries what the recogniser said; the record carries what the
+    row is searched by, and for a row written with a repetition mark that is
+    the words above it followed by its own."""
+    rec = record()
+    rec["rows"][0]["name_raw"] = "Martinez Maria"
+    got, n = with_second_readings(rec, {2: {1: "Martines Marie"}}, MODEL,
+                                  was={(2, 1): "Maria"})
+    assert n == 1
+
+
+def test_the_script_refuses_a_row_the_export_disagrees_with(tmp_path):
+    records, side = corpus(tmp_path, {
+        "model": MODEL, "by": "row",
+        "read": {"h": {"2": {"1": "Guiso Cantadore"}}}})
+    bands = tmp_path / "bands"
+    bands.mkdir()
+    (bands / "bands.json").write_text(json.dumps(
+        {"h/2": [{"n": 1, "engine": "Somebody Entirely Else"}]}),
+        encoding="utf-8")
+    before = (records / "h.json").read_text(encoding="utf-8")
+    apply_script["main"](["--sidecar", str(side), "--records", str(records),
+                          "--bands", str(bands), "--write"])
+    assert (records / "h.json").read_text(encoding="utf-8") == before

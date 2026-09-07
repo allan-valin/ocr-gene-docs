@@ -15,7 +15,6 @@ whole index, exactly as the app searches it.
 from __future__ import annotations
 
 import argparse
-import difflib
 import json
 import sys
 from pathlib import Path
@@ -27,6 +26,7 @@ from desembarque import truthset                    # noqa: E402
 from desembarque.gazetteer import Names, fold, spoken_names  # noqa: E402
 from desembarque.identity import cached_hash        # noqa: E402
 from desembarque.recheck import flagged             # noqa: E402
+from desembarque.secondopinion import same_row as _same_row  # noqa: E402
 from desembarque.search import load_index, search   # noqa: E402
 
 
@@ -59,24 +59,9 @@ def exported_readings(bands: Path) -> dict[tuple, str]:
     return out
 
 
-def same_row(reading: str, text: str, floor: float = 0.8) -> bool:
-    """Whether an exported reading and an indexed row are the same ink.
-
-    Not a plain comparison, because the two are not the same kind of string.
-    The export carries what the recogniser said; the index carries what the row
-    is *searched by*, and for a row written with a repetition mark that is the
-    words above it followed by its own — `" Maria` is indexed as `Martinez
-    Maria`. So the reading is also tried against the tail of the indexed text,
-    word for word, and the better of the two decides.
-    """
-    a, b = fold(reading), fold(text)
-    best = difflib.SequenceMatcher(None, a, b).ratio()
-    words = b.split()
-    mine = a.split()
-    if len(words) > len(mine) >= 1:
-        tail = " ".join(words[-len(mine):])
-        best = max(best, difflib.SequenceMatcher(None, a, tail).ratio())
-    return best >= floor
+# The same question the write asks, and one place asks it: whether an exported
+# reading and a stored row are the same ink. `desembarque.secondopinion`.
+same_row = _same_row
 
 
 def add_second_opinion(rows, path: Path, as_guess: bool = False,

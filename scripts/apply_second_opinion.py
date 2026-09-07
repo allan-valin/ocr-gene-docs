@@ -7,7 +7,14 @@ anybody using the tool. This puts it on the row, where `desembarque.search`
 spells the row by it and counts it with the guesses.
 
     .venv/bin/python scripts/apply_second_opinion.py \
-        --sidecar data/side-fair.json --records data/transcriptions
+        --sidecar data/side-fair.json --records data/transcriptions \
+        --bands data/bands-fair
+
+`--bands` is the export the sidecar was read from, and it is what keeps a
+reading on its own row: those row numbers age, a re-read renumbers a page, and
+a reading pasted onto row 14 after that names a stranger. Give it whenever the
+records may have been read again since the crops were cut — 21 of 1,787 rows
+were refused that way on the fifteen-dossier subcorpus.
 
 Nothing is written until `--write` is given: the default is a count of what
 would land, per document, which is the number to look at before touching a
@@ -28,6 +35,17 @@ sys.path.insert(0, str(ROOT))
 from desembarque.secondopinion import with_second_readings  # noqa: E402
 
 
+def exported_readings(bands: Path) -> dict[str, dict[tuple[int, int], str]]:
+    """What the engine said about each row on the day the crops were cut."""
+    index = json.loads((bands / "bands.json").read_text(encoding="utf-8"))
+    out: dict[str, dict[tuple[int, int], str]] = {}
+    for key, got in index.items():
+        doc, _, page = key.partition("/")
+        for r in got or ():
+            out.setdefault(doc, {})[(int(page), r["n"])] = r.get("engine") or ""
+    return out
+
+
 def numbered(pages: dict) -> dict[int, dict[int, str]]:
     """The sidecar's string keys as the row numbers they are."""
     out: dict[int, dict[int, str]] = {}
@@ -44,6 +62,10 @@ def main(argv=None) -> int:
     ap.add_argument("--sidecar", type=Path, required=True)
     ap.add_argument("--records", type=Path,
                     default=ROOT / "data" / "transcriptions")
+    ap.add_argument("--bands", type=Path, default=None,
+                    help="the `export_bands.py` directory the sidecar was read "
+                         "from; a row the engine now reads differently is "
+                         "refused rather than given somebody else's name")
     ap.add_argument("--write", action="store_true",
                     help="save the records; without it nothing is written and "
                          "the count is what would land")
@@ -57,6 +79,7 @@ def main(argv=None) -> int:
         print(f"{a.sidecar} is not keyed by row; refusing to pair it")
         return 2
 
+    exported = exported_readings(a.bands) if a.bands else {}
     total = docs = missing = 0
     for doc, pages in said.items():
         f = a.records / f"{doc}.json"
@@ -64,7 +87,8 @@ def main(argv=None) -> int:
             missing += 1
             continue
         record = json.loads(f.read_text(encoding="utf-8"))
-        got, n = with_second_readings(record, numbered(pages), model)
+        got, n = with_second_readings(record, numbered(pages), model,
+                                      was=exported.get(doc))
         if not n:
             continue
         docs += 1
