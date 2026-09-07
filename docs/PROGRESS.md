@@ -95,16 +95,22 @@ worth having and is not the one the plan expected.
   saying what they typed. Fifty-three documents in, at 11:00:
 
   ```
-  rows              71449 -> 72963
-  carrying a name   37341 -> 39649  (+2308)
-  6 documents came back with fewer names (worst -4)
+  rows              71449 -> 73025
+  carrying a name   29718 -> 32780  (+3062)
+  5 documents came back with fewer names (worst -2)
   every row a person typed survived verbatim
   ```
 
-  Held over 660 documents that is the corpus roughly doubling in searchable
-  rows. Six documents came back slightly worse, which is why the comparison at
-  the end is a comparison and not a formality. 05edf625 makes the case on its
-  own: 543 rows to 933, 89 carrying a name to 602.
+  Held over 660 documents that is the corpus more than doubling in findable
+  rows. 05edf625 makes the case on its own: 543 rows to 933, and 89 carrying a
+  name to 602.
+
+  Both counts here are lower than the first ones taken this morning, and the
+  difference is the point: the first version counted `22222222` and the column
+  caption as names, put the corpus at 37,341, and read a dossier where the
+  re-read *threw that junk away* as four names lost. Counting what the index
+  indexes — `search.searchable`, now the only copy of the rule — the base is
+  29,718 and the worst document loses two.
 
 
 **Running right now.** The corpus re-read, which Allan said yes to on the
