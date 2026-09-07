@@ -450,6 +450,7 @@ def spellings(row: dict, text: str, known=None,
             if spelled != text and spelled not in out:
                 out.append(spelled)
     guesses = _stroke_spellings(text, vocab or _vocabulary(known), out)
+    guesses += _other_recogniser(row, text, out + guesses)
     return out + guesses, len(guesses)
 
 
@@ -573,6 +574,29 @@ def _second_reading(row: dict, text: str) -> list[str]:
         return []
     swapped = " ".join(a[0] if a else w for w, a in zip(words, alts))
     return [swapped] if swapped and swapped != text else []
+
+
+def _other_recogniser(row: dict, text: str, taken: list[str]) -> list[str]:
+    """What a second recogniser read off this row's crop, if one has.
+
+    A different model reading the same ink, stored on the row by the offline
+    pass — the engine's own two attempts are `name_alts`, and this is somebody
+    else's. Over the fifteen-dossier subcorpus it is worth three more names in
+    the top five, and it was measured through a sidecar only the bench could
+    read, so the application gained nothing from it until it was stored here.
+
+    Counted with the guesses rather than with the readings, which is the trade
+    the measurement asked for: as a *reading* it found six more by name alone
+    and lost three when the crossing was named, and losing a name somebody can
+    already reach is the worse half of that bargain.
+    """
+    said = (row.get("second_read") or {}).get("text") or ""
+    said = said.strip()
+    if not said or fold(said) == fold(text):
+        return []
+    if any(fold(said) == fold(t) for t in taken):
+        return []
+    return [said]
 
 
 def _resolved(rows: list[dict]) -> list[dict]:

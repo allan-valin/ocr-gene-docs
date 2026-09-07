@@ -1430,3 +1430,51 @@ def test_a_guess_that_throws_away_the_ink_is_not_a_reading_of_it():
     assert guessed == 0
     _, kept = s.spellings({}, "Garpar", counts)
     assert kept == 1
+
+
+def test_a_second_recogniser_reading_is_searched_as_a_guess():
+    """The second opinion, stored on the row rather than in a sidecar.
+
+    A second recogniser reads the same crop and its reading is worth three
+    more names in the top five over the fifteen-dossier subcorpus. It was
+    measured through a sidecar only the bench understood, so the application
+    gained nothing from it. Stored on the row it is indexed like the stroke
+    spellings: weighted below every reading, and kept out of the pass that
+    runs when a crossing was named — the trade the numbers asked for.
+    """
+    import json
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        def index(row):
+            (tmp / "a.json").write_text(json.dumps({
+                "hash": "h", "file": "d.pdf", "engine": "paddle",
+                "rows": [row]}))
+            return load_index(tmp)
+
+        raw = {"n": 1, "page": 2, "name_raw": "Jlnr Wtxbq"}
+        assert not search(index(raw), "fernanda oliveira"), \
+            "the engine's own reading already reaches this name"
+        rows = index({**raw, "second_read": {"model": "trocr",
+                                             "text": "Fernanda Oliveira"}})
+        hits = search(rows, "fernanda oliveira")
+        assert hits and hits[0]["row"] == 1
+        # and the reading itself is still what the row shows
+        assert hits[0]["text"] == "Jlnr Wtxbq"
+
+
+def test_a_second_recogniser_saying_nothing_new_adds_no_spelling():
+    from desembarque.search import spellings
+    row = {"n": 1, "second_read": {"model": "m", "text": "guudo camtadore"}}
+    alts, guessed = spellings(row, "GUUDO CAMTADORE")
+    assert "guudo camtadore" not in [a.lower() for a in alts]
+
+
+def test_a_second_recogniser_reading_is_counted_with_the_guesses():
+    from desembarque.search import spellings
+    row = {"n": 1, "second_read": {"model": "m", "text": "Guiso Cantadore"}}
+    alts, guessed = spellings(row, "GUUDO CAMTADORE")
+    assert "Guiso Cantadore" in alts
+    # it is a guess, so it sits in the tail the count names
+    assert "Guiso Cantadore" in alts[len(alts) - guessed:]

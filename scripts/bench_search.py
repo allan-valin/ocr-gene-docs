@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 from desembarque import truthset                    # noqa: E402
 from desembarque.gazetteer import Names, fold, spoken_names  # noqa: E402
 from desembarque.identity import cached_hash        # noqa: E402
+from desembarque.recheck import flagged             # noqa: E402
 from desembarque.search import load_index, search   # noqa: E402
 
 
@@ -79,7 +80,8 @@ def same_row(reading: str, text: str, floor: float = 0.8) -> bool:
 
 
 def add_second_opinion(rows, path: Path, as_guess: bool = False,
-                       bands: Path | None = None) -> str:
+                       bands: Path | None = None,
+                       only: set[tuple] | None = None) -> str:
     """Put a second recogniser's reading of a row beside the engine's own.
 
     A reading, not a guess: another recogniser read it off the same crop, so it
@@ -91,6 +93,12 @@ def add_second_opinion(rows, path: Path, as_guess: bool = False,
     number the engine gave them, so its keys *are* row numbers and the map is
     the identity — pairing is engine against engine and needs no alignment at
     all, which is why its coverage is 82% against the other's 28%.
+
+    `only`, when given, is the `(doc, page, row)` of the rows worth the second
+    reading — `desembarque.recheck.flagged` over the same corpus. The second
+    recogniser is about two seconds a row, so the whole corpus is days of it
+    and the flagged rows are hours; this measures what the shorter run is
+    worth before anybody spends the longer one.
     """
     d = json.loads(path.read_text(encoding="utf-8"))
     said, mapped = d.get("read") or {}, d.get("map") or {}
@@ -102,7 +110,7 @@ def add_second_opinion(rows, path: Path, as_guess: bool = False,
     # the same name is how a second opinion lands on a stranger, so a row whose
     # two readings disagree is refused rather than paired.
     exported = exported_readings(bands) if bands else {}
-    used = missing = stale = 0
+    used = missing = stale = skipped = 0
     at_row: dict[tuple, dict] = {}
     for r in rows:
         at_row[(r.get("doc"), r.get("page"), r.get("row"))] = r
@@ -110,6 +118,9 @@ def add_second_opinion(rows, path: Path, as_guess: bool = False,
         for page, bands in pages_of.items():
             for band, value in bands.items():
                 row_n = value if mapped else int(band)
+                if only is not None and (doc, int(page), row_n) not in only:
+                    skipped += 1
+                    continue
                 r = at_row.get((doc, int(page), row_n))
                 text = ((said.get(doc, {}).get(page, {}) or {}).get(band) or "").strip()
                 if r is None or not text or text == r.get("text"):
@@ -131,7 +142,29 @@ def add_second_opinion(rows, path: Path, as_guess: bool = False,
                     r["alts"].insert(at, text)
                 used += 1
     return (f"second opinion: {used} rows read twice, {missing} unpaired"
-            + (f", {stale} refused as read from a stale row" if stale else ""))
+            + (f", {stale} refused as read from a stale row" if stale else "")
+            + (f", {skipped} passed over as not worth a second look" if skipped
+               else ""))
+
+
+def flagged_rows(cache: Path) -> set[tuple]:
+    """Every `(doc, page, row)` the review screen would mark for a second look.
+
+    What the offline batch would hand a second recogniser if it paid for the
+    flagged rows rather than for the corpus. Read off the stored records, which
+    is where the batch stands when it has to decide — before an index exists.
+    """
+    names = Names.load(ROOT / "data" / "names.json")
+    out: set[tuple] = set()
+    for f in sorted(cache.glob("*.json")):
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        doc = d.get("hash") or f.stem
+        for page, row in flagged(d, names):
+            out.add((doc, page, row))
+    return out
 
 
 def catalogue_ships(scans: Path) -> dict[str, str]:
@@ -219,9 +252,14 @@ def matrix(args) -> int:
     rows = load_index(args.cache, engine_only=False, ships=ships or None,
                       known=known_names())
     if getattr(args, "second_opinion", None):
+        only = (flagged_rows(args.cache)
+                if getattr(args, "second_only_flagged", False) else None)
+        if only is not None:
+            print(f"{len(only)} rows flagged for a second look in {args.cache}")
         print(add_second_opinion(rows, args.second_opinion,
                                  getattr(args, "second_as_guess", False),
-                                 bands=getattr(args, "second_bands", None)))
+                                 bands=getattr(args, "second_bands", None),
+                                 only=only))
         # a different index: the postings and the letter counts were built
         # before these readings existed, and both are cached by version
         rows.version = (rows.version or 0) + 1_000_000
@@ -270,6 +308,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="count the second recogniser's readings with the "
                          "guesses: weighted below every reading, and kept out "
                          "of the pass that runs when a crossing was named")
+    ap.add_argument("--second-only-flagged", action="store_true",
+                    help="read only the rows the review check flags, which is "
+                         "what the offline batch would pay for: the second "
+                         "recogniser is ~2 s a row and the corpus is days of "
+                         "it")
     ap.add_argument("--matrix", action="store_true",
                     help="both questions at three cutoffs, on one load of the "
                          "index — what a scoring change has to be judged by")

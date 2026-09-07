@@ -110,3 +110,32 @@ def test_a_repetition_mark_is_not_a_stale_row(tmp_path):
                                             "engine": "Maria"}]})
     add_second_opinion(rows, side, bands=bands)
     assert rows[0]["alts"] == ["Martimez Maria"]
+
+
+def test_only_the_rows_asked_for_are_read_twice(tmp_path):
+    """The second recogniser is ~2 s a row, so the batch pays for a subset.
+
+    `only` is the (doc, page, row) the check flagged; everything else keeps
+    the engine's reading alone and is counted as passed over, not as unpaired.
+    """
+    rows = [{"doc": "abc", "page": 2, "row": 4, "text": "GUUDO CAMTADORE"},
+            {"doc": "abc", "page": 2, "row": 5, "text": "MARIA SILVA"}]
+    path = sidecar(tmp_path, {"model": "m", "by": "row",
+                              "read": {"abc": {"2": {"4": "Guiso Cantadore",
+                                                     "5": "Maria Silva"}}}})
+    said = add_second_opinion(rows, path, only={("abc", 2, 4)})
+    assert rows[0]["alts"] == ["Guiso Cantadore"]
+    assert "alts" not in rows[1]
+    assert "1 rows read twice" in said
+    assert "1 passed over" in said
+
+
+def test_no_restriction_reads_every_paired_row(tmp_path):
+    rows = [{"doc": "abc", "page": 2, "row": 4, "text": "GUUDO CAMTADORE"},
+            {"doc": "abc", "page": 2, "row": 5, "text": "MARIA SILVA"}]
+    path = sidecar(tmp_path, {"model": "m", "by": "row",
+                              "read": {"abc": {"2": {"4": "Guiso Cantadore",
+                                                     "5": "Maria Sylva"}}}})
+    said = add_second_opinion(rows, path)
+    assert "2 rows read twice" in said
+    assert "passed over" not in said
