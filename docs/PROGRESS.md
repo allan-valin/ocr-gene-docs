@@ -46,23 +46,32 @@ worth having and is not the one the plan expected.
 
 * **The check is not a filter.** The plan's guess was to pay for the second
   reading only on the rows the review check flags. Over the whole corpus the
-  check flags **62,976 of 71,147 rows, 88.5%**, so the saving is a tenth:
-  39.5 h of second reading becomes 35.0 h at 2 s a row. On the subcorpus,
-  gating it that way reads 1,602 rows instead of 1,787 and the index goes
-  **91/104/111 → 90/103/110** — a name lost at every cutoff to save a tenth of
-  the time. Run it on everything or not at all.
+  check flags **62,976 of 71,147 rows, 88.5%**, so the saving is a tenth. On
+  the subcorpus, gating it that way reads 1,602 rows instead of 1,787 and the
+  index goes **91/104/111 → 90/103/110** — a name lost at every cutoff to save
+  a tenth of the time. Run it on everything or not at all.
 * **Nor is the score.** `score < 0.85` is 78% of rows, and even `score < 0.5`
-  is 44% — 31,320 rows, 17.4 h. There is no cheap subset because there is no
-  small bad half: the check flags 88.5% of the corpus and the hand-read pages
-  say 82% of rows really are misread. The bar is not lying, the reading is bad.
-* **So what the second reading costs is a day and a half of machine, for four
-  more names in the top five out of 138.** That is the number to decide on,
-  and the thing to try before deciding is the *speed*, not the selection:
-  2 s a row is `--beams 4` on a CPU. Beam width, batch size and a smaller
-  model have never been measured against the reading they produce, and cutting
-  2 s to 0.7 s changes the answer from a day and a half to half a day. That
-  measurement wants the machine to itself, which is why it is not in this
-  section.
+  is 44% — 31,320 rows. There is no cheap subset because there is no small bad
+  half: the check flags 88.5% of the corpus and the hand-read pages say 82% of
+  rows really are misread. The bar is not lying, the reading is bad.
+* **The row costs 4.33 s, not the 2 s the plan carried.** Measured off the
+  fair run's own log: 1,865 crops in 8,068 s. So the corpus at the shipped
+  setting is **85.6 h**, and gating on the check only takes it to 75.7 h.
+  Every hours figure written before today was half of the true one.
+* **And the whole cost is the beam width.** 91 labelled crops, the machine to
+  itself, the re-read paused:
+
+  | setting | per crop | corpus | CER on 56 labelled rows |
+  |---|---|---|---|
+  | `--beams 4 --batch 3` (shipped) | 4.40 s | 85.6 h | 0.627 |
+  | `--beams 1 --batch 3` | **1.33 s** | **26.3 h** | 0.634 |
+  | `--beams 1 --batch 8` | 1.51 s | 29.8 h | 0.634 |
+
+  Greedy decoding is **3.3× faster for seven thousandths of character error**,
+  and reaches a name the archive knows where the engine's reading does not on
+  12 of those 56 rows against the beam search's 13. Batch size is not a lever
+  at all — 8 is slower than 3, on a CPU with no room to widen. So the number
+  to decide on is a day of machine, not three and a half.
 
 
 **Running right now.** The corpus re-read, which Allan said yes to on the
@@ -88,15 +97,15 @@ holds up that copy becomes the corpus.
 
 1. **Whether the re-read is worth keeping** — the comparison above. Nothing
    else on this list is worth as much as the engine reading the pages better.
-2. **How fast the second recogniser can be made.** The plumbing is done and
-   the selection question is answered (there is nothing to select); what is
-   unmeasured is `--beams`, `--batch` and a smaller model against the reading
-   they produce, on `data/bands-fair` where the crops and a truth set already
-   sit. `score_crops.py` says what a setting read; the day-and-a-half above
-   turns on it. Give it the machine to itself.
-3. **Then the decision**: 39.5 h of second reading for four more names in the
-   top five per 138 hand-read names, or whatever the hours become after (2).
-   `apply_second_opinion.py --write` is how it reaches the corpus.
+2. **The decision on the second reading**: about a day of machine —
+   26.3 h at `--beams 1` — for four more names in the top five per 138
+   hand-read names. `apply_second_opinion.py --write` is how it reaches the
+   corpus, and `data/side-fair-b1.json` is the greedy reading of the fifteen
+   dossiers if the numbers below want checking again.
+
+   What is still unmeasured on the speed side is a *smaller model*. Greedy
+   decoding took 4.33 s a crop to 1.33; the encoder is the floor under that,
+   and nothing has been scored against a base-vs-small trade.
 4. **Grow the labelled set**, unchanged from the last section and still the
    only thing between here and an archive-trained recogniser: 151 hand-read
    rows and four corrections, and fine-tuning on that many is measured and

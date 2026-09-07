@@ -1127,13 +1127,19 @@ what fails:
       **And the sizing question is answered, against the plan's guess.** The
       plan supposed the second reading would be paid for only on the rows the
       check flags. The check flags **62,976 of 71,147 rows (88.5%)**, so that
-      gate turns 39.5 h into 35.0 h and, on the subcorpus, 91/104/111 into
-      90/103/110 — one name at every cutoff to save a tenth of the time. Nor
-      does the recogniser's own score cut it: `< 0.85` is 78% of rows and
-      `< 0.5` is still 44%. There is no small bad half of this corpus. What is
-      left to try is the *speed* — `--beams`, `--batch`, a smaller model,
-      scored by `score_crops.py` on `data/bands-fair` — because 2 s a row is
-      what makes it a day and a half.
+      gate saves a tenth of the time and, on the subcorpus, turns 91/104/111
+      into 90/103/110 — one name at every cutoff. Nor does the recogniser's
+      own score cut it: `< 0.85` is 78% of rows and `< 0.5` is still 44%.
+      There is no small bad half of this corpus.
+
+      **The cost is the beam width, and it was the whole cost.** The row takes
+      4.33 s at the shipped setting, not the 2 s the plan carried (1,865 crops
+      in 8,068 s, off the fair run's own log), so the corpus is 85.6 h. On 91
+      crops with the machine to itself: `--beams 1` is **1.33 s a crop, 26.3 h
+      for the corpus, at CER 0.634 against the beam search's 0.627** — 3.3x
+      for seven thousandths — and `--batch 8` is slower than `--batch 3`, so
+      batch size is not a lever on a CPU. Still unmeasured: a smaller model,
+      which is the only thing left under the encoder's floor.
 
 - [x] **T15 — One place to ask which rows are worth a second look.** Done
       2026-09-07. `desembarque.recheck`. The reasons lived in `serve.py` and
