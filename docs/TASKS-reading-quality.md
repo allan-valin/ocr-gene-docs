@@ -1110,3 +1110,37 @@ what fails:
       beside a reading is not a reading, and a search that matches an invented
       spelling has to say which spelling it matched, or the tool starts
       answering with words no page contains.
+
+- [x] **T14 — The second recogniser's reading, in the corpus.** Done
+      2026-09-07. The reading was measured through a sidecar `bench_search.py`
+      understood and nothing else did, so every name it was worth was a name
+      the application could not find. A row now carries `second_read` and
+      `desembarque.search` spells the row by it, counted with the guesses;
+      `scripts/apply_second_opinion.py` writes a sidecar into the corpus.
+
+      **Measured end to end**, which is what makes this done rather than
+      written: `data/freshcache` copied, `data/side-fair.json` written into the
+      copy — 1,864 rows over fifteen documents — and the plain matrix over that
+      corpus with no sidecar and no bench flag reads **91/104/111 by name
+      alone, 118/123/129 naming the crossing**, exactly the sidecar's numbers.
+
+      **And the sizing question is answered, against the plan's guess.** The
+      plan supposed the second reading would be paid for only on the rows the
+      check flags. The check flags **62,976 of 71,147 rows (88.5%)**, so that
+      gate turns 39.5 h into 35.0 h and, on the subcorpus, 91/104/111 into
+      90/103/110 — one name at every cutoff to save a tenth of the time. Nor
+      does the recogniser's own score cut it: `< 0.85` is 78% of rows and
+      `< 0.5` is still 44%. There is no small bad half of this corpus. What is
+      left to try is the *speed* — `--beams`, `--batch`, a smaller model,
+      scored by `score_crops.py` on `data/bands-fair` — because 2 s a row is
+      what makes it a day and a half.
+
+- [x] **T15 — One place to ask which rows are worth a second look.** Done
+      2026-09-07. `desembarque.recheck`. The reasons lived in `serve.py` and
+      were written again in `bench_check.py`; the copies had drifted, the bench
+      asking the spoken-name lists and the screen not, so the yellow bar was
+      measured on a rule it was not running. `bench_check.py --json` is
+      byte-for-byte unchanged by the consolidation, which is the only proof
+      worth having that a refactor refactored. The screen still asks only about
+      the archive's own names — handing it the language lists changes what a
+      person is stopped on and is a decision, not a refactor.

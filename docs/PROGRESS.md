@@ -6,6 +6,109 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-09-07 — the second reading ships, and it costs a day and a half
+
+**Where things stand.** The corpus re-read is running (see below) and nothing
+else is. 770 Python assertions green, the tree pushed. The second opinion is
+now something the application has rather than something the bench measured,
+and the open question about it — how to pay for it — has an answer that is
+worth having and is not the one the plan expected.
+
+**Shipped.**
+
+* **One place to ask which rows are worth a second look.** The reasons were
+  written twice, in `scripts/serve.py` and again in `scripts/bench_check.py`,
+  and the copies had drifted: the bench asked the spoken-name lists as well as
+  the archive's own names and the screen did not, so the yellow bar was being
+  measured on a rule it was not running. Both now call
+  `desembarque.recheck.why_check`, and `bench_check.py --json` is byte-for-byte
+  what it was before the change. The screen keeps its present behaviour —
+  handing it the language lists adds a flag to the bar and is a decision, not a
+  refactor. `recheck.flagged` is the third caller the consolidation was for:
+  the offline batch, which has to pick rows from a stored record before any
+  index exists.
+* **The other recogniser's reading, on the row.** A row carries `second_read`
+  — the model and what it said — and `desembarque.search` spells the row by
+  it, counted with the guesses: below every reading, and out of the pass that
+  runs when a crossing was named. `scripts/apply_second_opinion.py` writes a
+  `read_bands.py` sidecar into the corpus, refusing a sidecar keyed by a band's
+  position, never giving a machine's reading to a row a person typed, and
+  writing nothing at all on a second run over the same sidecar.
+* **And it was proved end to end.** `data/freshcache` copied to
+  `data/sidecache`, `data/side-fair.json` written into it — 1,864 rows over
+  fifteen documents — and then the plain matrix over that corpus with no
+  sidecar and no bench flag: **91/104/111 by name alone, 118/123/129 naming
+  the crossing**, which is exactly what the sidecar measured through the bench.
+  Every number the second opinion had earned is now a number the application
+  has.
+
+**Measured, and it settles the sizing question.**
+
+* **The check is not a filter.** The plan's guess was to pay for the second
+  reading only on the rows the review check flags. Over the whole corpus the
+  check flags **62,976 of 71,147 rows, 88.5%**, so the saving is a tenth:
+  39.5 h of second reading becomes 35.0 h at 2 s a row. On the subcorpus,
+  gating it that way reads 1,602 rows instead of 1,787 and the index goes
+  **91/104/111 → 90/103/110** — a name lost at every cutoff to save a tenth of
+  the time. Run it on everything or not at all.
+* **Nor is the score.** `score < 0.85` is 78% of rows, and even `score < 0.5`
+  is 44% — 31,320 rows, 17.4 h. There is no cheap subset because there is no
+  small bad half: the check flags 88.5% of the corpus and the hand-read pages
+  say 82% of rows really are misread. The bar is not lying, the reading is bad.
+* **So what the second reading costs is a day and a half of machine, for four
+  more names in the top five out of 138.** That is the number to decide on,
+  and the thing to try before deciding is the *speed*, not the selection:
+  2 s a row is `--beams 4` on a CPU. Beam width, batch size and a smaller
+  model have never been measured against the reading they produce, and cutting
+  2 s to 0.7 s changes the answer from a day and a half to half a day. That
+  measurement wants the machine to itself, which is why it is not in this
+  section.
+
+
+**Running right now.** The corpus re-read, which Allan said yes to on the
+morning of 2026-09-07 — the item that stood at the top of the last section:
+
+```sh
+.venv-ocr/bin/python scripts/export_bands.py --records data/transcriptions \
+    --out data/reread-index --write-records data/reread --no-crops
+```
+
+started 09:23, PID in `data/reread.pid`, log `data/reread.log`, writing into
+`data/reread` (a copy of `data/transcriptions`, never a hardlink) and touching
+nothing that is there. It is slower than the half-hour-per-fifteen estimate
+because it shared the machine with the benches above for its first hour: eight
+dossiers in the first four minutes alone, eleven by the eighteenth. A page
+already in `data/reread-index` is skipped, so an interrupted run resumes.
+
+When it finishes: compare `data/reread` with `data/transcriptions` for rows
+carrying a name, run `bench_search.py --matrix --cache data/reread`, and if it
+holds up that copy becomes the corpus.
+
+### Start here next time, in order
+
+1. **Whether the re-read is worth keeping** — the comparison above. Nothing
+   else on this list is worth as much as the engine reading the pages better.
+2. **How fast the second recogniser can be made.** The plumbing is done and
+   the selection question is answered (there is nothing to select); what is
+   unmeasured is `--beams`, `--batch` and a smaller model against the reading
+   they produce, on `data/bands-fair` where the crops and a truth set already
+   sit. `score_crops.py` says what a setting read; the day-and-a-half above
+   turns on it. Give it the machine to itself.
+3. **Then the decision**: 39.5 h of second reading for four more names in the
+   top five per 138 hand-read names, or whatever the hours become after (2).
+   `apply_second_opinion.py --write` is how it reaches the corpus.
+4. **Grow the labelled set**, unchanged from the last section and still the
+   only thing between here and an archive-trained recogniser: 151 hand-read
+   rows and four corrections, and fine-tuning on that many is measured and
+   does not work.
+5. Still open and untouched: T3's `bench_columns.py` and per-column truth, and
+   T10's other columns. Both want a cursive page whose columns read at all,
+   which T11 measured and found they do not.
+
+**On disk from today.** `data/sidecache` is `data/freshcache` with the second
+reading written in — the end-to-end proof, keep it or delete it, nothing
+depends on it. `data/reread` and `data/reread-index` are the run above.
+
 ## 2026-09-04 — the labels were wrong, and that came first
 
 **Where things stand at the end of the day.** Tree clean, 742 Python
