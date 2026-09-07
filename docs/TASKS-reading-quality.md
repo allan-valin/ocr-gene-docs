@@ -1136,10 +1136,23 @@ what fails:
       4.33 s at the shipped setting, not the 2 s the plan carried (1,865 crops
       in 8,068 s, off the fair run's own log), so the corpus is 85.6 h. On 91
       crops with the machine to itself: `--beams 1` is **1.33 s a crop, 26.3 h
-      for the corpus, at CER 0.634 against the beam search's 0.627** — 3.3x
-      for seven thousandths — and `--batch 8` is slower than `--batch 3`, so
-      batch size is not a lever on a CPU. Still unmeasured: a smaller model,
-      which is the only thing left under the encoder's floor.
+      for the corpus** — 3.3x — and `--batch 8` is slower than `--batch 3`, so
+      batch size is not a lever on a CPU.
+
+      Read the whole way and searched, which is the test that counts: greedy
+      is **CER 0.560 against the beam search's 0.567** over the 152 labelled
+      rows, and in the index, on the same 31,272 rows, **90/101/112 against
+      91/104/111** by name alone, both against 87/97/105 with no second
+      reading and all three 118/123/129 naming the crossing. The beam search
+      buys one name at five and three at ten for sixty extra hours. If it is
+      run, it is run greedily. Still unmeasured: a smaller model, the only
+      thing left under the encoder's floor.
+
+      **And it rescues nothing.** Of the 1,864 rows read twice, 1,748 are
+      searchable either way, the second reading makes 43 searchable that the
+      engine's does not, and the engine's makes 54 searchable that it does
+      not. The second opinion is worth its three or four names at five and
+      nothing else.
 
 - [x] **T15 — One place to ask which rows are worth a second look.** Done
       2026-09-07. `desembarque.recheck`. The reasons lived in `serve.py` and

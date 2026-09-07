@@ -68,10 +68,32 @@ worth having and is not the one the plan expected.
   | `--beams 1 --batch 8` | 1.51 s | 29.8 h | 0.634 |
 
   Greedy decoding is **3.3× faster for seven thousandths of character error**,
-  and reaches a name the archive knows where the engine's reading does not on
-  12 of those 56 rows against the beam search's 13. Batch size is not a lever
-  at all — 8 is slower than 3, on a CPU with no room to widen. So the number
-  to decide on is a day of machine, not three and a half.
+  and batch size is not a lever at all — 8 is slower than 3, on a CPU with no
+  room to widen. So the number to decide on is a day of machine, not three and
+  a half.
+* **And it was then read the whole way and searched, which is the only test
+  that counts.** `data/side-fair-b1.json` is all 1,865 crops read greedily;
+  over the 152 labelled rows it is **CER 0.560 against the beam search's
+  0.567** — not worse, slightly better. In the index, both written into a copy
+  of the same corpus and searched on the same 31,272 rows:
+
+  | | per crop | corpus | top 5 / 10 / 20, name alone |
+  |---|---|---|---|
+  | no second reading | — | — | 87 / 97 / 105 |
+  | `--beams 4`, the shipped setting | 4.40 s | 85.6 h | 91 / 104 / 111 |
+  | `--beams 1` | **1.33 s** | **26.3 h** | 90 / 101 / 112 |
+
+  Naming the crossing, all three are 118/123/129 — the second reading has
+  never moved that column and does not now. So the beam search buys one more
+  name at five and three at ten for **sixty extra hours**, and character error
+  and findability disagree about which reading is better, which this
+  repository has seen before. **If it is run, it is run greedily.**
+* **It does not rescue the unreadable rows, which was the other hope.** Of the
+  1,864 rows read twice, 1,748 are searchable either way; the second reading
+  makes 43 searchable that the engine's does not, and the engine's makes 54
+  searchable that the second reading does not. Five of the 43 spell a name the
+  archive knows. The second opinion is worth its three or four names in the
+  top five and nothing else.
 * **A sidecar belongs to the reading its crops were cut from, and the write now
   knows it.** `apply_second_opinion.py --bands` refuses a row the engine no
   longer reads the same way, which is what stops a reading landing on a
@@ -136,15 +158,24 @@ holds up that copy becomes the corpus.
 
 1. **Whether the re-read is worth keeping** — the comparison above. Nothing
    else on this list is worth as much as the engine reading the pages better.
-2. **The decision on the second reading**: about a day of machine —
-   26.3 h at `--beams 1` — for four more names in the top five per 138
-   hand-read names. `apply_second_opinion.py --write` is how it reaches the
-   corpus, and `data/side-fair-b1.json` is the greedy reading of the fifteen
-   dossiers if the numbers below want checking again.
+2. **The decision on the second reading**, and it is only a decision now:
+   **26.3 h of machine at `--beams 1`, for three more names in the top five
+   and four at ten, per 138** — and only after (1), because a third of a
+   sidecar is refused by a corpus it was not read from. The pass is
 
-   What is still unmeasured on the speed side is a *smaller model*. Greedy
-   decoding took 4.33 s a crop to 1.33; the encoder is the floor under that,
-   and nothing has been scored against a base-vs-small trade.
+   ```sh
+   .venv-ocr/bin/python scripts/export_bands.py --records <corpus> --out <bands>
+   .venv-htr/bin/python scripts/read_bands.py --bands <bands> --out side.json \
+       --variant strip --refine 64 --beams 1 --batch 3
+   .venv/bin/python scripts/apply_second_opinion.py --sidecar side.json \
+       --records <corpus> --bands <bands> --write
+   ```
+
+   and nothing about it is unmeasured except one lever: a **smaller model**.
+   Greedy took the crop from 4.33 s to 1.33 and the encoder is the floor under
+   that; no base-vs-small trade has been scored. `data/bands-fair`,
+   `data/trainset-fair` and `score_crops.py` are what that measurement needs,
+   and it wants the machine to itself.
 4. **Grow the labelled set**, unchanged from the last section and still the
    only thing between here and an archive-trained recogniser: 151 hand-read
    rows and four corrections, and fine-tuning on that many is measured and
