@@ -175,12 +175,26 @@ def catalogue_ships(scans: Path) -> dict[str, str]:
 
 
 def truth_rows(cache: Path, scans: Path, with_line: bool = False,
-               ships: dict[str, str] | None = None) -> list[dict]:
-    """Every hand-read name, with the row it should be found on."""
+               ships: dict[str, str] | None = None,
+               truth_dir: Path | None = None) -> list[dict]:
+    """Every hand-read name, with the row it should be found on.
+
+    Each one carries the hand it was written in and who read it, because a
+    blended score over typed and cursive pages says nothing: the typed pages
+    are effectively solved and were inflating every figure quoted from this
+    bench (docs/TASKS-honest-measurement.md, T3).
+
+    `truth_dir` is what makes a held-out set possible — the same scoring over
+    a directory that nothing was ever tuned against (T5).
+    """
     out = []
-    for f in sorted((ROOT / "data" / "truth").glob("*.json")):
-        t = json.loads(f.read_text(encoding="utf-8"))
-        if not t.get("names"):
+    for f in sorted(Path(truth_dir or ROOT / "data" / "truth").glob("*.json")):
+        page = truthset.load_page(f)      # raises on a file with no reader
+        t = page.raw
+        # both shapes are scored now: a run of names down the page, and the
+        # rows form, which is the only page a person actually read and was
+        # being skipped here for the whole life of the 138
+        if not (t.get("names") or t.get("rows")):
             continue
         pdf = scans / t["pdf"]
         if not pdf.exists():
@@ -214,7 +228,24 @@ def truth_rows(cache: Path, scans: Path, with_line: bool = False,
             out.append({"name": pair["truth"], "doc": doc,
                         "page": t["page"], "row": pair["row"].get("n"),
                         "read": pair["row"].get("name_raw") or "",
-                        "voyage": extra, "pdf": t["pdf"]})
+                        "voyage": extra, "pdf": t["pdf"],
+                        "hand": page.hand, "reader": page.reader})
+    return out
+
+
+def tally(scored: list[tuple[str, int | None]],
+          cutoffs: tuple[int, ...] = (5, 10, 20)) -> dict[str, dict]:
+    """How many names were found at each cutoff, per hand and blended.
+
+    A hand nobody read is absent rather than a row of zeroes, so a bench run
+    over one page does not print two thirds of a table it has no data for.
+    """
+    out: dict[str, dict] = {}
+    for hand in sorted({h for h, _ in scored}) + ["blended"]:
+        ranks = [r for h, r in scored if hand in (h, "blended")]
+        out[hand] = {"n": len(ranks),
+                     "found": [sum(1 for r in ranks if r and r <= at)
+                               for at in cutoffs]}
     return out
 
 
@@ -248,20 +279,34 @@ def matrix(args) -> int:
         # a different index: the postings and the letter counts were built
         # before these readings existed, and both are cached by version
         rows.version = (rows.version or 0) + 1_000_000
+    truth_dir = getattr(args, "truth_dir", None)
     asked = {
         "by name alone": [(w, w["name"]) for w in
-                          truth_rows(args.cache, args.scans, ships=ships)],
+                          truth_rows(args.cache, args.scans, ships=ships,
+                                     truth_dir=truth_dir)],
         "naming the crossing": [
             (w, f"{w['name']} {w['voyage']}".strip() if w.get("voyage") else w["name"])
-            for w in truth_rows(args.cache, args.scans, with_line=True, ships=ships)],
+            for w in truth_rows(args.cache, args.scans, with_line=True, ships=ships,
+                                truth_dir=truth_dir)],
     }
-    total = len(next(iter(asked.values())))
-    print(f"{total} hand-read names against {len(rows)} indexed rows\n")
-    print(f"{'':22}{'top 5':>8}{'top 10':>8}{'top 20':>8}")
+    names = next(iter(asked.values()))
+    readers = {}
+    for w, _ in names:
+        readers[w.get("reader") or "unrecorded"] = \
+            readers.get(w.get("reader") or "unrecorded", 0) + 1
+    who = ", ".join(f"{n} by {r}" for r, n in sorted(readers.items(),
+                                                     key=lambda kv: -kv[1]))
+    print(f"{len(names)} hand-read names against {len(rows)} indexed rows "
+          f"({who})\n")
+    cutoffs = (5, 10, 20)
+    print(f"{'':26}" + "".join(f"{f'top {at}':>8}" for at in cutoffs))
     for label, queries in asked.items():
-        ranks = [rank_of(rows, w, q, 50) for w, q in queries]
-        got = [sum(1 for r in ranks if r and r <= at) for at in (5, 10, 20)]
-        print(f"{label:22}" + "".join(f"{n:>8}" for n in got))
+        print(label)
+        scored = [(w.get("hand") or "unknown", rank_of(rows, w, q, 50))
+                  for w, q in queries]
+        for hand, got in tally(scored, cutoffs).items():
+            head = f"  {hand} ({got['n']})"
+            print(f"{head:26}" + "".join(f"{n:>8}" for n in got["found"]))
     return 0
 
 
@@ -298,12 +343,27 @@ def main(argv: list[str] | None = None) -> int:
                          "what the offline batch would pay for: the second "
                          "recogniser is ~2 s a row and the corpus is days of "
                          "it")
+    ap.add_argument("--truth-dir", type=Path, default=None,
+                    help="score against this directory of truth files instead "
+                         "of data/truth")
+    ap.add_argument("--held-out", action="store_true",
+                    help="score the held-out set in data/truth-heldout, the "
+                         "random draw of docs/TASKS-honest-measurement.md T5 "
+                         "that nothing is ever tuned against. Reported beside "
+                         "the tuned-on set, never instead of it")
     ap.add_argument("--matrix", action="store_true",
                     help="both questions at three cutoffs, on one load of the "
                          "index — what a scoring change has to be judged by")
     args = ap.parse_args(argv)
     sys.path.insert(0, str(ROOT / "scripts"))
 
+    if args.held_out:
+        args.truth_dir = args.truth_dir or ROOT / "data" / "truth-heldout"
+        if not args.truth_dir.exists():
+            print(f"no held-out set at {args.truth_dir}: it is read by hand, "
+                  "one page per document, in the order fixed by "
+                  "docs/TASKS-honest-measurement.md T5")
+            return 1
     if args.matrix:
         return matrix(args)
     ships = catalogue_ships(args.scans) if args.catalogue else {}
