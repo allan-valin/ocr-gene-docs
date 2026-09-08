@@ -53,8 +53,14 @@ def pairs(truth: dict, rows: list[dict]) -> list[dict]:
     # when a page is cut differently, and a run counted from anywhere drifts
     # past the first row that carries no reading. See `aligned`.
     if truth.get("rows"):
-        wanted = [(int(n), name) for n, name in truth["rows"].items()]
+        # the shorthand of the new format lives here too: a row nobody could
+        # read and a band that is no row are not names to search for, and the
+        # marker on an uncertain reading is not part of the name
+        cells = [parse_cell(cell, n=int(n)) for n, cell in truth["rows"].items()]
+        wanted = [(c.n, c.text) for c in cells if c.kind == READ]
+        sure = {c.n: c.certain for c in cells}
     else:
+        sure = {}
         placed = aligned([r.get("name_raw") or "" for r in on_page],
                          [n for n in (truth.get("names") or []) if n])
         wanted = [(on_page[i].get("n"), name) for i, name in placed.items()]
@@ -67,7 +73,8 @@ def pairs(truth: dict, rows: list[dict]) -> list[dict]:
         # anything else about the row — its nationality, for the language
         # prior — has to be able to find the row again
         out.append({"truth": name, "read": row["name_raw"], "row": row,
-                    "pdf": truth.get("pdf"), "page": truth.get("page")})
+                    "pdf": truth.get("pdf"), "page": truth.get("page"),
+                    "certain": sure.get(n, True)})
     return out
 
 

@@ -153,3 +153,37 @@ class TestLoadPages:
         write(tmp_path, "a.json", {k: v for k, v in NEW.items() if k != "reader"})
         with pytest.raises(ValueError, match="reader"):
             load_pages(tmp_path)
+
+
+class TestPairingSkipsWhatIsNotAName:
+    """`pairs` scores a page against the engine, so only readings are queries.
+
+    An unreadable row is the most interesting row on the page and the least
+    searchable: nobody can type it, so it is counted elsewhere (what did the
+    engine claim to read there?) and never as a name to look for.
+    """
+
+    ROWS = [{"page": 2, "n": 1, "name_raw": "ANTONIO COPPOLA"},
+            {"page": 2, "n": 2, "name_raw": "LUUGI FERRERO"},
+            {"page": 2, "n": 3, "name_raw": "INVENTED NAME"},
+            {"page": 2, "n": 4, "name_raw": "RULE"}]
+
+    def truth(self):
+        return {"pdf": "a.pdf", "page": 2, "reader": "Allan", "hand": "cursive",
+                "rows": {"1": "Antonio Coppola", "2": "?Luigi Ferrero",
+                         "3": "", "4": "-"}}
+
+    def test_unreadable_and_absent_rows_are_not_scored_as_names(self):
+        from desembarque.truthset import pairs
+        got = pairs(self.truth(), self.ROWS)
+        assert [p["row"]["n"] for p in got] == [1, 2]
+
+    def test_an_uncertain_row_is_scored_without_its_marker(self):
+        from desembarque.truthset import pairs
+        got = pairs(self.truth(), self.ROWS)
+        assert got[1]["truth"] == "Luigi Ferrero"
+
+    def test_the_row_says_whether_its_reader_was_sure(self):
+        from desembarque.truthset import pairs
+        got = pairs(self.truth(), self.ROWS)
+        assert [p["certain"] for p in got] == [True, False]

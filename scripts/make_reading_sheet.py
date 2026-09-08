@@ -221,6 +221,8 @@ TEMPLATE = """<!doctype html>
  .r input{flex:1;padding:4px 7px;border:1px solid #ccc;border-radius:4px;font-size:14px}
  .r input:focus{outline:2px solid #4a7;border-color:#4a7}
  .hand{margin:0 0 10px;color:#555;font-size:13px}
+ .who input{font:inherit;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin-left:8px}
+ #whowarn{display:none;color:#a33;font-size:13px;margin-left:10px}
  .hand label{margin-right:10px}
  .bar{position:sticky;bottom:0;background:#fff;border-top:1px solid #ddd;padding:12px 20px;text-align:center}
  button{font:inherit;padding:9px 16px;border:1px solid #333;background:#222;color:#fff;border-radius:6px;cursor:pointer}
@@ -248,6 +250,10 @@ part that matters: a name typed against the wrong row is worse than no name.</p>
 </table>
 <p><b>Please do not skip the illegible ones.</b> Every previous measurement in
 this project quietly left them out, which is why it flattered itself.</p>
+<p class=who><label><b>Who is reading this?</b>
+<input id=reader autocomplete=off placeholder="your name"></label>
+<span id=whowarn>A page that does not say who read it is not evidence — that is
+the whole lesson this sheet exists for.</span></p>
 </header>
 $BODY
 <div class=bar>
@@ -263,10 +269,11 @@ const KEY='desembarque-reading-sheet';
 function load(){try{const w=JSON.parse(localStorage.getItem(KEY)||'{}');
   document.querySelectorAll('.rows input').forEach(i=>{
     const k=i.dataset.s+':'+i.dataset.n; if(w[k]!==undefined)i.value=w[k];});
+  if(w.__reader)document.getElementById('reader').value=w.__reader;
   if(w.__hand)Object.entries(w.__hand).forEach(([n,v])=>{
     const r=document.querySelector(`input[name=h${n}][value="${v}"]`); if(r)r.checked=true;});
  }catch(e){}}
-function keep(){try{const w={__hand:{}};
+function keep(){try{const w={__hand:{},__reader:document.getElementById('reader').value};
   document.querySelectorAll('.rows input').forEach(i=>{
     if(i.value)w[i.dataset.s+':'+i.dataset.n]=i.value;});
   document.querySelectorAll('.sheet').forEach((s,i)=>{
@@ -279,14 +286,20 @@ function collect(){
     s.querySelectorAll('.rows input').forEach(inp=>{rows[inp.dataset.n]=inp.value.trim();});
     const c=document.querySelector(`input[name=h${i}]:checked`);
     return {pdf:s.dataset.pdf,page:+s.dataset.page,hand:c?c.value:null,
-            reader:'Allan',read_on:new Date().toISOString().slice(0,10),
+            reader:document.getElementById('reader').value.trim(),
+            read_on:new Date().toISOString().slice(0,10),
             complete:true,rows};
   }).filter(s=>Object.values(s.rows).some(v=>v!==''));
 }
-function save(){const b=new Blob([JSON.stringify(collect(),null,1)],{type:'application/json'});
+function named(){const v=document.getElementById('reader').value.trim();
+  if(!v){document.getElementById('whowarn').style.display='block';
+    document.getElementById('reader').focus();}
+  return !!v;}
+function save(){if(!named())return;
+  const b=new Blob([JSON.stringify(collect(),null,1)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);
   a.download='reading-sheet.json';a.click();}
-function copy(){const t=document.getElementById('out');
+function copy(){if(!named())return; const t=document.getElementById('out');
   t.style.display='block';t.value=JSON.stringify(collect(),null,1);
   t.select();try{document.execCommand('copy')}catch(e){}}
 addEventListener('input',keep); addEventListener('change',keep); load();
