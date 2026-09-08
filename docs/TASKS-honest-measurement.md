@@ -245,30 +245,50 @@ that might compete for rank. The held-out set (T5) is what settles it.
 * **Q8_0 instead of Q4_K_M** — 0.339 against 0.327, so no better, and 40%
   slower. The quantisation is not what limits it.
 
-**The blocker, and it is not technical.** CHURRO inherits **Qwen-Research**
-terms: open weights, research use, no commercial use. `LICENSING.md` plans a
-commercial licence beside the AGPL, and Allan's standing rule is open source
-only. So this result is *evidence about a class of model*, not a component
-that ships. The routes that stay open, in order of how much they are worth:
+**CHURRO cannot ship, and it turns out not to matter.** CHURRO inherits
+**Qwen-Research** terms: open weights, research use, no commercial use, which
+collides with `LICENSING.md` and with the open-source-only rule. So the obvious
+question was asked the same afternoon: **does a permissively licensed VLM keep
+the gain?** `Qwen2.5-VL-7B-Instruct` is **Apache-2.0** where the 3B is not, and
+it was measured the same way, on the same rows:
 
-1. **A permissively licensed VLM of the same shape.** Qwen2.5-VL-7B-Instruct
-   is Apache-2.0 where the 3B is not. Bigger and slower, and not trained on
-   historical hands — CHURRO's own paper puts the best untuned open-weight VLM
-   at 54.5% against its 70.1% — so measure before believing.
-2. **Fine-tune a permissive base on CHURRO-DS**, checking the dataset's own
-   licence first.
-3. **PyLaia and Kraken**, still untried, both permissive and both built for
-   historical cursive.
+| CER, mean | cursive rows (109) | typed rows (42) | seconds a row |
+|---|---|---|---|
+| the engine as it ships | 0.443 | 0.171 | 4.33 |
+| CHURRO 3B (research licence) | **0.350** | 0.249 | 4.4 |
+| **Qwen2.5-VL-7B (Apache-2.0)** | 0.356 | **0.114** | 8.5 |
 
-**Route by hand, whatever wins.** T4 labels every page typed or cursive off
-confidence already stored, and this table is the argument for using it: the
-engine is far better on typed pages, a historical VLM is far better on cursive
-ones, and 83% of the corpus is cursive. Neither reads everything.
+**The Apache-2.0 model matches CHURRO on cursive and beats both it and the
+engine on typed.** Through the index, cursive names found by name alone in the
+top five: engine 52, Qwen-7B **78**, CHURRO 85, of 110. So the licence blocker
+costs about seven names of a hundred and ten and nothing at all in principle —
+**there is a shippable model that reads this archive better than what is in it
+now, on both hands.** What it costs is twice the machine time a row.
 
-**Cost, honestly.** 5 s a row is 85 hours for the whole corpus — the same order
-as the re-read, and not a thing to run casually. Per document it is 3–4 minutes
-for a 40-row page, which is a reasonable "read this one properly" button and an
-unreasonable batch.
+That changes the shape of the routing argument rather than removing it. Against
+Qwen-7B the engine wins nothing on quality, only on speed, so the question
+becomes which rows are worth 8.5 seconds — and T4's per-page hand labels are
+still how that is decided, since a cursive page gains 0.09 CER and a typed one
+0.06 off a much lower base.
+
+**Still worth trying, in order:**
+
+1. **A fine-tune of a permissive base on CHURRO-DS**, licence of the dataset
+   checked first — that is the combination that would beat both rows above.
+2. **PyLaia and Kraken**, untried, permissive, built for historical cursive.
+3. **Qwen2.5-VL-7B at a larger quantisation or with the page in view**, since
+   everything here was Q4_K_M on row crops.
+
+**Cost, honestly.** 5 s a row (CHURRO) is 85 hours for the whole corpus and
+8.5 s (Qwen-7B) is 170 — the same order as the re-read and then some, not a
+thing to run casually. Per document it is 3–6 minutes for a 40-row page, which
+is a reasonable "read this one properly" button and an unreasonable batch. The
+honest first move is the button, not the batch.
+
+**And none of this is proven yet.** Every number above is measured against
+labels that are mostly the assistant's own reading, whose errors correlate with
+the *engine's* — which flatters the engine, so the VLMs' margin is if anything
+understated. It stays unproven until T5's held-out pages are read.
 
 ---
 

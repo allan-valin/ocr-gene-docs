@@ -73,16 +73,26 @@ Also settled: reading the whole name column in one look is worse, not cheaper
 (every `Maria` came back `Elbria`), and Q8_0 weights are no better than Q4_K_M
 and 40% slower.
 
-**Its licence blocks it from shipping.** Qwen-Research terms: open weights,
-research only, no commercial use, and `LICENSING.md` now carries a table of
-which weights this project may actually use. So the result is evidence about a
-*class* of model, and the next question is whether a permissively licensed one
-(Qwen2.5-VL-7B is Apache-2.0 where the 3B is not) or a fine-tune on CHURRO-DS
-keeps the gain. **Nothing about the shipped engine changed today.**
+**CHURRO's licence blocks it from shipping — and that turned out not to
+matter.** It is research-use-only, so the same afternoon the obvious question
+was put to a model that *is* shippable: `Qwen2.5-VL-7B-Instruct`, Apache-2.0.
 
-The other half of that result is that **it should be routed by hand**: the
-engine is much better on typed pages, the VLM much better on cursive, and T4
-now labels every page in the corpus. Neither reads everything.
+| CER, mean | cursive (109 rows) | typed (42 rows) | s/row |
+|---|---|---|---|
+| the engine as it ships | 0.443 | 0.171 | 4.33 |
+| CHURRO 3B — research licence | **0.350** | 0.249 | 4.4 |
+| **Qwen2.5-VL-7B — Apache-2.0** | 0.356 | **0.114** | 8.5 |
+
+The permissively licensed model matches CHURRO on cursive and beats both it and
+the engine on typed. Cursive names found by name alone in the top five: engine
+52, Qwen-7B **78**, CHURRO 85, of 110. **So there is a model this project may
+actually use that reads this archive better than what is in it now, on both
+hands, for twice the machine time a row.**
+
+`LICENSING.md` now carries the table of which weights may be used at all.
+**Nothing about the shipped engine changed today** — and none of this is proven
+until the held-out pages are read, because every number here is scored against
+labels whose errors correlate with the engine's.
 
 **What is waiting on Allan, and it is the only thing blocking honest numbers.**
 

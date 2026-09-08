@@ -63,6 +63,7 @@ depends on it.
 | PaddleOCR PP-OCRv6 det/rec | Apache-2.0 | yes | **shipped** — the engine |
 | TrOCR variants scored 2026-09-03 | MIT / Apache-2.0 | yes | measured, not adopted |
 | `stanford-oval/churro-3B` | Qwen-Research | **no** | measured 2026-09-08, cannot ship |
+| `Qwen/Qwen2.5-VL-7B-Instruct` | Apache-2.0 | yes | measured 2026-09-08, **the candidate** |
 
 CHURRO is open-*weight*, which is not open-*source*: it inherits Qwen-Research terms,
 which permit research use and forbid commercial use. It was measured on 2026-09-08 because
