@@ -105,6 +105,18 @@ writes the sidecar `apply_second_opinion.py --write` already knows how to apply.
 until the held-out pages are read, because every number here is scored against
 labels whose errors correlate with the engine's.
 
+**A bug found by accident, and it is bigger than it looks.** Six of the ten
+held-out pages came back from the VLM pass with no rows read at all. The cause:
+a page's stored `columns` has two shapes — the name column alone on a page
+measured off the rules, and *every* boundary on a page that printed its
+headings — and `desembarque.bandcrops` accepted only the first, calling the
+second unusable. **1,509 of the 2,543 pages that have bands, 59%, could not be
+cut into row crops at all.** Everything downstream of a crop was quietly
+working on the other 41%: the labelled training set, the review screen's
+picture of a row, every second-opinion pass. `make_reading_sheet` had always
+read both shapes, which is why the sheet could render pages the reading pass
+then skipped. Fixed, with the two shapes tested.
+
 **The plan those numbers argue for is written down**:
 [`docs/PLAN-vlm-second-reading.md`](PLAN-vlm-second-reading.md). Its first step
 costs no machine at all and can cancel the rest, and its second — the VLM over
