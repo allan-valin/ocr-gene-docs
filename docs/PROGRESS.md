@@ -105,6 +105,12 @@ writes the sidecar `apply_second_opinion.py --write` already knows how to apply.
 until the held-out pages are read, because every number here is scored against
 labels whose errors correlate with the engine's.
 
+**The plan those numbers argue for is written down**:
+[`docs/PLAN-vlm-second-reading.md`](PLAN-vlm-second-reading.md). Its first step
+costs no machine at all and can cancel the rest, and its second — the VLM over
+the ten held-out pages, under an hour — is the experiment the whole thing turns
+on. 170 hours of corpus reading is not started before that hour is spent.
+
 **What is waiting on Allan, and it is the only thing blocking honest numbers.**
 
 `~/Downloads/desembarque-reading-sheet.html` — 10 pages, 361 rows, 4 MB, opens
