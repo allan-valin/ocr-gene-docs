@@ -69,3 +69,30 @@ def test_a_page_whose_geometry_says_nothing_yields_nothing(tmp_path):
     page = tmp_path / "p.png"
     a_page(page)
     assert bandcrops.crops_for(page, {"rows": [], "columns": []}) == {}
+
+
+def test_a_page_measured_off_its_printing_stores_every_boundary():
+    """`columns` has two shapes on disk, and only one of them was understood.
+
+    A page measured off the rules stores the name column alone — two numbers.
+    A page that printed its headings stores every boundary on it, a dozen
+    numbers, and the name column is the first pair of them. `make_reading_sheet`
+    has always read both; this refused the second, so the review screen offered
+    no crop for those pages and the whole-document reading pass skipped them.
+    Six of the ten held-out pages are of the second kind.
+    """
+    many = {"rows": [[0.1, 0.2]], "skew": 0.0,
+            "columns": [0.078, 0.255, 0.337, 0.368, 0.390, 0.451]}
+    geo = bandcrops.StoredGeometry(many)
+    assert geo.usable() is True
+    assert geo.name_column(0) == (0.078, 0.255)
+
+
+def test_the_name_column_is_still_the_whole_of_a_two_number_geometry():
+    geo = bandcrops.StoredGeometry({"rows": [[0.1, 0.2]], "columns": [0.05, 0.30]})
+    assert geo.name_column(0) == (0.05, 0.30)
+
+
+def test_a_single_boundary_is_not_a_column():
+    assert bandcrops.StoredGeometry({"rows": [[0.1, 0.2]],
+                                     "columns": [0.05]}).usable() is False

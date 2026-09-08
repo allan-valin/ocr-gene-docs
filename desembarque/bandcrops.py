@@ -34,7 +34,13 @@ class StoredGeometry:
         stored = stored or {}
         self._rows = [tuple(b) for b in (stored.get("rows") or [])
                       if b and len(b) == 2]
-        self._name = tuple(stored.get("columns") or ())
+        # two shapes on disk: a page measured off the rules stores the name
+        # column alone, and a page that printed its headings stores every
+        # boundary on it. The name column is the first pair either way --
+        # `make_reading_sheet.strip` has always read it that way, and this
+        # refused the second shape outright, so the review screen offered no
+        # crop for those pages and a whole-document reading pass skipped them
+        self._name = tuple(stored.get("columns") or ())[:2]
         self.skew = float(stored.get("skew") or 0.0)
         self.measured_by = stored.get("measured_by")
         self.read_from = stored.get("read_from")
