@@ -44,6 +44,12 @@ whether the reading improved.**
 
 ## T1 — The truth file format, and it must exist before Allan reads anything
 
+**Done 2026-09-08.** `desembarque.truthset` loads it: `load_page`, `load_pages`,
+`parse_cell`, the three classes kept apart, a file with no `reader` refused.
+The old six load unchanged. `pairs` reads the shorthand too, so an unreadable
+row never goes to the index as an empty query.
+
+
 Allan is preparing a ground-"truth" file. The quotes are his and they are the
 design requirement: *"when the handwriting is bad, I can't tell myself what they
 mean."* A row he cannot read is **data, not a gap** — it is the most interesting
@@ -96,12 +102,24 @@ what it actually was.
 
 ## T2 — Say who read the old six files
 
+**Done 2026-09-08.** Five say `assistant` and carry the warning in their own
+caution field; one says `Allan`. Each also carries the hand its caution
+described, which is what T3 needed.
+
+
 Rewrite the `source` field of each of the six existing truth files to state
 plainly who read it, and mark the five that were not Allan's as
 `reader: "assistant"`. Then every number quoted from them carries its own
 warning wherever it is read next. No measurement, no code — an honest label.
 
 ## T3 — Split every reported number by hand
+
+**Done 2026-09-08.** `--matrix` prints per hand and blended, and the header
+says who read what. It also found that the rows form — Allan's page, the only
+one a person read — was being skipped entirely: 152 names, not 138. Measured
+that day: cursive 52/67/75 of 110, typed 41/41/41 of 42, at the top 5/10/20.
+Restated in `docs/PROGRESS.md`.
+
 
 The 138 is one blended figure over pages of unlike difficulty, and it flatters
 badly:
@@ -121,6 +139,13 @@ two rows from now on, or it prints nothing.
 
 ## T4 — Classify all 660 documents typed or cursive
 
+**Done 2026-09-08.** `desembarque.hands` + `scripts/classify_hands.py`, writing
+`data/hands.json`. Cut at 0.91 median surname confidence, which is the middle
+of the gap the six known pages leave (cursive 0.640–0.869, typed 0.952–0.989);
+6 of 6 right. **658 documents, 2,543 pages: 83% of the pages it can call are
+cursive.** 163 pages sit within 0.03 of the cut and `--check` reports them.
+
+
 Needed to draw a stratified sample, and useful on its own — the tool should
 know which of its documents are the hard ones. The engine's own confidence
 separates the two nearly perfectly on the six pages we have (typed pages read
@@ -131,6 +156,13 @@ a threshold on a number already stored, not new reading.
 six pages whose hand we know.
 
 ## T5 — The held-out set, drawn at random and never tuned on
+
+**Built 2026-09-08, waiting on a reader.** `scripts/make_reading_sheet.py`
+writes the sheet (10 pages, 361 rows, 4 MB, self-contained, asks who is
+reading), `scripts/import_reading_sheet.py` takes it back into
+`data/truth-heldout` refusing anything unlabelled, and `bench_search.py
+--matrix --held-out` scores it. Nothing else is blocked on code here.
+
 
 Allan's design, which is better than measuring corpus-wide: keep improving
 against the existing set, and **estimate honestly on a random draw from the
@@ -174,6 +206,8 @@ and the best open-weight VLM otherwise tested managed 54.5%.
 This repository has scored five pretrained recognisers (2026-09-03) and every
 one was a TrOCR variant. This is a different class of model and was never tried.
 It is plausibly worth more than everything measured on 2026-09-07 put together.
+
+**T1–T5 are done as of 2026-09-08, so this is now the next work.**
 
 **In order, and stop at the first failure:**
 1. **Does it run here at all?** 3B on a 14 GB CPU box with no GPU. Measure

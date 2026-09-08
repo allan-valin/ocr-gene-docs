@@ -6,6 +6,76 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-09-08 — the measurement gets a reader's name, and the score splits in two
+
+**Where things stand.** The five tasks that had to come before any reading
+work are done (`docs/TASKS-honest-measurement.md` T1–T5, T4 measured, T5
+waiting on one thing only: somebody reading pages). The corpus re-read is
+running again after yesterday's hand-back stopped it — 254 of 662 documents
+were done, and it picks up where it left off. 853 Python assertions green.
+
+**The headline numbers, restated as the pair they should always have been.**
+`bench_search.py --matrix` prints typed and cursive apart from now on, because
+blended they say nothing — the typed pages are effectively solved and the
+cursive ones are the entire point:
+
+| found in the top | 5 | 10 | 20 |
+|---|---|---|---|
+| **cursive** (110 names) | 52 | 67 | 75 |
+| **typed** (42 names) | 41 | 41 | 41 |
+| blended (152), as quoted until today | 93 | 108 | 116 |
+
+Typed is 98% at the top five and cursive is 47%. Naming the crossing as well
+as the name takes cursive to 89 of 110, which is the number worth keeping in
+mind: **what a searcher knows about the voyage is worth more than anything
+done to the reading so far.**
+
+It is 152 names now and not 138. The rows form — Allan's page, the only one a
+person read — carried no `names` list, and `truth_rows` skipped it, so the
+single human-read page was outside every figure this repository has ever
+quoted. It is in.
+
+**Shipped.**
+
+* **Every truth file says who read it.** Five of the six now say `assistant`,
+  which is what they were, and carry the warning in their own caution field.
+  One says `Allan`. Nothing downstream can quote them innocently again.
+* **A page can now say what nobody could read.** `desembarque.truthset` loads
+  the format of T1 — `?` for an uncertain row, empty for a row nobody can read,
+  `-` for a band that is not a row — and keeps the three apart. A file with no
+  reader raises rather than loads. This is the class the old files had no way
+  to write down, and its absence is why every previous number flattered: an
+  illegible row was left out rather than counted, so a recogniser was never
+  charged for inventing a name on one.
+* **Every page of the corpus is labelled typed or cursive.**
+  `scripts/classify_hands.py`, off the confidence already stored beside each
+  reading — no OCR, one pass. It gets all six pages of known hand right, and
+  the gap it sits in is wide: cursive tops out at 0.869, typed starts at 0.952.
+  **Of the pages it can call, 83% are cursive.** 163 pages sit within 0.03 of
+  the cut, where the label is the threshold guessing, and `--check` says so.
+* **The held-out set can be read and taken back in.**
+  `scripts/make_reading_sheet.py` writes one self-contained HTML file — the
+  page images, the engine's own row numbering drawn on them, a box per row —
+  and `scripts/import_reading_sheet.py` turns what comes back into
+  `data/truth-heldout`, refusing any page that does not say who read it and
+  which hand it is. `bench_search.py --matrix --held-out` scores it.
+
+**What is waiting on Allan, and it is the only thing blocking honest numbers.**
+
+`~/Downloads/desembarque-reading-sheet.html` — 10 pages, 361 rows, 4 MB, opens
+in any browser on any machine, keeps your work as you type. Take them in order
+and stop whenever you like; three pages is already a real sample. Then:
+
+```sh
+.venv/bin/python scripts/import_reading_sheet.py ~/Downloads/reading-sheet.json
+.venv/bin/python scripts/bench_search.py --matrix --held-out
+```
+
+Until that exists, **every delta this repository has ever reported is unproven**
+— the set they were measured on was partly written by the thing being measured.
+The one exception stays the re-read: +166% findable rows, measured over the
+whole corpus, needing no truth set at all.
+
 ## 2026-09-07 — the second reading ships, and it costs a day and a half
 
 **Where things stand.** The corpus re-read is running (see below) and nothing
