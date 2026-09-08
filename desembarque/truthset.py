@@ -15,9 +15,20 @@ from __future__ import annotations
 import difflib
 import json
 import unicodedata
+from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# What a reader can say about a band on the page, and they are three answers
+# and not two. A reading is a name. An unreadable row is the reader saying so,
+# which is the class the old six files had no way to write down and the reason
+# every number taken from them flatters: the illegible rows were simply absent,
+# so a recogniser was never charged for inventing a name on one. A band that is
+# not a row at all -- a rule, a struck-through space -- is neither.
+READ = "read"
+UNREADABLE = "unreadable"
+ABSENT = "absent"
 
 def fold(s: str) -> str:
     s = unicodedata.normalize("NFKD", s or "")
@@ -187,3 +198,126 @@ def words_from_disk() -> tuple[list[dict], dict]:
         for w in word_pairs(p["truth"], p["read"]):
             cases.append({**w, "row": p["row"]})
     return cases, seen
+
+
+@dataclass(frozen=True)
+class TruthCell:
+    """One band of the page as the reader wrote it down.
+
+    `text` is the name with the row's uncertainty marker taken off, so it can
+    be compared with a reading; `certain` keeps what the marker said. A word
+    the reader could not make out stays in the text as a bare `?` -- it is part
+    of what the page says, and dropping it would silently turn a half-read row
+    into a whole one.
+    """
+    n: int
+    kind: str
+    text: str
+    certain: bool
+
+
+def parse_cell(cell: str | None, n: int = 0) -> TruthCell:
+    """The shorthand of docs/TASKS-honest-measurement.md T1, read.
+
+    | written        | meant                                    |
+    |----------------|------------------------------------------|
+    | `José Fernandes` | read it, sure of it                    |
+    | `?José Guberti`  | read it, not sure                      |
+    | `?Lorenzo ?`     | sure of one word, the other unreadable |
+    | `""`             | cannot read it, and that is the answer  |
+    | `-`              | no row there                            |
+
+    The shorthand is written by a person in a hurry, so the reading of it is
+    forgiving of surrounding space and of nothing else.
+    """
+    raw = (cell or "").strip()
+    if raw == "-":
+        return TruthCell(n=n, kind=ABSENT, text="", certain=False)
+    if not raw:
+        return TruthCell(n=n, kind=UNREADABLE, text="", certain=False)
+    if raw.startswith("?"):
+        return TruthCell(n=n, kind=READ, text=raw[1:].strip(), certain=False)
+    return TruthCell(n=n, kind=READ, text=raw, certain=True)
+
+
+@dataclass(frozen=True)
+class TruthPage:
+    """One page somebody read, and who they were.
+
+    `reader` is required and unforgiving, because the lesson that produced this
+    format is that five of the six files this repository scored everything
+    against were written by the assistant in wording that implied a person. A
+    file that does not say who read it is not evidence.
+
+    Two shapes load: this format, keyed by row number, and the old run of
+    `names` down the page, which keeps its run because the alignment that puts
+    it against the engine's cut lives in `pairs` and is not this loader's job.
+    """
+    pdf: str
+    page: int
+    reader: str
+    hand: str = "unknown"
+    read_on: str | None = None
+    complete: bool = False
+    rows: dict[int, TruthCell] = field(default_factory=dict)
+    names: tuple[str, ...] = ()
+    path: Path | None = None
+    raw: dict = field(default_factory=dict)
+
+    def cells(self) -> list[TruthCell]:
+        return [self.rows[n] for n in sorted(self.rows)]
+
+    def read(self) -> list[TruthCell]:
+        """The rows carrying a name, certain or not."""
+        return [c for c in self.cells() if c.kind == READ]
+
+    def unreadable(self) -> list[TruthCell]:
+        """The rows the reader could not read. Not gaps -- answers."""
+        return [c for c in self.cells() if c.kind == UNREADABLE]
+
+    def absent(self) -> list[TruthCell]:
+        """The bands that are not rows."""
+        return [c for c in self.cells() if c.kind == ABSENT]
+
+
+def load_page(path: Path | str | dict) -> TruthPage:
+    """Read one truth file. Refuses a file that does not say who read it."""
+    if isinstance(path, dict):
+        d, where = path, None
+    else:
+        where = Path(path)
+        d = json.loads(where.read_text(encoding="utf-8"))
+
+    reader = (d.get("reader") or "").strip()
+    if not reader:
+        raise ValueError(
+            f"{where or 'truth page'}: no reader, so it is not evidence "
+            "(docs/TASKS-honest-measurement.md T1)")
+
+    rows = {}
+    if isinstance(d.get("rows"), dict):
+        for n, cell in d["rows"].items():
+            rows[int(n)] = parse_cell(cell, n=int(n))
+    names = tuple(d.get("names") or ())
+
+    return TruthPage(
+        pdf=d.get("pdf") or "",
+        page=int(d.get("page") or 0),
+        reader=reader,
+        hand=(d.get("hand") or "unknown"),
+        read_on=d.get("read_on"),
+        complete=bool(d.get("complete")),
+        rows=rows,
+        names=names,
+        path=where,
+        raw=d,
+    )
+
+
+def load_pages(directory: Path | str = ROOT / "data" / "truth") -> list[TruthPage]:
+    """Every truth file in a directory, in name order.
+
+    One unlabelled file stops the lot on purpose: a half-labelled truth set is
+    how the last one came to be quoted as if it were all hand-read.
+    """
+    return [load_page(f) for f in sorted(Path(directory).glob("*.json"))]
