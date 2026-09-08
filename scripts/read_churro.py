@@ -172,6 +172,8 @@ def main(argv=None) -> int:
         print("no CHURRO weights in the hub cache; see this file's docstring")
         return 1
 
+    tag = model.name.replace("churro-3B.", "churro-3B-").replace(".gguf", "")
+
     def run(server):
         if a.pdf:
             from page_geometry import page_image
@@ -187,7 +189,7 @@ def main(argv=None) -> int:
                 said, secs = server.read(Path(img), PAGE_PROMPT, predict=2048)
                 print(f"whole page in {secs:.1f} s\n")
             print(said[:2000])
-            payload = {"model": "churro-3B-Q4_K_M",
+            payload = {"model": tag,
                        "kind": "strip" if a.strip else "page",
                        "pdf": a.pdf.name, "page": a.page,
                        "seconds": secs, "text": said}
@@ -207,7 +209,7 @@ def main(argv=None) -> int:
             print(f"  {i}/{len(rows)} {secs:5.1f}s  {said[:40]!r}"
                   f"   (label {row['label'][:30]!r})", flush=True)
         total = sum(times)
-        payload = {"model": "churro-3B-Q4_K_M", "by": "row", "read": read,
+        payload = {"model": tag, "by": "row", "read": read,
                    "seconds": total, "rows": len(times),
                    "seconds_per_row": total / max(1, len(times))}
         a.out.write_text(json.dumps(payload, ensure_ascii=False, indent=1),

@@ -60,6 +60,30 @@ quoted. It is in.
   `data/truth-heldout`, refusing any page that does not say who read it and
   which hand it is. `bench_search.py --matrix --held-out` scores it.
 
+**CHURRO reads this corpus's cursive better than the engine does, by a lot.**
+
+The full table is in `docs/TASKS-honest-measurement.md` T6. The short of it:
+a 3B open-weight historical-document VLM, quantised to fit beside a browser on
+this laptop, at 4–5 seconds a row — the same order as the engine's own 4.33 s.
+It beats the engine on **every** cursive page and loses on both typed ones, and
+through the index it takes cursive names found by name alone in the top five
+from **52 to 85 of 110** — +63%, on the hand this project exists for.
+
+Also settled: reading the whole name column in one look is worse, not cheaper
+(every `Maria` came back `Elbria`), and Q8_0 weights are no better than Q4_K_M
+and 40% slower.
+
+**Its licence blocks it from shipping.** Qwen-Research terms: open weights,
+research only, no commercial use, and `LICENSING.md` now carries a table of
+which weights this project may actually use. So the result is evidence about a
+*class* of model, and the next question is whether a permissively licensed one
+(Qwen2.5-VL-7B is Apache-2.0 where the 3B is not) or a fine-tune on CHURRO-DS
+keeps the gain. **Nothing about the shipped engine changed today.**
+
+The other half of that result is that **it should be routed by hand**: the
+engine is much better on typed pages, the VLM much better on cursive, and T4
+now labels every page in the corpus. Neither reads everything.
+
 **What is waiting on Allan, and it is the only thing blocking honest numbers.**
 
 `~/Downloads/desembarque-reading-sheet.html` — 10 pages, 361 rows, 4 MB, opens

@@ -196,6 +196,85 @@ here, the gain was overfitting and comes out.
 
 ## T6 — Try CHURRO before building anything else
 
+**Measured 2026-09-08, and it is the biggest result this project has had.**
+
+It runs here: quantised to Q4_K_M (1.9 GB of weights, 1.3 GB vision projector)
+under llama.cpp, **4.4 to 5.1 seconds a row** on eight CPU threads, which is
+the same order as the engine's own 4.33 s. `scripts/read_churro.py`.
+
+Against the 155 labelled rows of `data/trainset-fair`, and split by the hand
+each page is written in — which is the only way to read this table:
+
+| page | hand | CHURRO CER | engine CER |
+|---|---|---|---|
+| BS_ENT_013947-p2 | cursive | **0.073** | 0.200 |
+| BS_ENT_013947-p3 | cursive | **0.529** | 0.601 |
+| BS_ENT_014541-p2 | cursive | **0.304** | 0.371 |
+| BS_ENT_015061-p6 | cursive | **0.237** | 0.349 |
+| BS_ENT_013981-p2 | typed | 0.293 | **0.252** |
+| BS_ENT_013983-p2 | typed | 0.160 | **0.010** |
+| all 155 rows | mixed | 0.327 mean / 0.200 median | 0.369 / 0.300 |
+
+**It wins on every cursive page and loses on both typed ones.** The previous
+best second opinion managed 0.560. It spells a name the archive's own gazetteer
+knows, where the engine's reading spells none, on **76 of 155 rows**.
+
+And through the index — `bench_search.py --matrix --second-opinion
+data/churro-rows.json`, the number that decides things:
+
+| cursive, by name alone | top 5 | top 10 | top 20 |
+|---|---|---|---|
+| engine as it ships | 52 | 67 | 75 |
+| with CHURRO's reading | **85** | **93** | **103** |
+
+of 110 names. **+63% at the top five**, far past the two-digit bar, on the
+hand that is the entire point.
+
+Two biases pull in opposite directions and neither is small: the labels are
+mostly the assistant's own reading and their errors correlate with the
+*engine's*, which flatters the engine; and CHURRO here read only the rows the
+queries ask for, so the other 30,000 indexed rows did not get better readings
+that might compete for rank. The held-out set (T5) is what settles it.
+
+**What was also tried and is settled:**
+
+* **The name column in one look** — one inference for forty rows instead of
+  forty. It reads *worse*: every `Maria` on the page came back `Elbria`, and
+  it returned forty lines for fifty bands, which is the row-pairing problem
+  again. Per-row crops cost the same and read what is there.
+* **Q8_0 instead of Q4_K_M** — 0.339 against 0.327, so no better, and 40%
+  slower. The quantisation is not what limits it.
+
+**The blocker, and it is not technical.** CHURRO inherits **Qwen-Research**
+terms: open weights, research use, no commercial use. `LICENSING.md` plans a
+commercial licence beside the AGPL, and Allan's standing rule is open source
+only. So this result is *evidence about a class of model*, not a component
+that ships. The routes that stay open, in order of how much they are worth:
+
+1. **A permissively licensed VLM of the same shape.** Qwen2.5-VL-7B-Instruct
+   is Apache-2.0 where the 3B is not. Bigger and slower, and not trained on
+   historical hands — CHURRO's own paper puts the best untuned open-weight VLM
+   at 54.5% against its 70.1% — so measure before believing.
+2. **Fine-tune a permissive base on CHURRO-DS**, checking the dataset's own
+   licence first.
+3. **PyLaia and Kraken**, still untried, both permissive and both built for
+   historical cursive.
+
+**Route by hand, whatever wins.** T4 labels every page typed or cursive off
+confidence already stored, and this table is the argument for using it: the
+engine is far better on typed pages, a historical VLM is far better on cursive
+ones, and 83% of the corpus is cursive. Neither reads everything.
+
+**Cost, honestly.** 5 s a row is 85 hours for the whole corpus — the same order
+as the re-read, and not a thing to run casually. Per document it is 3–4 minutes
+for a 40-row page, which is a reasonable "read this one properly" button and an
+unreasonable batch.
+
+---
+
+### The original task, as written 2026-09-07
+
+
 A 3B-parameter **open-weight** vision-language model specialised for historical
 text: [arXiv 2509.19768](https://arxiv.org/pdf/2509.19768),
 `github.com/stanford-oval/Churro`. Trained on 99,491 pages across 46 language
