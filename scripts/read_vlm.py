@@ -1,6 +1,12 @@
-"""CHURRO, the historical-hand vision-language model, on this corpus's ink.
+"""A vision-language model on this corpus's ink, row by row.
 
-CHURRO is a 3B open-weight VLM trained on ~100K pages of historical documents
+Written for CHURRO and kept general, because the question CHURRO answered is
+now "does a model this project may actually ship do the same?" — point
+`--model` and `--mmproj` at any llama.cpp-servable VLM and the measurement is
+the same one. The prompts stay CHURRO's own, so every model is asked the
+question in the words the best of them was tuned for.
+
+CHURRO itself is a 3B open-weight VLM trained on ~100K pages of historical documents
 across 46 language clusters (arXiv 2509.19768). Every recogniser this project
 has scored was a TrOCR variant, so this is a different class of model and
 docs/TASKS-honest-measurement.md T6 asks the cheapest question first: **does it
@@ -11,7 +17,7 @@ in bfloat16 and this machine does not have that to spare beside a browser.
 Q4_K_M is 1.9 GB and the vision projector 1.3 GB.
 
     # once: build llama.cpp and fetch the weights (see docs/PROGRESS.md)
-    .venv/bin/python scripts/read_churro.py --serve --rows 40 --out data/churro.json
+    .venv/bin/python scripts/read_vlm.py --serve --rows 40 --out data/churro.json
     .venv/bin/python scripts/score_crops.py --sidecar data/churro.json \
         --trainset data/trainset-fair
 

@@ -9,7 +9,7 @@ import runpy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-churro = runpy.run_path(str(ROOT / "scripts" / "read_churro.py"))
+churro = runpy.run_path(str(ROOT / "scripts" / "read_vlm.py"))
 unwrap = churro["unwrap"]
 rows_from = churro["rows_from"]
 

@@ -200,7 +200,7 @@ here, the gain was overfitting and comes out.
 
 It runs here: quantised to Q4_K_M (1.9 GB of weights, 1.3 GB vision projector)
 under llama.cpp, **4.4 to 5.1 seconds a row** on eight CPU threads, which is
-the same order as the engine's own 4.33 s. `scripts/read_churro.py`.
+the same order as the engine's own 4.33 s. `scripts/read_vlm.py`.
 
 Against the 155 labelled rows of `data/trainset-fair`, and split by the hand
 each page is written in — which is the only way to read this table:
