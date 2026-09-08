@@ -62,6 +62,16 @@ PAGE_PROMPT = (
 ROW_PROMPT = ("This is a single line cut from a scanned passenger list: one "
               "person's name. Transcribe exactly what is written, and nothing "
               "else, between <output> and </output> tags.")
+# The name column of a page, in one look. This is the shape that would pay:
+# one inference for forty rows instead of forty, and the reading order carries
+# the row numbering with it -- which is the pairing problem that made every
+# character-error figure before 2026-09-04 a name scored against a neighbour.
+STRIP_PROMPT = ("This is the name column cut from a scanned passenger list. "
+                "Transcribe every name you can read, one per line, in the "
+                "order they appear down the page. Write nothing else: no "
+                "numbering, no table, no commentary. If a line is illegible, "
+                "write a single ? for it. Put the whole list between <output> "
+                "and </output> tags.")
 
 
 def find(pattern: str) -> Path | None:
@@ -149,6 +159,9 @@ def main(argv=None) -> int:
     ap.add_argument("--pdf", type=Path, default=None,
                     help="time it on a whole page instead: the question T6 asks first")
     ap.add_argument("--page", type=int, default=2)
+    ap.add_argument("--strip", action="store_true",
+                    help="with --pdf: read the name column in one look rather "
+                         "than the whole page")
     ap.add_argument("--work", type=Path, default=ROOT / "data" / "pagecache")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "churro.json")
     a = ap.parse_args(argv)
@@ -162,11 +175,20 @@ def main(argv=None) -> int:
     def run(server):
         if a.pdf:
             from page_geometry import page_image
-            img = page_image(a.pdf, a.page, a.work)
-            said, secs = server.read(Path(img), PAGE_PROMPT, predict=2048)
-            print(f"whole page in {secs:.1f} s\n")
+            if a.strip:
+                from spike_speed import name_strip
+                strip, rel, _, _ = name_strip(a.pdf, a.page, a.work)
+                img = a.work / f"{a.pdf.stem}-p{a.page}-churro.png"
+                strip.save(img)
+                said, secs = server.read(Path(img), STRIP_PROMPT, predict=1024)
+                print(f"name column ({len(rel)} bands) in {secs:.1f} s\n")
+            else:
+                img = page_image(a.pdf, a.page, a.work)
+                said, secs = server.read(Path(img), PAGE_PROMPT, predict=2048)
+                print(f"whole page in {secs:.1f} s\n")
             print(said[:2000])
-            payload = {"model": "churro-3B-Q4_K_M", "kind": "page",
+            payload = {"model": "churro-3B-Q4_K_M",
+                       "kind": "strip" if a.strip else "page",
                        "pdf": a.pdf.name, "page": a.page,
                        "seconds": secs, "text": said}
             a.out.write_text(json.dumps(payload, ensure_ascii=False, indent=1),
