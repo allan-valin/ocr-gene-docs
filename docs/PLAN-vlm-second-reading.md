@@ -61,15 +61,16 @@ for the corpus:
 ```sh
 Q=~/.cache/huggingface/hub/models--ggml-org--Qwen2.5-VL-7B-Instruct-GGUF/snapshots/*/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf
 M=~/.cache/huggingface/hub/models--ggml-org--Qwen2.5-VL-7B-Instruct-GGUF/snapshots/*/mmproj-Qwen2.5-VL-7B-Instruct-f16.gguf
-.venv/bin/python scripts/read_vlm.py --serve --model $Q --mmproj $M \
-    --documents --hand cursive --documents-limit 10 --pages-limit 1 \
-    --out data/vlm-heldout.json
+# data/heldout-pages.json names the exact ten pages the sheet shows,
+# so the model and the person read the same ink
+.venv/bin/python scripts/read_vlm.py --serve --threads 10 --model $Q --mmproj $M \
+    --documents --pages-json data/heldout-pages.json --out data/vlm-heldout.json
 .venv/bin/python scripts/bench_search.py --matrix --held-out \
     --second-opinion data/vlm-heldout.json
 ```
 
-*(the ten documents of the draw are named in `TASKS-honest-measurement.md` T5;
-select them explicitly rather than by hand order when running this for real.)*
+*(`data/heldout-pages.json` is written by the same `pick_page` the sheet uses,
+so it stays in step with whatever the sheet showed.)*
 
 **This is the number the whole project turns on.** On the tuned-on set the VLM
 took cursive names found by name alone in the top five from 52 of 110 to 78. If
