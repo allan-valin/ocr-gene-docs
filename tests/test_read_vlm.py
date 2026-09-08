@@ -156,3 +156,29 @@ class TestPagesLimit:
                       said, "aaa", pages_limit=1)
         assert list(said["aaa"]) == ["2"]
         assert server.asked == 1
+
+
+class TestOnlyTheseP4ges:
+    """The held-out draw is read page for page, or it is not the same set."""
+
+    def test_a_page_not_asked_for_is_not_read(self, tmp_path, monkeypatch):
+        import desembarque.bandcrops as bandcrops
+        from PIL import Image
+        monkeypatch.setattr(bandcrops, "crops_for",
+                            lambda *a, **k: {1: {"carved": Image.new("L", (40, 12))}})
+        import page_geometry
+        img = tmp_path / "p.png"
+        Image.new("L", (100, 100)).save(img)
+        monkeypatch.setattr(page_geometry, "page_image", lambda *a, **k: img)
+
+        geo = {"rows": [[0.1, 0.2]], "columns": [[0.1, 0.5]], "skew": 0.0}
+        rec = {"pages": [{"n": 2, "geometry": geo}, {"n": 5, "geometry": geo}]}
+
+        class Server:
+            def read(self, image, prompt, predict=64):
+                return "a name", 0.1
+
+        said = {}
+        read_document(Server(), tmp_path / "x.pdf", rec, tmp_path, said, "aaa",
+                      only={5})
+        assert list(said["aaa"]) == ["5"]

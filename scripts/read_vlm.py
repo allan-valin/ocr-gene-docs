@@ -195,7 +195,7 @@ def done_already(said: dict, doc: str, page: int) -> bool:
 
 def read_document(server, pdf: Path, record: dict, work: Path, said: dict,
                   doc: str, prompt: str = ROW_PROMPT, on_page=None,
-                  pages_limit: int = 0) -> int:
+                  pages_limit: int = 0, only: set[int] | None = None) -> int:
     """Read every row of every page of one scan. Returns rows read.
 
     The crops are cut from the geometry the record already carries, by the
@@ -210,6 +210,8 @@ def read_document(server, pdf: Path, record: dict, work: Path, said: dict,
              if p.get("geometry")}
     rows_read, seen = 0, 0
     for page in sorted(pages):
+        if only is not None and page not in only:
+            continue
         if done_already(said, doc, page):
             continue
         if pages_limit and seen >= pages_limit:
@@ -256,8 +258,17 @@ def whole_documents(server, a, tag: str) -> int:
     def note(doc, page, rows, secs):
         print(f"  {doc[:8]} p{page}: {rows} rows in {secs:.0f}s", flush=True)
 
+    wanted = None
+    if a.pages_json:
+        asked = json.loads(a.pages_json.read_text(encoding="utf-8"))
+        wanted = {}
+        for row in asked:
+            wanted.setdefault(row["pdf"], set()).add(int(row["page"]))
+
     began, total = time.time(), 0
-    for name in pick_documents(hands, a.hand, a.documents_limit):
+    names = sorted(wanted) if wanted else pick_documents(hands, a.hand,
+                                                        a.documents_limit)
+    for name in names:
         pdf = a.scans / name
         rec = a.records / f"{hands[name]['hash']}.json"
         if not pdf.exists() or not rec.exists():
@@ -266,7 +277,8 @@ def whole_documents(server, a, tag: str) -> int:
         record = json.loads(rec.read_text(encoding="utf-8"))
         total += read_document(server, pdf, record, a.work, said,
                                hands[name]["hash"], on_page=note,
-                               pages_limit=a.pages_limit)
+                               pages_limit=a.pages_limit,
+                               only=wanted.get(name) if wanted else None)
         a.out.write_text(json.dumps({"model": tag, "by": "row",
                                      "variant": "carved", "read": said},
                                     ensure_ascii=False), encoding="utf-8")
@@ -312,6 +324,11 @@ def main(argv=None) -> int:
                     help="how many documents to read this run")
     ap.add_argument("--pages-limit", type=int, default=0,
                     help="stop after this many pages of each document")
+    ap.add_argument("--pages-json", type=Path, default=None,
+                    help="read exactly these pages: a JSON list of "
+                         "{pdf, page}. This is how the held-out draw is read — "
+                         "the same pages the reading sheet put in front of a "
+                         "person, and no others")
     a = ap.parse_args(argv)
 
     model = a.model or find("churro-3B.Q4_K_M.gguf")
