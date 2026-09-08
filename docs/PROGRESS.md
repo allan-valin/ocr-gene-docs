@@ -117,6 +117,13 @@ picture of a row, every second-opinion pass. `make_reading_sheet` had always
 read both shapes, which is why the sheet could render pages the reading pass
 then skipped. Fixed, with the two shapes tested.
 
+**The decisive experiment is already half-run.** All ten held-out pages have
+been read by the VLM — 357 rows, `data/vlm-heldout.json`, the same pages the
+sheet puts in front of a person. When the sheet comes back the comparison costs
+one command and no machine time. (The six truth pages all store the name column
+as a pair, so nothing measured today was touched by the crop bug above: it hit
+the corpus, not the benchmark — which is part of why it went unseen.)
+
 **The plan those numbers argue for is written down**:
 [`docs/PLAN-vlm-second-reading.md`](PLAN-vlm-second-reading.md). Its first step
 costs no machine at all and can cancel the rest, and its second — the VLM over

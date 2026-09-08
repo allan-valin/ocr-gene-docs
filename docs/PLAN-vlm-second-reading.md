@@ -42,6 +42,19 @@ tuned against. Three pages is already a real sample.
 
 ## 2. The cheapest decisive experiment: the VLM on those same pages only
 
+**Already done, 2026-09-08 — `data/vlm-heldout.json` holds it.** All ten pages
+of the draw, 357 rows, read by Qwen2.5-VL-7B, the same pages the sheet puts in
+front of a person and no others. So when the sheet comes back, step 2 is one
+command and no machine time:
+
+```sh
+.venv/bin/python scripts/bench_search.py --matrix --held-out \
+    --second-opinion data/vlm-heldout.json
+```
+
+The original recipe follows, for when it has to be run again.
+
+
 Ten pages is about 360 rows — **under an hour of machine**, against 170 hours
 for the corpus:
 
