@@ -290,6 +290,28 @@ labels that are mostly the assistant's own reading, whose errors correlate with
 the *engine's* — which flatters the engine, so the VLMs' margin is if anything
 understated. It stays unproven until T5's held-out pages are read.
 
+**Except one, and it is the cleanest number of the day.** `BS_ENT_013947` p2 is
+the page Allan read himself — 14 rows, the only labels in this repository a
+person wrote. Reading that whole page again with Qwen2.5-VL-7B and scoring both
+against his rows:
+
+| | CER over Allan's 14 rows |
+|---|---|
+| the engine as it ships | 0.186 |
+| **Qwen2.5-VL-7B** | **0.084** |
+
+Less than half the error, closer on 9 of the 14. `fore Gulerti` → `Jose
+Guberti`, `Ant? Alonmo foatz` → `Antonio Alonso González`, `Mania Danchez` →
+`Maria Sanchez`. Fourteen rows is a thin set and it is a page the VLM has never
+been tuned against by anybody, which is more than can be said for any other
+figure here.
+
+**The pass that produced it is on disk**: `read_vlm.py --documents` reads whole
+documents out of the corpus, cutting each row from the geometry the record
+already stores, resumable, choosing documents by the hand T4 labelled them
+with, and writing the sidecar `apply_second_opinion.py --write` already knows
+how to put on the rows. 41 rows of a real page in 4.7 minutes.
+
 ---
 
 ### The original task, as written 2026-09-07

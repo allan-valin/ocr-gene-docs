@@ -89,6 +89,17 @@ the engine on typed. Cursive names found by name alone in the top five: engine
 actually use that reads this archive better than what is in it now, on both
 hands, for twice the machine time a row.**
 
+And on the one page a **person** actually read — Allan's own 14 rows of
+`BS_ENT_013947` p2, the only human labels in the repository — the same model
+halves the error: **engine 0.186, Qwen-7B 0.084**, closer on 9 rows of 14. That
+number is free of the bias that taints every other one here.
+
+The pass that produced it is on disk and resumable: `read_vlm.py --documents`
+reads whole documents out of the corpus, cuts each row from the geometry the
+record already stores, picks documents by the hand T4 labelled them with, and
+writes the sidecar `apply_second_opinion.py --write` already knows how to apply.
+41 rows of a real page in 4.7 minutes. **Nothing has been applied to the corpus.**
+
 `LICENSING.md` now carries the table of which weights may be used at all.
 **Nothing about the shipped engine changed today** — and none of this is proven
 until the held-out pages are read, because every number here is scored against

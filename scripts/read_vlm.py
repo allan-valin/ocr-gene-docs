@@ -171,6 +171,111 @@ def rows_from(trainset: Path, limit: int, hand: str = "",
     return lines[:limit] if limit else lines
 
 
+def pick_documents(hands: dict, hand: str = "", limit: int = 0) -> list[str]:
+    """Which scans to spend the seconds on, in name order.
+
+    A row costs 4 to 9 seconds, so the whole corpus is 85 to 170 hours and
+    choosing is the design rather than a convenience. `data/hands.json` says
+    which documents are cursive; those are the ones a VLM is worth paying for,
+    and a document whose hand could not be called is not one of them.
+    """
+    got = [f for f, v in sorted(hands.items())
+           if not hand or (v.get("document") == hand)]
+    return got[:limit] if limit else got
+
+
+def done_already(said: dict, doc: str, page: int) -> bool:
+    """Has this page been read in a previous run of the same pass?
+
+    A page that read as nothing counts as done: that is a reading and not an
+    absence, and re-reading it every restart would never finish.
+    """
+    return str(page) in (said.get(doc) or {})
+
+
+def read_document(server, pdf: Path, record: dict, work: Path, said: dict,
+                  doc: str, prompt: str = ROW_PROMPT, on_page=None,
+                  pages_limit: int = 0) -> int:
+    """Read every row of every page of one scan. Returns rows read.
+
+    The crops are cut from the geometry the record already carries, by the
+    same function the review screen uses, so the VLM is handed exactly the
+    picture the engine read and a reading can be put back on the right row.
+    """
+    from PIL import Image
+    from page_geometry import page_image
+    from desembarque.bandcrops import crops_for
+
+    pages = {p.get("n"): p.get("geometry") for p in (record.get("pages") or ())
+             if p.get("geometry")}
+    rows_read, seen = 0, 0
+    for page in sorted(pages):
+        if done_already(said, doc, page):
+            continue
+        if pages_limit and seen >= pages_limit:
+            break
+        seen += 1
+        img = page_image(pdf, page, work)
+        if img is None:
+            continue
+        crops = crops_for(Path(img), pages[page])
+        if not crops:
+            said.setdefault(doc, {})[str(page)] = {}
+            continue
+        got, began = {}, time.time()
+        for n, band in sorted(crops.items()):
+            tmp = work / f"{doc[:8]}-p{page}-r{n}.png"
+            band["carved"].convert("RGB").save(tmp)
+            text, _ = server.read(tmp, prompt, predict=64)
+            tmp.unlink(missing_ok=True)
+            if text:
+                got[str(n)] = text
+        said.setdefault(doc, {})[str(page)] = got
+        rows_read += len(got)
+        if on_page:
+            on_page(doc, page, len(got), time.time() - began)
+    return rows_read
+
+
+def whole_documents(server, a, tag: str) -> int:
+    """The 'read this one properly' pass, over documents rather than crops."""
+    hands = json.loads(a.hands.read_text(encoding="utf-8")) if a.hands.exists() else {}
+    if not hands:
+        print(f"no {a.hands}: run scripts/classify_hands.py first")
+        return 1
+    said: dict[str, dict] = {}
+    if a.out.exists():
+        try:
+            was = json.loads(a.out.read_text(encoding="utf-8"))
+            if was.get("model") == tag:
+                said = was.get("read") or {}
+                print(f"resuming: {sum(len(v) for v in said.values())} pages read")
+        except ValueError:
+            pass
+
+    def note(doc, page, rows, secs):
+        print(f"  {doc[:8]} p{page}: {rows} rows in {secs:.0f}s", flush=True)
+
+    began, total = time.time(), 0
+    for name in pick_documents(hands, a.hand, a.documents_limit):
+        pdf = a.scans / name
+        rec = a.records / f"{hands[name]['hash']}.json"
+        if not pdf.exists() or not rec.exists():
+            print(f"  {name}: not on disk, skipped")
+            continue
+        record = json.loads(rec.read_text(encoding="utf-8"))
+        total += read_document(server, pdf, record, a.work, said,
+                               hands[name]["hash"], on_page=note,
+                               pages_limit=a.pages_limit)
+        a.out.write_text(json.dumps({"model": tag, "by": "row",
+                                     "variant": "carved", "read": said},
+                                    ensure_ascii=False), encoding="utf-8")
+    print(f"\n{total} rows in {(time.time() - began) / 60:.1f} min. Wrote {a.out}"
+          "\nPut it on the rows:  .venv/bin/python scripts/apply_second_opinion.py "
+          f"--sidecar {a.out} --write")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", type=Path, default=None)
@@ -195,6 +300,18 @@ def main(argv=None) -> int:
                          "than the whole page")
     ap.add_argument("--work", type=Path, default=ROOT / "data" / "pagecache")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "churro.json")
+    ap.add_argument("--documents", action="store_true",
+                    help="read whole documents out of the corpus rather than "
+                         "the labelled crops: the 'read this one properly' "
+                         "pass. Resumable, and writes the same sidecar shape "
+                         "`apply_second_opinion.py` takes")
+    ap.add_argument("--records", type=Path, default=ROOT / "data" / "transcriptions")
+    ap.add_argument("--hands", type=Path, default=ROOT / "data" / "hands.json")
+    ap.add_argument("--scans", type=Path, default=ROOT / "data" / "scans")
+    ap.add_argument("--documents-limit", type=int, default=1,
+                    help="how many documents to read this run")
+    ap.add_argument("--pages-limit", type=int, default=0,
+                    help="stop after this many pages of each document")
     a = ap.parse_args(argv)
 
     model = a.model or find("churro-3B.Q4_K_M.gguf")
@@ -228,6 +345,8 @@ def main(argv=None) -> int:
                              encoding="utf-8")
             return 0
 
+        if a.documents:
+            return whole_documents(server, a, tag)
         rows = rows_from(a.trainset, a.rows, hand=a.hand)
         read: dict[str, dict] = {}
         times = []
