@@ -10,9 +10,18 @@ and next actions.
 
 **Where things stand.** The five tasks that had to come before any reading
 work are done (`docs/TASKS-honest-measurement.md` T1–T5, T4 measured, T5
-waiting on one thing only: somebody reading pages). The corpus re-read is
-running again after yesterday's hand-back stopped it — 254 of 662 documents
-were done, and it picks up where it left off. 853 Python assertions green.
+waiting on one thing only: somebody reading pages). 877 Python assertions
+green, the app's own 126 in-browser assertions green, nothing pushed.
+
+**The corpus re-read is stopped and resumable at 368 of 662 documents** —
+1,501 pages, 37,281 rows, up from 254 documents at the start of the day. It was
+stopped on purpose at hand-back so the machine is free. One line restarts it
+and it skips every page already in the index:
+
+```sh
+.venv-ocr/bin/python scripts/export_bands.py --records data/transcriptions \
+    --out data/reread-index --write-records data/reread --no-crops
+```
 
 **The headline numbers, restated as the pair they should always have been.**
 `bench_search.py --matrix` prints typed and cursive apart from now on, because
