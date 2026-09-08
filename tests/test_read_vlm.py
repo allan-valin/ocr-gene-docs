@@ -51,3 +51,29 @@ class TestRowsFrom:
             (d / "labels.jsonl").read_text(encoding="utf-8") + "\n",
             encoding="utf-8")
         assert len(rows_from(d, 0)) == 2
+
+
+class TestOnlyOneHand:
+    def make(self, tmp_path):
+        rows = [{"image": "a.png", "source": "cursive-p2.json", "doc": "d",
+                 "page": 2, "n": 1, "label": "A"},
+                {"image": "b.png", "source": "typed-p2.json", "doc": "d",
+                 "page": 2, "n": 2, "label": "B"},
+                {"image": "c.png", "source": "unknown-hash.json", "doc": "d",
+                 "page": 2, "n": 3, "label": "C"}]
+        (tmp_path / "labels.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        return tmp_path, {"cursive-p2.json": "cursive", "typed-p2.json": "typed"}
+
+    def test_it_reads_only_the_hand_asked_for(self, tmp_path):
+        d, hands = self.make(tmp_path)
+        got = rows_from(d, 0, hand="cursive", hands=hands)
+        assert [r["n"] for r in got] == [1]
+
+    def test_a_page_of_unrecorded_hand_is_not_guessed_into_either(self, tmp_path):
+        d, hands = self.make(tmp_path)
+        assert [r["n"] for r in rows_from(d, 0, hand="typed", hands=hands)] == [2]
+
+    def test_no_hand_asked_for_reads_everything(self, tmp_path):
+        d, hands = self.make(tmp_path)
+        assert len(rows_from(d, 0, hands=hands)) == 3

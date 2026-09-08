@@ -143,9 +143,31 @@ class Server:
         return unwrap(said), time.time() - began
 
 
-def rows_from(trainset: Path, limit: int) -> list[dict]:
+def hand_of(truth_dir: Path) -> dict[str, str]:
+    """Which hand each truth page is written in, keyed by its file name."""
+    out = {}
+    for f in sorted(Path(truth_dir).glob("*.json")):
+        try:
+            out[f.name] = json.loads(f.read_text(encoding="utf-8")).get("hand") or ""
+        except (OSError, ValueError):
+            continue
+    return out
+
+
+def rows_from(trainset: Path, limit: int, hand: str = "",
+              hands: dict[str, str] | None = None) -> list[dict]:
+    """The labelled rows to read, optionally only those of one hand.
+
+    A model is worth ranking on the pages it is for. The engine is far better
+    on typed pages and far worse on cursive ones, so a mean over both says
+    less than either half, and an hour of machine spent on typed rows to
+    confirm the engine wins there is an hour wasted.
+    """
     lines = [json.loads(l) for l in
              (trainset / "labels.jsonl").read_text(encoding="utf-8").splitlines() if l]
+    if hand:
+        by_page = hands if hands is not None else hand_of(ROOT / "data" / "truth")
+        lines = [r for r in lines if by_page.get(r.get("source") or "") == hand]
     return lines[:limit] if limit else lines
 
 
@@ -160,6 +182,9 @@ def main(argv=None) -> int:
     ap.add_argument("--url", default="http://127.0.0.1:8788",
                     help="a server already running, if not --serve")
     ap.add_argument("--trainset", type=Path, default=ROOT / "data" / "trainset-fair")
+    ap.add_argument("--hand", default="",
+                    help="read only the rows of pages written in this hand "
+                         "(typed, cursive), per each truth file's own label")
     ap.add_argument("--rows", type=int, default=0,
                     help="how many labelled row crops to read (0 = all)")
     ap.add_argument("--pdf", type=Path, default=None,
@@ -203,7 +228,7 @@ def main(argv=None) -> int:
                              encoding="utf-8")
             return 0
 
-        rows = rows_from(a.trainset, a.rows)
+        rows = rows_from(a.trainset, a.rows, hand=a.hand)
         read: dict[str, dict] = {}
         times = []
         for i, row in enumerate(rows, 1):
