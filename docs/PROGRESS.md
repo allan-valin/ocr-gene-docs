@@ -12,8 +12,8 @@ and next actions.
 below is still measured on the tuned-on set and is unproven in the same way
 every number before it was. What changed today is the *price* of the second
 reading: it was 170 hours of machine for the corpus and it is now about one.
-The corpus re-read is still at 368 of 662 (see the end of this section for
-what was done with the rest of the afternoon). 889 Python tests green, 12 skipped.
+The corpus re-read (T8) is running again from 368 of 662 — see the end of
+this section for why it had stopped. 889 Python tests green, 12 skipped.
 
 **The question asked.** Two things were on the plan's "what would change
 this" list — PyLaia/Kraken, and a better crop — and one model was sitting in
@@ -121,6 +121,15 @@ When the sheet comes back, each is one command:
    alternate (`apply_second_opinion.py --write`, the reversible shape) only
    once the held-out number says so. `spike_kraken.py --documents --hand
    cursive --documents-limit 0`, resumable; about an hour of recognition.
+**The re-read had not stopped on purpose.** The 2026-09-08 section below says
+it was stopped at hand-back; `data/reread.log` says it crashed, on the first
+record after 368 that carries no file name — two do — because `scans / ""`
+is the scans directory, which exists, and `cached_hash` opened it.
+`export_bands.py` now skips a record whose scan is not a file
+(`scan_of`, tested), and the re-read resumed at 13:55 today with the machine
+otherwise free, to be stopped before 17:00 hand-back. Its state at the stop
+is written at the end of this section.
+
 4. **Two alternates on a row — measured crudely, and not worth building.**
    Both readings joined into one string per row and run through the same
    matrix: McFondue + Qwen-7B **80/90/98** (Qwen alone 78 at five, McFondue
