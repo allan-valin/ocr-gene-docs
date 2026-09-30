@@ -100,7 +100,7 @@ corrections are the long game, and one more reason not to swap the engine.
 **The held-out comparison is pre-read for four models now.** The same ten
 pages the sheet shows, cut from the same geometry, one sidecar each:
 `data/vlm-heldout.json` (Qwen-7B, 357 rows), `data/kraken-heldout.json`
-(McCATMuS, 351), `data/kraken-fondue-heldout.json` (McFondue),
+(McCATMuS, 351), `data/kraken-fondue-heldout.json` (McFondue, 325 — it reads 26 more rows as nothing),
 `data/paddleocrvl-heldout.json` (PaddleOCR-VL). `spike_kraken.py --documents`
 drives kraken through `read_vlm.whole_documents`, so it is the same pass.
 When the sheet comes back, each is one command:
@@ -121,9 +121,15 @@ When the sheet comes back, each is one command:
    alternate (`apply_second_opinion.py --write`, the reversible shape) only
    once the held-out number says so. `spike_kraken.py --documents --hand
    cursive --documents-limit 0`, resumable; about an hour of recognition.
-4. Open and cheap: **two alternates on a row** — kraken's and a VLM's are wrong
-   differently, and the schema carries one `second_read`. Whether they stack
-   is one matrix run once the schema allows it.
+4. **Two alternates on a row — measured crudely, and not worth building.**
+   Both readings joined into one string per row and run through the same
+   matrix: McFondue + Qwen-7B **80/90/98** (Qwen alone 78 at five, McFondue
+   71/81/91), McFondue + PaddleOCR-VL 71/81/89 — no better than McFondue
+   alone — and McFondue + McCATMuS 68/81/88, worse. Every pairing *loses*
+   the crossing column (94/100/108 → 91/97/105 at best), because a longer
+   text dilutes the match. Two names at five for Qwen's 170 hours on top of
+   kraken's one is not a schema change; one reading a row, and it is
+   McFondue's.
 
 ## 2026-09-08 — the measurement gets a reader's name, and the score splits in two
 
