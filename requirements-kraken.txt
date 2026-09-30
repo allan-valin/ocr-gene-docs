@@ -1,0 +1,12 @@
+# kraken, a CTC line recogniser (Apache-2.0) with archive-trained models for
+# historical Latin-script hands. Measured 2026-09-30 as a second reading: see
+# docs/PROGRESS.md. Installed in its own venv because it pins its own torch:
+#
+#   python3 -m venv .venv-kraken
+#   .venv-kraken/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+#   .venv-kraken/bin/pip install -r requirements-kraken.txt
+#
+# Models (CC-BY-4.0, from Zenodo) go in ~/.cache/kraken/:
+#   McCATMuS_nfd_nofix_V1.mlmodel  https://zenodo.org/records/13788177
+kraken==7.1.1
+pypdfium2==5.13.0
