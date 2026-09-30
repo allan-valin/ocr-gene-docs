@@ -1,5 +1,14 @@
 # The VLM second reading: what to do next, in order
 
+**Amended 2026-09-30.** The model this plan turns on is no longer a VLM. A
+kraken model, Manu McFondue (CC-BY-4.0, 16 MB, 0.05 s a row), gives +37% of
+cursive names at the top five on the tuned-on set against Qwen-7B's +50% at
+170× the cost — see PROGRESS 2026-09-30. Steps 1–4 below stand with McFondue
+in Qwen's place: the cost table's 170 hours becomes about one, and the
+rollout's "overnight" becomes "after the re-read, an hour". Step 2's sidecar
+exists for four models. Of the three things listed under *what would change
+this plan*, two are measured: kraken did, a better crop did not.
+
 Written 2026-09-08, after the measurements in `docs/TASKS-honest-measurement.md`
 T6. This is the plan those numbers argue for, and the order matters more than
 any of the steps — the first one costs nothing and can cancel the rest.

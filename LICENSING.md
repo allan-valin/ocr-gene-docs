@@ -64,6 +64,10 @@ depends on it.
 | TrOCR variants scored 2026-09-03 | MIT / Apache-2.0 | yes | measured, not adopted |
 | `stanford-oval/churro-3B` | Qwen-Research | **no** | measured 2026-09-08, cannot ship |
 | `Qwen/Qwen2.5-VL-7B-Instruct` | Apache-2.0 | yes | measured 2026-09-08, **the candidate** |
+| `PaddlePaddle/PaddleOCR-VL-1.6` (GGUF) | Apache-2.0 | yes | measured 2026-09-30: +29% cursive names at the top five, 2.7 s a row |
+| kraken `Manu McFondue` (Zenodo 10886224) | CC-BY-4.0 | yes, with attribution | measured 2026-09-30: **+37% cursive names at the top five, 0.05 s a row — the cheapest candidate** |
+| kraken `McCATMuS`, `Manu McFrench V3` | CC-BY-4.0 | yes, with attribution | measured 2026-09-30, +13% and +23%; McFondue is better |
+| `Kansallisarkisto/multicentury-htr-model` | Apache-2.0 | yes | measured 2026-09-30, reads Finnish; dead |
 
 CHURRO is open-*weight*, which is not open-*source*: it inherits Qwen-Research terms,
 which permit research use and forbid commercial use. It was measured on 2026-09-08 because
@@ -72,6 +76,11 @@ component of anything sold, and under Allan's open-source-only rule it is not a 
 this project takes. If its numbers turn out to matter, the routes that stay open are a
 permissively licensed VLM (Qwen2.5-VL-7B is Apache-2.0, unlike the 3B) or fine-tuning one
 on CHURRO-DS, which is a dataset rather than weights.
+
+The kraken models are **CC-BY-4.0**: commercial use is allowed and the only
+obligation is attribution — the model's name, its authors (HTR-United /
+Chagué, Clérice et al.) and the Zenodo link, in this file and wherever the
+readings are shown. `kraken` itself is Apache-2.0.
 
 `llama.cpp` (MIT) is what made the measurement possible on this machine at all: the
 released weights are 7.5 GB in bfloat16, and quantised to Q4_K_M they are 1.9 GB.

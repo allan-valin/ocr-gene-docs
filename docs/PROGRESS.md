@@ -6,6 +6,125 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-09-30 — a 16 MB model at 0.05 s a row finds a third more cursive names
+
+**Where things stand.** The reading sheet has not come back, so every number
+below is still measured on the tuned-on set and is unproven in the same way
+every number before it was. What changed today is the *price* of the second
+reading: it was 170 hours of machine for the corpus and it is now about one.
+The corpus re-read is still at 368 of 662 (see the end of this section for
+what was done with the rest of the afternoon). 889 Python tests green, 12 skipped.
+
+**The question asked.** Two things were on the plan's "what would change
+this" list — PyLaia/Kraken, and a better crop — and one model was sitting in
+the hub cache unmeasured. All of it costs minutes a row or less, so all of it
+was measured the same way, on the same 155 labelled crops, through the same
+index, as CHURRO and Qwen were on 2026-09-08.
+
+**Through the index, cursive names found by name alone, of 110:**
+
+| second reading beside the engine's | licence | s / row | top 5 | top 10 | top 20 | corpus |
+|---|---|---|---|---|---|---|
+| none — the engine as it ships | — | — | 52 | 67 | 75 | — |
+| CHURRO 3B (2026-09-08) | research only | 4.4 | 85 | 93 | 103 | 85 h |
+| Qwen2.5-VL-7B Q4_K_M (2026-09-08) | Apache-2.0 | 8.5 | 78 | | | 170 h |
+| **kraken, Manu McFondue** | CC-BY-4.0 | **0.05** | **71** | **81** | **91** | **~1 h** |
+| PaddleOCR-VL-1.6 Q8_0 | Apache-2.0 | 2.7 | 67 | 78 | 86 | 53 h |
+| kraken, McCATMuS | CC-BY-4.0 | 0.11 | 59 | 73 | 84 | 2 h |
+| kraken, Manu McFrench V3 | CC-BY-4.0 | 0.03 | 64 | 76 | 84 | 0.6 h |
+
+Naming the crossing, which no second reading had ever moved: engine 89/94/100,
+McFondue **94/100/108**, PaddleOCR-VL 93/99/102, McCATMuS 95/99/102.
+
+**Manu McFondue** — kraken's model of French manuscripts 17th–21st century,
+with some Spanish letters, 16 MB, [Zenodo 10886224](https://zenodo.org/records/10886224)
+— takes cursive names in the top five from 52 to 71, **+37%**, for a twentieth
+of a second a row on this CPU. That is seven names short of Qwen-7B at 170× the
+cost, and past the two-digit bar by a wide margin. Whole cursive corpus:
+about an hour of recognition plus the page cutting, against a week for Qwen.
+
+**And character error says the opposite, again.** On the 155 rows kraken is
+*worse* than the engine by CER — McFondue 0.549 mean against 0.369 — and much
+worse on typed pages (1.017 on `BS_ENT_013981` p2, so it reads cursive pages
+only, which `data/hands.json` already decides). On the cursive pages it is
+better on three of four: `BS_ENT_015061` p6 0.323 against 0.349,
+`BS_ENT_013947` p3 0.551 against 0.601, `BS_ENT_014541` p2 0.300 against 0.371,
+and worse on Allan's page, 0.488 against 0.200. What the index rewards is not
+a lower error but a *different* one: a row the engine spells unfindably,
+kraken spells wrongly in a way a fuzzy search still reaches. This repository
+saw the same thing on 2026-09-03 and it is why the index, not the CER, decides.
+
+**PaddleOCR-VL-1.6** — the model the design spec named in July and rejected in
+August at 22 minutes a column — runs under llama.cpp on row crops at **2.7 s a
+row**, faster than the engine's own 4.33. Engine-level on cursive by CER (0.470
+against 0.444 over the 108 cursive rows), worse on typed, and +29% at the top
+five through the index. A real option, and McFondue beats it at a fiftieth of
+the price. It needed one thing: asked with its card's own `OCR:` and no
+persona (`read_vlm.py --style paddleocr`), because a model measured with
+another model's prompt is a measurement of the prompt.
+
+**Settled today, so it is not tried twice:**
+
+* **A better crop does not exist, for these models.** The band with 25% of its
+  own height added above and below (`training_set.py --variant grown`, kept
+  only where the plain band inside it is byte-for-byte the exported one)
+  makes PaddleOCR-VL read the neighbour's ascenders as text: 0.435 → 0.698.
+  Kraken too: 0.529 → 0.637, and 0 px or 24 px of white air instead of 8 are
+  both worse. The band as the engine cuts it is the right picture. *Not*
+  measured on Qwen-7B: the Android emulator holds 4 GB today and the 7B does
+  not fit beside it safely; given the two models above, the expectation is
+  the same.
+* **`Kansallisarkisto/multicentury-htr-model`** (4.2 GB in the hub cache since
+  September, never scored because of a processor bug since fixed) reads this
+  ink as **Finnish**: CER 1.0, 13 s a row. Dead.
+* **The other models on disk.** `~/uni/mpr/repo/models` holds a Piper voice and
+  a Vosk German speech model — the robotics practical, nothing to do with
+  ink. `PP-OCRv5_server_rec` was measured and rejected on 2026-08 (CER 0.516).
+  The hub cache's PaddleOCR-VL weights are in Paddle's own format; the GGUF
+  that runs here is `SanjeevSOLANKI/PaddleOCR-VL-1.6-GGUF`, 1.3 GB.
+
+**A bug, fixed, that would have hit any long pass.** PaddleOCR-VL emitted half
+a multibyte character on row 132 of 155, llama-server answered 500, and the
+reader died with the 131 readings before it never written. `read_vlm.py` now
+writes the sidecar after every row, records a refused row as nothing read, and
+resumes a sidecar of the same model — tests first, in `tests/test_read_vlm.py`.
+
+**The literature, on the way past.** [arXiv 2609.20064](https://arxiv.org/abs/2609.20064)
+(September 2026, *A Free Lunch? Adapting PP-OCRv6 for Historical Text
+Recognition*) finds a **fine-tuned PP-OCRv6 beats a large VLM tailored to
+historical Latin-script HTR**. PP-OCRv6 is the engine that ships here. What
+this repository lacks is not the model but the labels — 155 crops, measured on
+2026-09-05 as too few — so the paper is one more reason the review screen's
+corrections are the long game, and one more reason not to swap the engine.
+
+**The held-out comparison is pre-read for four models now.** The same ten
+pages the sheet shows, cut from the same geometry, one sidecar each:
+`data/vlm-heldout.json` (Qwen-7B, 357 rows), `data/kraken-heldout.json`
+(McCATMuS, 351), `data/kraken-fondue-heldout.json` (McFondue),
+`data/paddleocrvl-heldout.json` (PaddleOCR-VL). `spike_kraken.py --documents`
+drives kraken through `read_vlm.whole_documents`, so it is the same pass.
+When the sheet comes back, each is one command:
+
+```sh
+.venv/bin/python scripts/import_reading_sheet.py ~/Downloads/reading-sheet.json
+.venv/bin/python scripts/bench_search.py --matrix --held-out
+.venv/bin/python scripts/bench_search.py --matrix --held-out --second-opinion data/kraken-fondue-heldout.json
+```
+
+**Next, in order.**
+
+1. **Allan reads the sheet.** Unchanged; still the only thing between here
+   and a number anyone can quote.
+2. **Finish the corpus re-read (T8)** — it rewrites the rows a sidecar is keyed
+   to, so any corpus-wide second reading has to come after it, not before.
+3. **Then McFondue over every cursive document into a sidecar**, applied as an
+   alternate (`apply_second_opinion.py --write`, the reversible shape) only
+   once the held-out number says so. `spike_kraken.py --documents --hand
+   cursive --documents-limit 0`, resumable; about an hour of recognition.
+4. Open and cheap: **two alternates on a row** — kraken's and a VLM's are wrong
+   differently, and the schema carries one `second_read`. Whether they stack
+   is one matrix run once the schema allows it.
+
 ## 2026-09-08 — the measurement gets a reader's name, and the score splits in two
 
 **Where things stand.** The five tasks that had to come before any reading

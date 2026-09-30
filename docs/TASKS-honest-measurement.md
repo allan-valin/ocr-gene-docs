@@ -271,6 +271,14 @@ becomes which rows are worth 8.5 seconds — and T4's per-page hand labels are
 still how that is decided, since a cursive page gains 0.09 CER and a typed one
 0.06 off a much lower base.
 
+**Measured 2026-09-30, on the same rows and through the same index** —
+PROGRESS carries the full table. Cursive names by name alone in the top five,
+of 110: kraken **Manu McFondue 71** at 0.05 s a row (CC-BY-4.0), PaddleOCR-VL-1.6
+67 at 2.7 s (Apache-2.0), kraken Manu McFrench V3 64, kraken McCATMuS 59;
+against engine 52, Qwen-7B 78, CHURRO 85. Item 2 below is done and item 3's
+"page in view" half is settled the other way: a crop with air above and
+below reads *worse* for both PaddleOCR-VL and kraken.
+
 **Still worth trying, in order:**
 
 1. **A fine-tune of a permissive base on CHURRO-DS**, licence of the dataset
