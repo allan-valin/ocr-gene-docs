@@ -101,7 +101,7 @@ corrections are the long game, and one more reason not to swap the engine.
 pages the sheet shows, cut from the same geometry, one sidecar each:
 `data/vlm-heldout.json` (Qwen-7B, 357 rows), `data/kraken-heldout.json`
 (McCATMuS, 351), `data/kraken-fondue-heldout.json` (McFondue, 325 — it reads 26 more rows as nothing),
-`data/paddleocrvl-heldout.json` (PaddleOCR-VL). `spike_kraken.py --documents`
+`data/paddleocrvl-heldout.json` (PaddleOCR-VL, 345). `spike_kraken.py --documents`
 drives kraken through `read_vlm.whole_documents`, so it is the same pass.
 When the sheet comes back, each is one command:
 
