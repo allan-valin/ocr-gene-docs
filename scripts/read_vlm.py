@@ -80,6 +80,28 @@ STRIP_PROMPT = ("This is the name column cut from a scanned passenger list. "
                 "and </output> tags.")
 
 
+# How each model is asked. A model is measured the way its own card asks it:
+# CHURRO's client sends a persona and wants tags, PaddleOCR-VL's card sends the
+# two characters `OCR:` and nothing else -- it is a recogniser with a chat
+# template, not a chat model, and a system message it never saw only costs tokens.
+STYLES = {
+    "churro": {"system": SYSTEM, "row": ROW_PROMPT},
+    "paddleocr": {"system": None, "row": "OCR:"},
+}
+
+
+def messages(prompt: str, b64: str, system: str | None = SYSTEM) -> list[dict]:
+    """The chat turn a crop is read with: a persona only if the model has one."""
+    out = []
+    if system:
+        out.append({"role": "system", "content": system})
+    out.append({"role": "user", "content": [
+        {"type": "text", "text": prompt},
+        {"type": "image_url",
+         "image_url": {"url": f"data:image/png;base64,{b64}"}}]})
+    return out
+
+
 def find(pattern: str) -> Path | None:
     got = sorted(HUB.glob(f"**/{pattern}"))
     return got[-1] if got else None
@@ -99,8 +121,9 @@ class Server:
     """A llama-server holding the model, so a hundred crops load it once."""
 
     def __init__(self, model: Path, mmproj: Path, port: int, threads: int,
-                 ctx: int = 8192):
+                 ctx: int = 8192, system: str | None = SYSTEM):
         self.url = f"http://127.0.0.1:{port}"
+        self.system = system
         self.cmd = [str(LLAMA / "llama-server"), "-m", str(model),
                     "--mmproj", str(mmproj), "--port", str(port),
                     "-t", str(threads), "-c", str(ctx), "--no-warmup"]
@@ -126,12 +149,7 @@ class Server:
     def read(self, image: Path, prompt: str, predict: int = 512) -> tuple[str, float]:
         b64 = base64.b64encode(image.read_bytes()).decode()
         body = json.dumps({
-            "messages": [
-                {"role": "system", "content": SYSTEM},
-                {"role": "user", "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url",
-                     "image_url": {"url": f"data:image/png;base64,{b64}"}}]}],
+            "messages": messages(prompt, b64, getattr(self, "system", SYSTEM)),
             "temperature": 0.0, "n_predict": predict, "max_tokens": predict,
         }).encode()
         req = urllib.request.Request(f"{self.url}/v1/chat/completions", data=body,
@@ -239,7 +257,7 @@ def read_document(server, pdf: Path, record: dict, work: Path, said: dict,
     return rows_read
 
 
-def whole_documents(server, a, tag: str) -> int:
+def whole_documents(server, a, tag: str, prompt: str = ROW_PROMPT) -> int:
     """The 'read this one properly' pass, over documents rather than crops."""
     hands = json.loads(a.hands.read_text(encoding="utf-8")) if a.hands.exists() else {}
     if not hands:
@@ -276,7 +294,7 @@ def whole_documents(server, a, tag: str) -> int:
             continue
         record = json.loads(rec.read_text(encoding="utf-8"))
         total += read_document(server, pdf, record, a.work, said,
-                               hands[name]["hash"], on_page=note,
+                               hands[name]["hash"], prompt=prompt, on_page=note,
                                pages_limit=a.pages_limit,
                                only=wanted.get(name) if wanted else None)
         a.out.write_text(json.dumps({"model": tag, "by": "row",
@@ -292,6 +310,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", type=Path, default=None)
     ap.add_argument("--mmproj", type=Path, default=None)
+    ap.add_argument("--style", choices=sorted(STYLES), default="churro",
+                    help="how the model is asked: the CHURRO/Qwen persona with "
+                         "<output> tags, or PaddleOCR-VL's bare `OCR:`")
     ap.add_argument("--port", type=int, default=8788)
     ap.add_argument("--threads", type=int, default=6)
     ap.add_argument("--serve", action="store_true",
@@ -338,6 +359,7 @@ def main(argv=None) -> int:
         return 1
 
     tag = model.name.replace("churro-3B.", "churro-3B-").replace(".gguf", "")
+    style = STYLES[a.style]
 
     def run(server):
         if a.pdf:
@@ -363,13 +385,13 @@ def main(argv=None) -> int:
             return 0
 
         if a.documents:
-            return whole_documents(server, a, tag)
+            return whole_documents(server, a, tag, prompt=style["row"])
         rows = rows_from(a.trainset, a.rows, hand=a.hand)
         read: dict[str, dict] = {}
         times = []
         for i, row in enumerate(rows, 1):
             img = a.trainset / row["image"]
-            said, secs = server.read(img, ROW_PROMPT, predict=64)
+            said, secs = server.read(img, style["row"], predict=64)
             times.append(secs)
             read.setdefault(row["doc"], {}).setdefault(str(row["page"]), {})[
                 str(row["n"])] = said
@@ -386,12 +408,12 @@ def main(argv=None) -> int:
         return 0
 
     if a.serve:
-        with Server(model, mmproj, a.port, a.threads) as s:
+        with Server(model, mmproj, a.port, a.threads, system=style["system"]) as s:
             return run(s)
 
     class Remote(Server):
         def __init__(self, url):
-            self.url, self.proc = url, None
+            self.url, self.proc, self.system = url, None, style["system"]
     return run(Remote(a.url))
 
 

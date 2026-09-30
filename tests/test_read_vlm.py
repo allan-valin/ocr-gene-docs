@@ -182,3 +182,25 @@ class TestOnlyTheseP4ges:
         read_document(Server(), tmp_path / "x.pdf", rec, tmp_path, said, "aaa",
                       only={5})
         assert list(said["aaa"]) == ["5"]
+
+
+class TestMessages:
+    """A model is asked the way its own card asks it, or the measurement is of
+    the prompt and not the model. PaddleOCR-VL takes `OCR:` and no persona."""
+
+    def test_churro_style_carries_the_system_prompt(self):
+        got = churro["messages"]("read this", "abc")
+        assert got[0]["role"] == "system"
+        assert got[1]["role"] == "user"
+        assert got[1]["content"][0]["text"] == "read this"
+        assert got[1]["content"][1]["image_url"]["url"].endswith(",abc")
+
+    def test_no_system_means_no_system_message_at_all(self):
+        got = churro["messages"]("OCR:", "abc", system=None)
+        assert [m["role"] for m in got] == ["user"]
+
+    def test_every_style_names_a_row_prompt(self):
+        for name, style in churro["STYLES"].items():
+            assert style["row"], name
+        assert churro["STYLES"]["paddleocr"]["system"] is None
+        assert churro["STYLES"]["paddleocr"]["row"] == "OCR:"
