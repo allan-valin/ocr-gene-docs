@@ -57,13 +57,18 @@ class StoredGeometry:
 
 
 def crops_for(image: Path, stored: dict | None, rows=None,
-              margin: int = INK_MARGIN) -> dict[int, dict]:
+              margin: int = INK_MARGIN, grow: float = 0.0) -> dict[int, dict]:
     """Both pictures of the named rows of a page, keyed by row number.
 
     `rows` are row numbers as the record numbers them — the band's index plus
     one — and all of them when it is None. Each entry holds the `carved` crop
     the engine's recogniser was handed and the plain `strip` rectangle of the
     band, which a second recogniser reads very differently.
+
+    `grow`, when set, adds a third picture, `grown`: the band with that share
+    of its own height added above and below, clamped to the page. The band
+    clips ascenders and descenders, and a model that reads a picture rather
+    than a line may read better given the ink the ruling took from it.
     """
     from PIL import Image
 
@@ -83,4 +88,9 @@ def crops_for(image: Path, stored: dict | None, rows=None,
         if want is not None and i + 1 not in want:
             continue
         crop(i, box)
+        if grow and i in sink:
+            x0, y0, x1, y1 = box
+            air = (y1 - y0) * grow
+            sink[i]["grown"] = im.crop((x0, max(0, int(y0 - air)),
+                                        x1, min(im.size[1], int(y1 + air))))
     return {i + 1: band for i, band in sink.items()}

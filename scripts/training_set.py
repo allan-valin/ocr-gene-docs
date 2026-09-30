@@ -120,6 +120,44 @@ def labels_for_page(band_rows: list[dict], truth: dict) -> dict[int, str]:
 
 
 
+def regrow(cut: dict[int, dict], exported: dict[int, Path]) -> dict[int, object]:
+    """The grown crops of the rows whose plain band is the exported one.
+
+    A truth page's crops were exported from one reading and the record may
+    since have been read again; a grown crop cut from the record's geometry
+    is the same row only if the band it contains is byte-for-byte the band
+    that was exported. Otherwise the label would land on a stranger.
+    """
+    from PIL import Image
+    out = {}
+    for n, band in cut.items():
+        ref = exported.get(n)
+        if ref is None or not Path(ref).exists() or "grown" not in band:
+            continue
+        was = Image.open(ref).convert("L")
+        if was.size != band["strip"].size or was.tobytes() != band["strip"].convert("L").tobytes():
+            continue
+        out[n] = band["grown"]
+    return out
+
+
+def grown_for_truth_page(rec: dict, page: int, scans: Path, work: Path,
+                         rows: list[int], grow: float, exported: dict[int, Path]
+                         ) -> dict[int, object]:
+    """Cut the grown crops of a truth page from the record's own geometry."""
+    from desembarque import bandcrops
+    from page_geometry import page_image
+    geo = measured_pages(rec).get(page)
+    pdf = scans / (rec.get("file") or "")
+    if not geo or not pdf.exists():
+        return {}
+    img = page_image(pdf, page, work)
+    if img is None:
+        return {}
+    cut = bandcrops.crops_for(img, geo, rows=rows, grow=grow)
+    return regrow(cut, exported)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bands", type=Path, default=None,
@@ -129,12 +167,16 @@ def main() -> None:
                     help="take a label from every row somebody has retyped in "
                          "these records, cutting its crop from the geometry "
                          "the page stores")
-    ap.add_argument("--variant", choices=("carved", "strip"), default="strip",
+    ap.add_argument("--variant", choices=("carved", "strip", "grown"), default="strip",
                     help="which picture of the row to keep: the engine's own "
                          "carved crop, or the plain rectangle of the band. "
                          "TrOCR reads the carved crop of a cursive name at "
                          "CER 0.609 and the band at 0.567, so a set built for "
-                         "a pretrained model wants the band")
+                         "a pretrained model wants the band; `grown` is the "
+                         "band with --grow of its height added each side")
+    ap.add_argument("--grow", type=float, default=0.25,
+                    help="for --variant grown: the share of the band's height "
+                         "added above and below it")
     ap.add_argument("--verified", action="store_true",
                     help="count a row merely marked verified as a label too, "
                          "which is weaker evidence: the person may have been "
@@ -174,14 +216,31 @@ def main() -> None:
             print(f"  {tf.name}: no crops exported for this page")
             continue
         at = {r["n"]: r for r in rows}
-        for n, name in labels_for_page(rows, d).items():
-            key = "strip" if args.variant == "strip" else "file"
-            named = at[n].get(key) or at[n].get("file")
-            src = args.bands / named
-            if not src.exists():
-                continue
+        labels = labels_for_page(rows, d)
+        grown: dict[int, object] = {}
+        if args.variant == "grown":
+            rf = (args.records or ROOT / "data" / "transcriptions") / f"{doc}.json"
+            if rf.exists():
+                grown = grown_for_truth_page(
+                    json.loads(rf.read_text(encoding="utf-8")), int(d["page"]),
+                    args.scans, args.work, sorted(labels), args.grow,
+                    {n: args.bands / at[n]["strip"] for n in labels if at[n].get("strip")})
+            ungrown = len(labels) - len(grown)
+            if ungrown:
+                print(f"  {tf.name}: {ungrown} rows whose band is not the exported one, skipped")
+        for n, name in labels.items():
             dst = images / f"{doc[:8]}_{d['page']}_{n}.png"
-            shutil.copy(src, dst)
+            if args.variant == "grown":
+                if n not in grown:
+                    continue
+                grown[n].convert("RGB").save(dst)
+            else:
+                key = "strip" if args.variant == "strip" else "file"
+                named = at[n].get(key) or at[n].get("file")
+                src = args.bands / named
+                if not src.exists():
+                    continue
+                shutil.copy(src, dst)
             pairs[dst.name] = {"image": f"images/{dst.name}", "label": name,
                                "engine": at[n]["engine"], "how": "hand-read",
                                "doc": doc, "page": d["page"], "n": n,
@@ -208,7 +267,8 @@ def main() -> None:
                 uncut += len(rows)
                 continue
             cut = bandcrops.crops_for(img, geo.get(page),
-                                      rows=[c["n"] for c in rows])
+                                      rows=[c["n"] for c in rows],
+                                      grow=args.grow if args.variant == "grown" else 0.0)
             for c in rows:
                 band = cut.get(c["n"])
                 if not band:

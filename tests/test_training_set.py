@@ -112,3 +112,20 @@ def test_a_page_keyed_by_row_is_taken_as_it_is():
     band_rows = [{"n": 4, "engine": "x"}, {"n": 9, "engine": "y"}]
     truth = {"rows": {"4": "Rossi Mario", "7": "not exported"}}
     assert labels_for_page(band_rows, truth) == {4: "Rossi Mario"}
+
+
+def test_a_grown_crop_is_kept_only_where_the_band_is_the_exported_one(tmp_path):
+    """A truth page's crops were exported from one reading; a grown crop cut
+    from the record's geometry is the same row only if the plain band it
+    contains is byte-for-byte the band that was exported. Otherwise the page
+    has been renumbered and the label would land on a stranger."""
+    from PIL import Image
+    same = Image.new("L", (40, 10), 255)
+    other = Image.new("L", (40, 10), 0)
+    exported = tmp_path / "1-strip.png"
+    same.save(exported)
+    cut = {1: {"strip": same, "grown": Image.new("L", (40, 16), 255)},
+           2: {"strip": other, "grown": Image.new("L", (40, 16), 255)}}
+    got = ts["regrow"](cut, {1: exported, 2: exported})
+    assert list(got) == [1]
+    assert got[1].size == (40, 16)

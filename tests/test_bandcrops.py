@@ -96,3 +96,27 @@ def test_the_name_column_is_still_the_whole_of_a_two_number_geometry():
 def test_a_single_boundary_is_not_a_column():
     assert bandcrops.StoredGeometry({"rows": [[0.1, 0.2]],
                                      "columns": [0.05]}).usable() is False
+
+
+def test_a_grown_crop_is_the_band_with_air_above_and_below(tmp_path):
+    """The engine's band clips ascenders and descenders, and a model that
+    reads a picture rather than a line may read better given the ink it lost.
+    The grown crop is the plain band with a share of its own height added
+    each side, clamped to the page."""
+    page = tmp_path / "p.png"
+    a_page(page)
+    got = bandcrops.crops_for(page, STORED, grow=0.25)
+    strip, grown = got[2]["strip"], got[2]["grown"]
+    assert grown.size[0] == strip.size[0]
+    assert grown.size[1] > strip.size[1]
+    # 25% of a 96 px band each side: within a pixel of 48 more
+    assert abs(grown.size[1] - strip.size[1] - 0.5 * strip.size[1]) <= 2
+    # the top row cannot grow above the page
+    top = bandcrops.crops_for(page, STORED, grow=0.25)[1]
+    assert top["grown"].size[1] < top["strip"].size[1] * 1.5
+
+
+def test_no_growth_asked_for_means_no_grown_crop(tmp_path):
+    page = tmp_path / "p.png"
+    a_page(page)
+    assert "grown" not in bandcrops.crops_for(page, STORED)[1]
