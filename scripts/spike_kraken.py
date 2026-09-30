@@ -29,7 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "scripts")]
 
-from read_vlm import rows_from  # noqa: E402
+from read_vlm import rows_from, whole_documents  # noqa: E402
 
 
 def load(model_path: Path):
@@ -64,6 +64,35 @@ def read_line(model, image_path: Path, pad: int) -> str:
     return unicodedata.normalize("NFC", " ".join(out)).strip()
 
 
+class Reader:
+    """What `read_vlm.whole_documents` asks of a server, answered by kraken.
+
+    The VLM runner reads a document page by page, cutting each row from the
+    geometry the record stores and handing the picture to `server.read`.
+    Kraken is not a server, but it can answer the same question, so the
+    held-out pages are read by it exactly as they were read by the VLMs.
+    """
+
+    def __init__(self, model, pad: int, read_line=None):
+        self.model, self.pad, self.system = model, pad, None
+        self._read = read_line or globals()["read_line"]
+
+    def read(self, image: Path, prompt: str, predict: int = 64) -> tuple[str, float]:
+        began = time.time()
+        return self._read(self.model, Path(image), self.pad), time.time() - began
+
+
+def document_args(out: Path, pages_json: Path | None = None, hand: str = "",
+                  documents_limit: int = 1, pages_limit: int = 0,
+                  records: Path | None = None) -> argparse.Namespace:
+    """The arguments `whole_documents` reads off the VLM runner's parser."""
+    return argparse.Namespace(
+        hands=ROOT / "data" / "hands.json", out=out, pages_json=pages_json,
+        scans=ROOT / "data" / "scans", records=records or ROOT / "data" / "transcriptions",
+        work=ROOT / "data" / "pagecache", hand=hand,
+        documents_limit=documents_limit, pages_limit=pages_limit)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", type=Path, required=True)
@@ -74,9 +103,22 @@ def main(argv=None) -> int:
                     help="white border around the crop, px; a CTC model wants "
                          "a little air above and below the line")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "kraken-rows.json")
+    ap.add_argument("--documents", action="store_true",
+                    help="read whole documents out of the corpus instead of "
+                         "the labelled crops, as read_vlm.py --documents does")
+    ap.add_argument("--pages-json", type=Path, default=None,
+                    help="the exact pages to read, as the reading sheet lists them")
+    ap.add_argument("--records", type=Path, default=None)
+    ap.add_argument("--documents-limit", type=int, default=1)
+    ap.add_argument("--pages-limit", type=int, default=0)
     a = ap.parse_args(argv)
 
     model = load(a.model)
+    tag = a.model.stem + (f"-pad{a.pad}" if a.pad else "")
+    if a.documents:
+        ns = document_args(a.out, a.pages_json, a.hand, a.documents_limit,
+                           a.pages_limit, a.records)
+        return whole_documents(Reader(model, a.pad), ns, tag, prompt="")
     rows = rows_from(a.trainset, a.rows, hand=a.hand)
     read: dict[str, dict] = {}
     times = []
@@ -89,7 +131,6 @@ def main(argv=None) -> int:
         print(f"  {i}/{len(rows)} {times[-1]:5.2f}s  {said[:40]!r}"
               f"   (label {row['label'][:30]!r})", flush=True)
     total = sum(times)
-    tag = a.model.stem + (f"-pad{a.pad}" if a.pad else "")
     a.out.write_text(json.dumps({"model": tag, "by": "row", "read": read,
                                  "seconds": total, "rows": len(times),
                                  "seconds_per_row": total / max(1, len(times))},
