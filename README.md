@@ -80,8 +80,13 @@ Honest about the limits:
   empty. A wider input, a bigger model, removing the printed
   rules and folding confusable letters were each measured and each was worse or no better,
   and pretrained handwriting models lost to the printed-text recogniser by a wide margin
-  (CER 0.61 against 0.21, at 8 s a row). This needs training data of its own rather than
-  somebody else's model.
+  (CER 0.61 against 0.21, at 8 s a row). As a *replacement* this needs training data of
+  its own rather than somebody else's model. As a *second reading beside* the engine's,
+  somebody else's model is worth a lot: a 16 MB kraken model of French manuscripts
+  (Manu McFondue, CC-BY-4.0) is wrong differently, and putting its reading on the row
+  takes cursive names found by name alone in the top five from 52 to 71 of 110, at a
+  twentieth of a second a row — still measured on the tuned-on set, see
+  `docs/PROGRESS.md` 2026-09-30, and not yet applied to the corpus.
 * **A family list is mostly repetition marks, and they are resolved.** These lists write
   the surname once and a ditto under it for every relative: forty-eight people under nine
   surnames on one page. The surname is filled in from the row the mark points at and the
