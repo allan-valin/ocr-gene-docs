@@ -27,14 +27,15 @@ index, as CHURRO and Qwen were on 2026-09-08.
 |---|---|---|---|---|---|---|
 | none — the engine as it ships | — | — | 52 | 67 | 75 | — |
 | CHURRO 3B (2026-09-08) | research only | 4.4 | 85 | 93 | 103 | 85 h |
-| Qwen2.5-VL-7B Q4_K_M (2026-09-08) | Apache-2.0 | 8.5 | 78 | | | 170 h |
+| Qwen2.5-VL-7B Q4_K_M (2026-09-08, 109 cursive rows) | Apache-2.0 | 8.5 | 78 | 86 | 98 | 170 h |
 | **kraken, Manu McFondue** | CC-BY-4.0 | **0.05** | **71** | **81** | **91** | **~1 h** |
 | PaddleOCR-VL-1.6 Q8_0 | Apache-2.0 | 2.7 | 67 | 78 | 86 | 53 h |
 | kraken, McCATMuS | CC-BY-4.0 | 0.11 | 59 | 73 | 84 | 2 h |
 | kraken, Manu McFrench V3 | CC-BY-4.0 | 0.03 | 64 | 76 | 84 | 0.6 h |
 
 Naming the crossing, which no second reading had ever moved: engine 89/94/100,
-McFondue **94/100/108**, PaddleOCR-VL 93/99/102, McCATMuS 95/99/102.
+McFondue **94/100/108**, PaddleOCR-VL 93/99/102, McCATMuS 95/99/102, Qwen-7B
+95/101/106 (re-run today on its 2026-09-08 sidecar).
 
 **Manu McFondue** — kraken's model of French manuscripts 17th–21st century,
 with some Spanish letters, 16 MB, [Zenodo 10886224](https://zenodo.org/records/10886224)
