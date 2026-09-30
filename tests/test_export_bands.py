@@ -94,3 +94,19 @@ def test_a_page_read_for_the_first_time_gains_a_geometry():
         pytest.skip("the OCR engine is not importable in this environment")
     got = mod.merged_pages([], {4: {"rows": [[0, 1]]}})
     assert got == [{"n": 4, "geometry": {"rows": [[0, 1]]}}]
+
+
+def test_a_record_with_no_scan_is_skipped_not_hashed(tmp_path):
+    """Two records in the corpus carry no file name. `scans / ""` is the scans
+    directory itself, which exists, and hashing a directory crashed the
+    corpus re-read at 368 of 662 — a crash the progress file recorded as a
+    stop. A record's scan is a file, or the record is skipped."""
+    mod = load()
+    if mod is None:
+        pytest.skip("engine venv not active")
+    scan_of = mod.scan_of
+    (tmp_path / "a.pdf").write_bytes(b"%PDF")
+    assert scan_of({"file": "a.pdf"}, tmp_path) == tmp_path / "a.pdf"
+    assert scan_of({"file": ""}, tmp_path) is None
+    assert scan_of({}, tmp_path) is None
+    assert scan_of({"file": "missing.pdf"}, tmp_path) is None

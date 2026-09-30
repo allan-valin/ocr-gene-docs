@@ -86,6 +86,20 @@ def merged_pages(pages: list[dict], fresh: dict[int, dict]) -> list[dict]:
     return sorted(out, key=lambda p: p.get("n") or 0)
 
 
+def scan_of(rec: dict, scans: Path) -> Path | None:
+    """The record's scan, or None when it has none on disk.
+
+    Two records in the corpus carry no file name, and `scans / ""` is the
+    scans directory itself -- which exists, so `exists()` let it through and
+    hashing a directory stopped the corpus re-read at 368 of 662.
+    """
+    name = (rec.get("file") or "").strip()
+    if not name:
+        return None
+    pdf = scans / name
+    return pdf if pdf.is_file() else None
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--records", type=Path, required=True)
@@ -121,8 +135,8 @@ def main() -> None:
     eng = PaddleEngine()
     for rf in sorted(args.records.glob("*.json")):
         rec = json.loads(rf.read_text(encoding="utf-8"))
-        pdf = args.scans / (rec.get("file") or "")
-        if not pdf.exists():
+        pdf = scan_of(rec, args.scans)
+        if pdf is None:
             continue
         doc = cached_hash(pdf)
         fresh: dict[int, list[dict]] = {}
