@@ -204,3 +204,65 @@ class TestMessages:
             assert style["row"], name
         assert churro["STYLES"]["paddleocr"]["system"] is None
         assert churro["STYLES"]["paddleocr"]["row"] == "OCR:"
+
+
+class TestReadRows:
+    """One row the server chokes on is one row unread, not a run lost.
+
+    llama-server answers 500 when a model emits half a multibyte character,
+    which PaddleOCR-VL did on row 132 of 155 -- and the 131 readings before
+    it were never written. The reading is saved after every row, and a row
+    that fails is recorded as nothing read, so the pass can be scored and
+    resumed."""
+
+    class Server:
+        def __init__(self, fail_on: int):
+            self.fail_on, self.asked, self.system = fail_on, 0, None
+
+        def read(self, image, prompt, predict=64):
+            import urllib.error
+            self.asked += 1
+            if self.asked == self.fail_on:
+                raise urllib.error.HTTPError("http://x", 500, "peg", {}, None)
+            return f"read {self.asked}", 0.5
+
+    def rows(self):
+        return [{"doc": "d", "page": 2, "n": i, "image": f"images/{i}.png",
+                 "label": f"name {i}"} for i in (1, 2, 3)]
+
+    def test_a_failed_row_is_recorded_as_nothing_and_the_rest_are_read(self, tmp_path):
+        out = tmp_path / "side.json"
+        got = churro["read_rows"](self.Server(fail_on=2), self.rows(), "OCR:",
+                                  tmp_path, out, "m")
+        assert got["read"]["d"]["2"] == {"1": "read 1", "2": "", "3": "read 3"}
+        assert got["rows"] == 3
+
+    def test_the_sidecar_is_on_disk_after_every_row(self, tmp_path):
+        out = tmp_path / "side.json"
+        seen = []
+
+        class Peek(self.Server):
+            def read(self, image, prompt, predict=64):
+                if out.exists():
+                    seen.append(len(json.loads(out.read_text())["read"]["d"]["2"]))
+                return super().read(image, prompt, predict)
+
+        churro["read_rows"](Peek(fail_on=0), self.rows(), "OCR:", tmp_path, out, "m")
+        assert seen == [1, 2]
+        assert json.loads(out.read_text())["model"] == "m"
+
+    def test_a_row_already_in_the_sidecar_is_not_read_again(self, tmp_path):
+        out = tmp_path / "side.json"
+        out.write_text(json.dumps({"model": "m", "read": {"d": {"2": {"1": "old"}}},
+                                   "seconds": 1.0, "rows": 1}))
+        server = self.Server(fail_on=0)
+        got = churro["read_rows"](server, self.rows(), "OCR:", tmp_path, out, "m")
+        assert server.asked == 2
+        assert got["read"]["d"]["2"]["1"] == "old"
+
+    def test_another_models_sidecar_is_not_resumed(self, tmp_path):
+        out = tmp_path / "side.json"
+        out.write_text(json.dumps({"model": "other", "read": {"d": {"2": {"1": "old"}}}}))
+        server = self.Server(fail_on=0)
+        churro["read_rows"](server, self.rows(), "OCR:", tmp_path, out, "m")
+        assert server.asked == 3

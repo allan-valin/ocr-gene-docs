@@ -257,6 +257,53 @@ def read_document(server, pdf: Path, record: dict, work: Path, said: dict,
     return rows_read
 
 
+def read_rows(server, rows: list[dict], prompt: str, trainset: Path, out: Path,
+              tag: str) -> dict:
+    """Read the labelled crops one by one, saving after each.
+
+    A row the server cannot answer -- llama-server says 500 when a model
+    emits half a multibyte character -- is recorded as nothing read and the
+    pass goes on, because 131 readings lost to the 132nd is a run wasted.
+    A sidecar already on disk for the same model is resumed, not redone.
+    """
+    read: dict[str, dict] = {}
+    seconds, done = 0.0, 0
+    if out.exists():
+        try:
+            was = json.loads(out.read_text(encoding="utf-8"))
+            if was.get("model") == tag:
+                read = was.get("read") or {}
+                seconds, done = float(was.get("seconds") or 0), int(was.get("rows") or 0)
+        except ValueError:
+            pass
+
+    def save():
+        out.write_text(json.dumps({"model": tag, "by": "row", "read": read,
+                                   "seconds": seconds, "rows": done,
+                                   "seconds_per_row": seconds / max(1, done)},
+                                  ensure_ascii=False, indent=1), encoding="utf-8")
+
+    for i, row in enumerate(rows, 1):
+        page = read.setdefault(row["doc"], {}).setdefault(str(row["page"]), {})
+        if str(row["n"]) in page:
+            continue
+        img = trainset / row["image"]
+        try:
+            said, secs = server.read(img, prompt, predict=64)
+        except urllib.error.HTTPError as e:
+            said, secs = "", 0.0
+            print(f"  {i}/{len(rows)} the server refused this row: {e}", flush=True)
+        page[str(row["n"])] = said
+        seconds += secs
+        done += 1
+        save()
+        print(f"  {i}/{len(rows)} {secs:5.1f}s  {said[:40]!r}"
+              f"   (label {row['label'][:30]!r})", flush=True)
+    save()
+    return {"model": tag, "by": "row", "read": read, "seconds": seconds,
+            "rows": done, "seconds_per_row": seconds / max(1, done)}
+
+
 def whole_documents(server, a, tag: str, prompt: str = ROW_PROMPT) -> int:
     """The 'read this one properly' pass, over documents rather than crops."""
     hands = json.loads(a.hands.read_text(encoding="utf-8")) if a.hands.exists() else {}
@@ -387,22 +434,8 @@ def main(argv=None) -> int:
         if a.documents:
             return whole_documents(server, a, tag, prompt=style["row"])
         rows = rows_from(a.trainset, a.rows, hand=a.hand)
-        read: dict[str, dict] = {}
-        times = []
-        for i, row in enumerate(rows, 1):
-            img = a.trainset / row["image"]
-            said, secs = server.read(img, style["row"], predict=64)
-            times.append(secs)
-            read.setdefault(row["doc"], {}).setdefault(str(row["page"]), {})[
-                str(row["n"])] = said
-            print(f"  {i}/{len(rows)} {secs:5.1f}s  {said[:40]!r}"
-                  f"   (label {row['label'][:30]!r})", flush=True)
-        total = sum(times)
-        payload = {"model": tag, "by": "row", "read": read,
-                   "seconds": total, "rows": len(times),
-                   "seconds_per_row": total / max(1, len(times))}
-        a.out.write_text(json.dumps(payload, ensure_ascii=False, indent=1),
-                         encoding="utf-8")
+        payload = read_rows(server, rows, style["row"], a.trainset, a.out, tag)
+        total, times = payload["seconds"], range(payload["rows"])
         print(f"\n{len(times)} rows in {total / 60:.1f} min — "
               f"{total / max(1, len(times)):.1f} s a row. Wrote {a.out}")
         return 0
