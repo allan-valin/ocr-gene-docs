@@ -127,8 +127,17 @@ record after 368 that carries no file name — two do — because `scans / ""`
 is the scans directory, which exists, and `cached_hash` opened it.
 `export_bands.py` now skips a record whose scan is not a file
 (`scan_of`, tested), and the re-read resumed at 13:55 today with the machine
-otherwise free, to be stopped before 17:00 hand-back. Its state at the stop
-is written at the end of this section.
+otherwise free. **Stopped at 14:11 at 378 of 662 documents, 1,521 pages** in
+`data/reread-index`, because a Gradle build (5 GB, two JVMs) started beside
+the re-read's own 5 GB with 1.8 GB left on the machine — the pattern that
+froze it once before. Sixteen minutes bought ten documents, two of them
+enormous (`97e0c269` p6 alone is 382 bands). One line restarts it and it
+skips every page already indexed; give it the machine to itself:
+
+```sh
+.venv-ocr/bin/python scripts/export_bands.py --records data/transcriptions \
+    --out data/reread-index --write-records data/reread --no-crops
+```
 
 4. **Two alternates on a row — measured crudely, and not worth building.**
    Both readings joined into one string per row and run through the same

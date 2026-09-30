@@ -379,7 +379,7 @@ whose 1–3% claims cannot currently be told from noise.
 
 ## T8 — Finish the corpus re-read when the machine is free
 
-Stopped 2026-09-07 at 172 of 660 documents, ~10 hours left, resumable — a page
+At 378 of 662 documents on 2026-09-30 (it had crashed at 368 on a record with no scan, since fixed; PROGRESS 2026-09-30), ~7 hours left, resumable — a page
 already in `data/reread-index` is skipped:
 
 ```sh
