@@ -135,6 +135,13 @@ froze it once before. Sixteen minutes bought ten documents, two of them
 enormous (`97e0c269` p6 alone is 382 bands). One line restarts it and it
 skips every page already indexed; give it the machine to itself:
 
+**Resumed 2026-10-02 09:35–12:21** by the morning session, with the machine otherwise idle
+(no Gradle, no emulator; 6–7 GB available, a watchdog ready to SIGTERM it under 1.5 GB — it
+never fired). Stopped by hand at the hand-back time: **501 of 662 documents touched, 2012
+pages** in `data/reread-index` (from 1,521 pages at 09:35: 491 pages in 2 h 46 min, about 3 a
+minute on this CPU). Same restart line, same skip-what-is-indexed behaviour; roughly half the
+corpus is now re-read.
+
 ```sh
 .venv-ocr/bin/python scripts/export_bands.py --records data/transcriptions \
     --out data/reread-index --write-records data/reread --no-crops
