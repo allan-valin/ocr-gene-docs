@@ -67,26 +67,23 @@ Working:
 
 Honest about the limits:
 
-* **Typescript is solved; cursive is four fifths findable, if you know the crossing.**
-  Measured by searching each of 142 hand-read names exactly as a person would type it,
-  against the whole index: **41 of 42 names on the typewritten pages** come back in the top
-  ten either way, and on the cursive pages **54 of 100 typing only the name, 82 of 100 when
-  the ship, the line or the year is named as well**. A row is not charged for what it holds
-  besides the name — a title, a class of passage, a surname resolved from a repetition mark —
-  which is worth seven of those names to somebody who cannot name the crossing. `Ponticelli Giovanni` is read as
-  `Pouticelli Sooai` — wrong as a transcription, findable as a search. The recogniser is
-  the ceiling and most of the 17 names still missing are below any matcher's floor: the
-  row simply does not resemble the name, and four of them are rows the recogniser returned
-  empty. A wider input, a bigger model, removing the printed
-  rules and folding confusable letters were each measured and each was worse or no better,
-  and pretrained handwriting models lost to the printed-text recogniser by a wide margin
-  (CER 0.61 against 0.21, at 8 s a row). As a *replacement* this needs training data of
-  its own rather than somebody else's model. As a *second reading beside* the engine's,
-  somebody else's model is worth a lot: a 16 MB kraken model of French manuscripts
-  (Manu McFondue, CC-BY-4.0) is wrong differently, and putting its reading on the row
-  takes cursive names found by name alone in the top five from 52 to 71 of 110, at a
-  twentieth of a second a row — still measured on the tuned-on set, see
-  `docs/PROGRESS.md` 2026-09-30, and not yet applied to the corpus.
+* **Typed pages read well; cursive pages mostly do not, and the number that says so was
+  read by a person.** Until 2026-10-08 every figure here came from six pages the assistant
+  had mostly read itself, and they flattered: 41 of 42 typed names and 52 of 110 cursive
+  names in the top five by name alone. The first **held-out** sheet — ten documents drawn
+  at random, one page each, read by Allan — says **typed 74 of 93, cursive 3 of 33** on the
+  corpus as it stands (`bench_search.py --matrix --held-out`); with the ship, the line or
+  the year named as well, cursive reaches 89 of 110 on the tuned-on pages and does not move
+  on the held-out one. A row is not charged for what it holds besides the name, and a
+  misreading is often still findable — `Ponticelli Giovanni` read as `Pouticelli Sooai`.
+  What does not help cursive, each measured and written down in `docs/PROGRESS.md`: a
+  wider input, a bigger model, removing the rules, folding confusable letters, pretrained
+  handwriting models as a replacement, a 16 MB kraken model as a second reading (+1 of 33
+  on the held-out page), reading the whole page with a segmenter instead of the engine's
+  bands, and a document-parsing VLM over the whole page. The recogniser is the ceiling,
+  and moving it needs training data from this archive's own hands. What did help, by a
+  lot, is reading the whole corpus again through a measured table: rows carrying a name
+  went from 29,718 to 59,285 on 2026-10-08.
 * **A family list is mostly repetition marks, and they are resolved.** These lists write
   the surname once and a ditto under it for every relative: forty-eight people under nine
   surnames on one page. The surname is filled in from the row the mark points at and the

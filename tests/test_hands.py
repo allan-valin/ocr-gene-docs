@@ -110,3 +110,12 @@ class TestClassifyDirectory:
 
 def got_median(entry, page):
     return entry["median_conf"][page]
+
+
+def test_the_confidence_is_read_under_its_current_key_too():
+    """`conf` is keyed `name` since T6; the re-read of 2026-10-08 writes only
+    that, and a classifier reading `surname` alone called the corpus unknown."""
+    from desembarque.hands import page_features
+    new = [{"page": 2, "n": i, "name_raw": "X", "conf": {"name": c}}
+           for i, c in enumerate((0.9, 0.95, 0.99))]
+    assert page_features(new)["median_conf"] == 0.95

@@ -42,7 +42,11 @@ def page_features(rows: list[dict]) -> dict:
     The median rather than the mean: a page is a column of rows and one
     blank-but-confident band should not carry it.
     """
-    confs = [(r.get("conf") or {}).get("surname") for r in rows
+    # `conf` is keyed `name` since T6 (2026-08-29) and `surname` before it;
+    # the corpus carried both until the 2026-10-08 re-read, and a classifier
+    # reading only the old key called 652 of 658 documents unknown that day
+    confs = [(r.get("conf") or {}).get("name", (r.get("conf") or {}).get("surname"))
+             for r in rows
              if (r.get("name_raw") or "").strip()]
     confs = [float(c) for c in confs if c is not None]
     return {"rows": len(confs),

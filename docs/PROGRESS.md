@@ -174,6 +174,18 @@ across 117 documents, nothing overwritten, reversible. Modest, because
 these pages are 88% cursive and the recogniser reads cursive badly through
 any column; the 46 pages with no plausible sibling are left as they are.
 
+**Two things the promotion broke, fixed.** `desembarque.hands` read the
+confidence under `surname`, the key T6 renamed to `name` in August; the
+re-read writes only the new one, so `classify_hands.py` called 652 of 658
+documents unknown. It reads both now, and `data/hands.json` is re-labelled
+on the promoted corpus (the old labels kept beside it): 97 documents moved,
+74 of them cursive → typed, because better crops read with more confidence;
+434 cursive, 197 typed, 27 unknown; 6 of 6 tuned-on pages still right, and
+of the five held-out pages Allan labelled, four agree and BS.ENT.016079 p2
+(three typed names on an otherwise empty page) is called cursive by both the
+old and the new labels. And the README quoted the tuned-on numbers as if
+they were the reading's; it quotes the held-out ones now.
+
 **Measured and rejected today, two more.** *A name-column finder on
 kraken's lines* (the left edge where the most letters begin, the right edge
 where those lines end): right on six of the eleven pages whose column is
