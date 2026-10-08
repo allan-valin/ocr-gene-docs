@@ -445,6 +445,35 @@ def unglued(word: str) -> list[str]:
     return out
 
 
+def unglued_by_names(word: str, names: frozenset | None) -> list[str]:
+    """The two names in a glued reading that carries no inner capital.
+
+    `unglued` cuts where a capital stands inside a word, because the
+    recogniser dropped the clerk's space and kept the capital after it. A
+    typewritten page in capitals leaves no such mark: BS.ENT.016429 p3 reads
+    `FRANZPOPERL`, `KARLFRENK`, `MARIALANG`, `ERNAWERNER` — 14% of the rows
+    on the typed documents are a single run of ten letters or more with no
+    space in it — and a searcher typing *Karl Frenk* shares no whole word
+    with any of them. So the cut is taken where the left half is a name this
+    archive has read: the given name is the evidence, and the rest of the
+    run is the family name whatever it is. A word that is itself a known
+    name is not cut.
+    """
+    w = (word or "").strip()
+    if not names or not w or " " in w or len(w) < GLUE_HALF * 2:
+        return []
+    if RE_INNER_CAPITAL.search(w) or not w.isalpha():
+        return []
+    folded = fold(w)
+    if len(folded) != len(w) or folded in names:
+        return []
+    out = []
+    for i in range(GLUE_HALF, len(w) - GLUE_HALF + 1):
+        if folded[:i] in names:
+            out.append(f"{w[:i]} {w[i:]}")
+    return out
+
+
 def searchable_alts(row: dict, text: str,
                     known: set[str] | None = None) -> list[str]:
     """Every other spelling of this row worth indexing beside its reading.
@@ -469,12 +498,13 @@ def spellings(row: dict, text: str, known=None,
     not score alike. The guesses are last, so a count names them.
     """
     out = list(_second_reading(row, text))
+    vocab = vocab or _vocabulary(known)
     for word in text.split():
-        for split in unglued(word):
+        for split in unglued(word) + unglued_by_names(word, vocab[0] if vocab else None):
             spelled = text.replace(word, split, 1)
             if spelled != text and spelled not in out:
                 out.append(spelled)
-    guesses = _stroke_spellings(text, vocab or _vocabulary(known), out)
+    guesses = _stroke_spellings(text, vocab, out)
     guesses += _other_recogniser(row, text, out + guesses)
     return out + guesses, len(guesses)
 

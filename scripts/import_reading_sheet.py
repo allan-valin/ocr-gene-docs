@@ -33,7 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT)]
 
-from desembarque.sheetbands import positional_map        # noqa: E402
+from desembarque.sheetbands import align_by_text, positional_map   # noqa: E402
 from desembarque.truthset import load_page              # noqa: E402
 
 HANDS = ("typed", "cursive", "mixed")
@@ -77,14 +77,26 @@ def find_record(records: Path | None, pdf: str) -> dict | None:
 
 
 def remap(sheet: dict, record: dict) -> tuple[dict, list[str]]:
-    """The sheet's positional boxes put onto the engine's band numbers."""
+    """The sheet's positional boxes put onto the engine's band numbers.
+
+    On a typed page the engine's reading is good enough to say which band
+    each typed row belongs to, and that catches the rows the engine never
+    cut (`align_by_text`); on a cursive page the reading says nothing and
+    the boxes are taken in the order the reader counted them
+    (`positional_map`).
+    """
     page = int(sheet["page"])
     geo = next((p.get("geometry") for p in record.get("pages") or ()
                 if int(p.get("n") or 0) == page), None) or {}
     texts = {int(r["n"]): r.get("name_raw") or "" for r in record.get("rows") or ()
              if r.get("page") == page and r.get("n") is not None}
     keys = sorted(int(k) for k in sheet["rows"])
-    where = positional_map(keys, geo.get("rows") or [], texts)
+    if sheet.get("hand") in ("typed", "mixed"):
+        mine = [(k, (sheet["rows"][str(k)] or "").strip().lstrip("?").strip())
+                for k in keys]
+        where = align_by_text(mine, sorted(texts.items()))
+    else:
+        where = positional_map(keys, geo.get("rows") or [], texts)
     rows, lost = {}, []
     for k in keys:
         value = sheet["rows"][str(k)]

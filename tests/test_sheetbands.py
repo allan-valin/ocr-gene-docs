@@ -82,3 +82,29 @@ class TestPositionalMap:
     def test_a_box_past_the_last_band_is_lost_not_mislabelled(self):
         texts = {1: "Nome", 2: "", 3: "A", 4: "B", 5: "C"}
         assert positional_map([3, 4], EVEN[:5], texts) == {3: 5, 4: None}
+
+
+from desembarque.sheetbands import align_by_text
+
+
+class TestAlignByText:
+    ENGINE = [(1, "Nome e Cognomes"), (2, ""), (3, "JON GULACBI"),
+              (4, "ROZAKLIA GULACSI"), (5, "ANAGULACSI"), (6, "HAJNALIA GULACSI"),
+              (7, "KAROL GULAOSI")]
+
+    def test_a_typed_page_is_aligned_by_what_the_engine_read(self):
+        mine = [(1, "Jon Gulacsi"), (2, "Rozaklia Gulacsi"), (3, "Ana Gulacsi"),
+                (4, "Hajnalia Gulacsi"), (5, "Karol Gulasci")]
+        assert align_by_text(mine, self.ENGINE) == {1: 3, 2: 4, 3: 5, 4: 6, 5: 7}
+
+    def test_a_row_the_engine_never_cut_is_dropped_not_shifted(self):
+        # the reader has a row between Jon and Rozaklia that no band carries
+        mine = [(1, "Jon Gulacsi"), (2, "Hajnalia Gulacsi"), (3, "Rozaklia Gulacsi"),
+                (4, "Ana Gulacsi"), (5, "Hajnalia Gulacsi"), (6, "Karol Gulasci")]
+        got = align_by_text(mine, self.ENGINE)
+        assert got == {1: 3, 2: None, 3: 4, 4: 5, 5: 6, 6: 7}
+
+    def test_an_empty_typed_row_pairs_with_nothing_in_particular(self):
+        mine = [(1, "Jon Gulacsi"), (2, ""), (3, "Rozaklia Gulacsi")]
+        got = align_by_text(mine, self.ENGINE)
+        assert got[1] == 3 and got[3] == 4

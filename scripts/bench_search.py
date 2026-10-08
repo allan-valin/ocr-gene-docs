@@ -370,8 +370,9 @@ def main(argv: list[str] | None = None) -> int:
     rows = load_index(args.cache, engine_only=False, ships=ships or None,
                       known=known_names())
     wanted = truth_rows(args.cache, args.scans, with_line=args.with_line,
-                        ships=ships)
-    print(f"{len(wanted)} hand-read names against {len(rows)} indexed rows")
+                        ships=ships, truth_dir=args.truth_dir)
+    print(f"{len(wanted)} hand-read names against {len(rows)} indexed rows"
+          + (f" ({args.truth_dir.name})" if args.truth_dir else ""))
 
     found, ranks, misses = 0, [], []
     per_page: dict[str, list[int]] = {}

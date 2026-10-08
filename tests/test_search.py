@@ -1505,3 +1505,30 @@ def test_a_row_with_no_letters_in_it_is_not_a_person():
                      {"n": 3, "page": 2, "name_raw": "Carlos Fayet"}]}))
         rows = load_index(tmp)
         assert [r["row"] for r in rows] == [3]
+
+
+class TestUngluedByNames:
+    """A typewritten page in capitals glues names with no capital to cut at."""
+
+    NAMES = frozenset({"KARL", "MARIA", "ERNA", "FRENK", "MARIALANG"})
+
+    def test_a_run_of_capitals_is_cut_after_a_known_given_name(self):
+        from desembarque.search import unglued_by_names
+        assert unglued_by_names("KARLFRENK", self.NAMES) == ["KARL FRENK"]
+
+    def test_the_rest_of_the_run_need_not_be_a_name_anyone_has_read(self):
+        from desembarque.search import unglued_by_names
+        assert unglued_by_names("ERNAWERNER", self.NAMES) == ["ERNA WERNER"]
+
+    def test_a_word_that_is_itself_a_known_name_is_left_whole(self):
+        from desembarque.search import unglued_by_names
+        assert unglued_by_names("MARIALANG", self.NAMES) == []
+
+    def test_a_word_with_an_inner_capital_is_the_other_rule_s_business(self):
+        from desembarque.search import unglued_by_names
+        assert unglued_by_names("MariaLang", self.NAMES) == []
+
+    def test_short_halves_and_no_dictionary_cut_nothing(self):
+        from desembarque.search import unglued_by_names
+        assert unglued_by_names("KARLFRENK", None) == []
+        assert unglued_by_names("ERNAERN", self.NAMES) == []

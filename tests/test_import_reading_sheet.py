@@ -156,3 +156,16 @@ class TestUnusablePages:
                  "rows": {str(i): ("immigration" if i == 5 else "")
                           for i in range(1, 49)}}
         assert import_sheet(sheet_file(tmp_path, [cover]), tmp_path / "out") == []
+
+
+class TestTypedPagesAlignByText:
+    def test_a_typed_row_the_engine_never_cut_is_lost_and_the_rest_stay_put(self, tmp_path):
+        # the reader typed an extra row between Ana and Jose that no band holds
+        typed = [{**SHEET[0], "hand": "typed",
+                  "rows": {"1": "Ana Silva", "2": "Rita Mota", "3": "Jose Costa",
+                           "4": "Rui Pires"}}]
+        written = import_sheet(sheet_file(tmp_path, typed), tmp_path / "out",
+                               records=records_dir(tmp_path), positional=True)
+        got = json.loads(written[0].read_text(encoding="utf-8"))
+        assert got["rows"] == {"3": "Ana Silva", "5": "Jose Costa", "6": "Rui Pires"}
+        assert got["lost"] == ["Rita Mota"]

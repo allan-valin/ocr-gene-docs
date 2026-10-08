@@ -6,6 +6,139 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-08 — the sheet came back, and the first honest number is 87% typed, 9% cursive
+
+**Where things stand.** Allan read the first held-out sheet on 2026-10-07.
+Five of its ten pages were unusable — four showed the *Nº de ordem* strip and
+one the "IMMIGRATION" cover note — and on the usable five the typing drifted
+off the band numbers. Both were this repository's doing, not the reader's,
+and both are fixed below. The five usable pages are in `data/truth-heldout`
+(127 names, all by Allan), the second sheet is in his Downloads cut from the
+re-read, and the corpus re-read (T8) is running again from 2,012 pages with a
+watchdog. Tests: 928 green, 13 skipped.
+
+**Why half the sheet was the ordinal column.** The sheet was cut on
+2026-09-08 from the geometry in `data/transcriptions` — which this file said
+on 2026-08-29 was the ordinal strip on 946 of 2,543 pages and the whole
+sheet on 394 more, 52% of the corpus. The re-read corrects exactly that
+(`measured_by: printing`), and had already re-cut four of the five bad pages
+by the time Allan opened the sheet: in `data/reread`, OL.PRJ.18396 p4 reads
+*Polzer Erich, Le Guiny Pauline, Kutchera de Fys…* through a column at
+0.151–0.316 where the old record had 0.011–0.053. Counted today: plausible
+name columns on 1,231 of 2,543 pages in the old corpus, **2,073 in the
+half-finished re-read**. So the crop detector is not "wrong and useless"; the
+sheet was cut from the reading the detector had already been fixed on. The
+cover note won its document because `pick_page` took the page with the most
+*bands* and a blank page cuts into 48 of them.
+
+**Why the numbers drifted.** A reader counts the rows he can see. The engine
+numbers the printed heading and the blank under it as bands 1 and 2, so box 1
+got the first name; and on BS.ENT.016317 p4 three of 42 bands are slivers
+almost entirely under the band below them — the gutter box of the next band
+hides their number — so the count ran ahead by three by the bottom of the
+page. On BS.ENT.016429 p3 the engine's bands are a uniform 0.0206 grid that
+misses three of the page's 44 rows, so the count ran ahead there too, for the
+opposite reason.
+
+**Fixed, with tests.** `desembarque/sheetbands.py`: `visible_bands` (a band
+whose part above the next one is under 40% of the median height is not a
+row anybody can type against), `representative_bands` (when a visible band
+read as nothing and the sliver under it carries the reading, the row is
+numbered by the band that can be scored), `heading_offset`, `positional_map`
+for cursive pages and `align_by_text` for typed ones — a monotone alignment
+where skipping a band the engine read costs more than dropping a typed row,
+because the families on these lists share a surname down twenty rows and a
+shifted chain of pairs looks half right by text. `import_reading_sheet.py
+--positional --records` maps the first sheet through it, writes `cut_from`,
+`mapping` and `lost` into each truth file, and sets aside a page typed as
+numbers or as one word instead of refusing the sheet. `make_reading_sheet.py`
+offers the page with the most *names* through a column the width of a name,
+draws and boxes only the visible bands, pre-fills every box with the engine's
+own reading in grey so the reader can tell which row a box is, carries the
+reading it was cut from, and draws from the seeded sample itself (the
+recorded ten are asserted to be its prefix; it is `random.Random(20260907)
+.sample` over the scans in name order, tuned-on documents out).
+
+**The held-out numbers, and what moved them.** Found in the top five by
+name alone, `bench_search.py --matrix --held-out`:
+
+| | cursive (33) | typed (93) |
+|---|---|---|
+| tuned-on set said | 47% | 98% |
+| held-out, as first imported (shift-aligned, scratch) | 1 | 68 of 94 |
+| held-out, positional/text alignment, ditto resolved, all-caps glue cut | **3** | **81** |
+| + McFondue on the engine's crops (`kraken-fondue-heldout.json`) | 4 | 82 |
+| + McFondue on the whole page, kraken blla lines clipped to the column | 4 | 82 |
+
+Three things moved typed from 68 to 81, and they are measurement, not
+tuning: (1) a cell Allan wrote as the clerk did — `Viola "` under *Julia
+Hunt Jones* — is now scored as *Viola Hunt Jones*, the name a searcher types
+(`truthset.with_ditto_resolved`, the mark's position saying whether the
+family name is the end or the start of the name above); (2) the typed page
+whose bands miss three rows is aligned by text, so a right reading is no
+longer charged for the row above it; (3) `search.unglued_by_names`: a
+typewritten page in capitals glues the names — `FRANZPOPERL`, `KARLFRENK`,
+`MARIALANG`, 14% of the ten-letter rows on the typed documents have no space
+— and `unglued` cannot cut where there is no inner capital, so the cut is
+taken after a given name the archive has read. This last one is a search
+change found on the held-out set; the tuned-on matrix is unmoved by it
+(52/67/75, 41/41/41), and the second sheet is where it gets confirmed or
+not. **Cursive at 9% is the number.** The tuned-on set's 47% was a reading of
+four pages whose column was right, by the assistant, and it was never going
+to survive a random page.
+
+**The spike Allan asked for: transcribe the whole page, then find the
+columns.** Measured on the five held-out pages (`scripts/spike_fullpage.py`,
+sidecars `data/fullpage-heldout-{line,column,lines}.json`):
+
+* **kraken blla + McFondue over the whole page**: 150–200 lines a page with
+  coordinates in 16 s a page on this CPU (18 s segmenting, 5 s reading; the
+  five pages in 81 s). Every truth row of every page gets a line; the lines
+  cross the printed column rules, so a row comes back as `t Hambaurg Poleer
+  Tric`, and McFondue's per-character cuts clip it to the stored name column
+  with no language model in the loop. Through the index: cursive 4 of 33 at
+  five against the engine's 3, typed 82 against 81; clipping to the column
+  and leaving the line whole score the same. **It finds the rows without any
+  band geometry, and it does not read them better.** On typed pages McFondue
+  is the wrong model (`NAIR 82430` for *Maria Szabo*); the engine's own
+  recogniser on kraken's lines is the untested half.
+* **PaddleOCR-VL-1.6 over the whole page** (llama.cpp, Q8_0): at 1400 px
+  with `Table Recognition:` and at 1600 px with `OCR:` it collapses into one
+  repeated token for 72 s; at 1000 px with `OCR:` it reads the heading and
+  then one numbered list in 56 s that mixes the port column and the name
+  column — `3. Rigo, 4. Liabonne, … 16. Juan Lantos Oundi, 17. Cadiimiro
+  Fraga Fraga` for *Vigo, Lisbonne, Juan Santos Conde, Casimiro Fraga Fraga*
+  — and then repeats that list five times to the token limit. The cursive
+  names in it are better than McFondue's, the structure is not usable, and
+  it is 56 s a page for a list that has to be put back on rows by counting.
+  Not the path; row crops at 2.7 s remain the way to ask this model.
+* **A language model to sort the text into columns** was not needed: the
+  lines carry coordinates and the page carries its rules. It is still the
+  open option for *reading* — a model that knows names could turn `JULLA
+  NUNT SORES` into *Julia Hunt Jones* — but that is the fuzzy index's job
+  already, and the DeepSeek API is a hosted service with the passengers'
+  names leaving the machine, which the standing rule excludes.
+
+**Next, in order.**
+
+1. **Let the re-read finish** (watchdog stops it under 1.5 GB or at 16:30;
+   PID in `data/reread.pid`, the real Python one). Then
+   `compare_corpora.py`, `bench_search.py --matrix --cache data/reread`,
+   re-import the held-out sheet with `--records data/reread` (OL.PRJ.17318
+   p5 is cut into 45 bands there against 46), and if it holds, the copy
+   becomes the corpus.
+2. **Allan reads sheet 2** (`~/Downloads/desembarque-reading-sheet-2.html`,
+   ten pages: the four re-cut ones and the next six of the draw). Import
+   with `--records data/reread` and no `--positional`. That is the fresh
+   held-out for the glue cut and for the McFondue question: one or two names
+   of 33 is not a decision, and the sidecar over the corpus waits for it.
+3. **The ditto's position in the index** as in the truth set: `VIOLA"`
+   should inherit *Hunt Jones*, not *Julia Hunt*. Tuned-on first.
+4. **kraken's lines as the row and column finder** for the pages the re-read
+   still measures wrong (236 ordinal, 234 whole-sheet of 2,543): the lines'
+   x-ranges cluster into columns, and that is a geometry the engine's own
+   recogniser could read through. Measured on those pages, not the corpus.
+
 ## 2026-09-30 — a 16 MB model at 0.05 s a row finds a third more cursive names
 
 **Where things stand.** The reading sheet has not come back, so every number

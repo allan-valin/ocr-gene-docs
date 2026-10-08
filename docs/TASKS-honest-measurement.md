@@ -157,6 +157,15 @@ six pages whose hand we know.
 
 ## T5 — The held-out set, drawn at random and never tuned on
 
+**Read 2026-10-07 (first sheet), imported 2026-10-08.** Five of the ten pages
+were usable; the other five showed the ordinal strip or a cover note because
+the sheet was cut from `data/transcriptions` before the re-read had corrected
+those pages. `data/truth-heldout` holds 127 names by Allan: **typed 81 of 93
+at the top five, cursive 3 of 33.** A second sheet of ten pages, cut from
+`data/reread` with the engine's reading greyed in every box, is with Allan;
+it comes in with `import_reading_sheet.py --records data/reread`. The first
+sheet came in with `--positional`. See `docs/PROGRESS.md`, 2026-10-08.
+
 **Built 2026-09-08, waiting on a reader.** `scripts/make_reading_sheet.py`
 writes the sheet (10 pages, 361 rows, 4 MB, self-contained, asks who is
 reading), `scripts/import_reading_sheet.py` takes it back into

@@ -187,3 +187,33 @@ class TestPairingSkipsWhatIsNotAName:
         from desembarque.truthset import pairs
         got = pairs(self.truth(), self.ROWS)
         assert [p["certain"] for p in got] == [True, False]
+
+
+class TestDittoOnTheSheet:
+    """A reader writes the clerk's mark; the measure wants the name it stands for."""
+
+    def test_a_mark_after_a_given_name_inherits_the_family_name_above(self):
+        from desembarque.truthset import with_ditto_resolved
+        got = with_ditto_resolved([(3, "Julia Hunt Jones"), (4, 'Viola "'),
+                                   (5, 'Florence "')])
+        assert got == [(3, "Julia Hunt Jones"), (4, "Viola Hunt Jones"),
+                       (5, "Florence Hunt Jones")]
+
+    def test_a_mark_before_a_given_name_inherits_the_family_name_first(self):
+        from desembarque.truthset import with_ditto_resolved
+        got = with_ditto_resolved([(14, "Grantinella Carmela"), (15, '" Maria')])
+        assert got == [(14, "Grantinella Carmela"), (15, "Grantinella Maria")]
+
+    def test_a_mark_alone_repeats_the_whole_name_above(self):
+        from desembarque.truthset import with_ditto_resolved
+        assert with_ditto_resolved([(1, "Jose Silva"), (2, '"')]) == \
+            [(1, "Jose Silva"), (2, "Jose Silva")]
+
+    def test_a_row_without_a_mark_is_left_alone(self):
+        from desembarque.truthset import with_ditto_resolved
+        assert with_ditto_resolved([(1, "Jose Silva"), (2, "Ana Costa")]) == \
+            [(1, "Jose Silva"), (2, "Ana Costa")]
+
+    def test_a_mark_with_nothing_above_is_dropped_from_the_query(self):
+        from desembarque.truthset import with_ditto_resolved
+        assert with_ditto_resolved([(1, 'Viola "')]) == [(1, 'Viola')]

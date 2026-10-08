@@ -35,6 +35,44 @@ def fold(s: str) -> str:
     return "".join(c for c in s if not unicodedata.combining(c)).upper().strip()
 
 
+def with_ditto_resolved(wanted: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """A hand-read cell written as the clerk wrote it, with the mark filled in.
+
+    Allan reads `Viola "` under `Julia Hunt Jones` because that is what the
+    page says, and a person looking for Viola would type *Viola Hunt Jones*.
+    Scored as written, the query is one given name against the whole archive
+    — rank 15 on the held-out sheet for a row the engine had read right. So
+    the mark inherits from the nearest read row above it exactly as the
+    index's own rows do (`desembarque.ditto`): the words that row wrote and
+    this one does not, counted from the left. `" Maria` and `Viola "` both
+    come out as the name a searcher would type; what was typed on the sheet
+    is untouched.
+    """
+    from desembarque import ditto
+    out: list[tuple[int, str]] = []
+    above: list[str] = []
+    for n, text in sorted(wanted):
+        raw = (text or "").strip()
+        has_mark = ditto.is_mark(raw) or any(ditto.is_mark(w) for w in raw.split())
+        # the sheet writes the mark as its own token; the engine glues it
+        words = ditto.written(" ".join(w for w in raw.split() if not ditto.is_mark(w)))
+        if has_mark and above:
+            # the mark stands where the repeated words stand: after what the
+            # row wrote, the family name is the end of the name above; before
+            # it, the start. A mark alone repeats the whole name.
+            if not words:
+                words = list(above)
+            elif ditto.is_mark(raw.split()[0]):
+                words = above[:max(0, len(above) - len(words))] + words
+            else:
+                words = words + above[min(len(words), len(above) - 1):]
+        resolved = " ".join(words) if words else raw
+        out.append((n, resolved))
+        if words:
+            above = words
+    return out
+
+
 def pairs(truth: dict, rows: list[dict]) -> list[dict]:
     """Each hand-read name beside the row the engine stored for it.
 
@@ -58,6 +96,7 @@ def pairs(truth: dict, rows: list[dict]) -> list[dict]:
         # marker on an uncertain reading is not part of the name
         cells = [parse_cell(cell, n=int(n)) for n, cell in truth["rows"].items()]
         wanted = [(c.n, c.text) for c in cells if c.kind == READ]
+        wanted = with_ditto_resolved(wanted)
         sure = {c.n: c.certain for c in cells}
     else:
         sure = {}
