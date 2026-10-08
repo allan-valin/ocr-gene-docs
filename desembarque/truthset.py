@@ -95,7 +95,11 @@ def pairs(truth: dict, rows: list[dict]) -> list[dict]:
         # read and a band that is no row are not names to search for, and the
         # marker on an uncertain reading is not part of the name
         cells = [parse_cell(cell, n=int(n)) for n, cell in truth["rows"].items()]
-        wanted = [(c.n, c.text) for c in cells if c.kind == READ]
+        # a reader who types the printed heading into its band has read the
+        # page faithfully, and it is not a person to search for
+        from desembarque.sheetbands import is_heading
+        wanted = [(c.n, c.text) for c in cells
+                  if c.kind == READ and not is_heading(c.text)]
         wanted = with_ditto_resolved(wanted)
         sure = {c.n: c.certain for c in cells}
     else:

@@ -157,6 +157,11 @@ six pages whose hand we know.
 
 ## T5 — The held-out set, drawn at random and never tuned on
 
+**Both sheets read and imported 2026-10-08: 15 pages, 436 names by Allan.**
+Cursive 56 of 212 at the top five by name alone (26%), typed 151 of 191
+(79%); McFondue read off kraken's whole-page lines takes cursive to 68. See
+`docs/PROGRESS.md`, 2026-10-08 afternoon. Earlier that day:
+
 **Read 2026-10-07 (first sheet), imported 2026-10-08.** Five of the ten pages
 were usable; the other five showed the ordinal strip or a cover note because
 the sheet was cut from `data/transcriptions` before the re-read had corrected

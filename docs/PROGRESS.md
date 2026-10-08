@@ -6,6 +6,52 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-08, afternoon — sheet 2 came back: 436 names, cursive 26%, and the whole page helps after all
+
+Allan read the second sheet the same day (ten pages, cut from the re-read,
+the engine's reading greyed in every box) and it came in by band number with
+no alignment at all. **The held-out set is 15 pages and 436 names now**, all
+by Allan: 212 cursive, 191 typed, 33 on two pages he called mixed. Found in
+the top five by name alone, `bench_search.py --matrix --held-out`:
+
+| second reading beside the engine's | cursive (212) | typed (191) | mixed (33) |
+|---|---|---|---|
+| none — the corpus as it stands | 56 (26%) | 151 (79%) | 17 |
+| McFondue on the engine's own crops | 60 | 151 | 18 |
+| **McFondue on kraken's whole-page lines, clipped to the column** | **68 (+21%)** | 151 | 19 |
+| the engine's recogniser on kraken's lines | 63 | **164 (+9%)** | 18 |
+
+At 10/20 the whole-page McFondue reading is 75/89 against the engine's 58/71.
+Naming the crossing, cursive is 111 of 212 with the engine alone. The pages
+vary enormously: OL.PRJ.18396 p4 reads 17 of 25 and BS.ENT.015796 p3 reads 1
+of 44, and the four pages the first sheet had shown as the ordinal strip now
+read 18/20, 28/44, 5/11 and 17/25 through the re-read's column.
+
+And the same lines read by the engine's own recogniser take typed from 151
+to 164 of 191 (86%), because a segmenter's line follows the ink and does not
+straddle two rows or catch the next column. One segmentation pass, two cheap
+recognisers: McFondue for the cursive pages, the engine for the typed ones.
+
+So **Allan's proposal from the morning — transcribe the whole page, then
+find the column — is the right one after all**, measured on 212
+names where the morning's 33 could not tell: not because the lines read
+better one by one, but because the segmenter finds the rows the engine's
+grid cuts across, and a second reading that is wrong differently reaches
+names the fuzzy index could not. The price: kraken segments and reads a
+page in 16 s on this CPU, so the whole corpus is about 10 hours of machine
+(the ~1,900 cursive pages 8.5 of them), resumable, with the geometry doing
+the columns and no language model anywhere. **That is the next pass**, run with the machine free and
+applied as second readings (the reversible shape), and it was not run today
+because the day ended at the hand-back.
+
+Three things the sheets taught about the measure itself, fixed: a heading
+typed into its band (`nome e cognomes name in full`) is not a name to search
+for; on the two mixed pages Allan typed what the bands hold below the names
+— nationalities, *para America*, *Brasileiros* — and those nine cells are
+counted as misses, which is right (they are on the page) and worth knowing
+when reading the mixed row; and `data/heldout-pages.json` lists the 15 pages,
+so every sidecar of the held-out set is cut by the same list.
+
 ## 2026-10-08 — the sheet came back, and the first honest number is 87% typed, 9% cursive
 
 **Where things stand.** Allan read the first held-out sheet on 2026-10-07.

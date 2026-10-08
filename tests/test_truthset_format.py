@@ -217,3 +217,11 @@ class TestDittoOnTheSheet:
     def test_a_mark_with_nothing_above_is_dropped_from_the_query(self):
         from desembarque.truthset import with_ditto_resolved
         assert with_ditto_resolved([(1, 'Viola "')]) == [(1, 'Viola')]
+
+
+def test_a_heading_typed_into_its_band_is_not_a_name_to_search_for():
+    from desembarque.truthset import pairs
+    truth = {"page": 2, "rows": {"1": "nome e cognomes name in full", "3": "William Lee"}}
+    rows = [{"page": 2, "n": 1, "name_raw": "NOME E COGNOMES"},
+            {"page": 2, "n": 3, "name_raw": "WILLIAM LEE"}]
+    assert [p["truth"] for p in pairs(truth, rows)] == ["William Lee"]

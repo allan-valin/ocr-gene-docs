@@ -70,17 +70,17 @@ Honest about the limits:
 * **Typed pages read well; cursive pages mostly do not, and the number that says so was
   read by a person.** Until 2026-10-08 every figure here came from six pages the assistant
   had mostly read itself, and they flattered: 41 of 42 typed names and 52 of 110 cursive
-  names in the top five by name alone. The first **held-out** sheet — ten documents drawn
-  at random, one page each, read by Allan — says **typed 74 of 93, cursive 3 of 33** on the
-  corpus as it stands (`bench_search.py --matrix --held-out`); with the ship, the line or
-  the year named as well, cursive reaches 89 of 110 on the tuned-on pages and does not move
-  on the held-out one. A row is not charged for what it holds besides the name, and a
+  names in the top five by name alone. The **held-out** set — fifteen documents drawn
+  at random, one page each, 436 names read by Allan — says **typed 151 of 191, cursive 56
+  of 212** on the corpus as it stands (`bench_search.py --matrix --held-out`); with the
+  ship, the line or the year named as well, cursive reaches 111 of 212. A row is not charged for what it holds besides the name, and a
   misreading is often still findable — `Ponticelli Giovanni` read as `Pouticelli Sooai`.
   What does not help cursive, each measured and written down in `docs/PROGRESS.md`: a
   wider input, a bigger model, removing the rules, folding confusable letters, pretrained
-  handwriting models as a replacement, a 16 MB kraken model as a second reading (+1 of 33
-  on the held-out page), reading the whole page with a segmenter instead of the engine's
-  bands, and a document-parsing VLM over the whole page. The recogniser is the ceiling,
+  handwriting models as a replacement, and a document-parsing VLM over the whole page. What does help, measured on
+  the 212 held-out cursive names: a 16 MB kraken model (Manu McFondue) reading the lines a
+  page segmenter finds, beside the engine's reading — 56 to 68 in the top five — at 16 s
+  a page, not yet run over the corpus. The recogniser is the ceiling,
   and moving it needs training data from this archive's own hands. What did help, by a
   lot, is reading the whole corpus again through a measured table: rows carrying a name
   went from 29,718 to 59,285 on 2026-10-08.
