@@ -14,13 +14,30 @@ engine cut is outlined and numbered on the image itself, and the boxes to type
 into carry the same numbers.
 
     .venv/bin/python scripts/make_reading_sheet.py --out sheet.html
+
+What the first sheet taught (Allan read it on 2026-10-07): five of its ten
+pages showed the ordinal strip or a cover note, because it was cut from the
+geometry in `data/transcriptions`, which the corpus re-read had since
+corrected on those very pages; and the boxes were numbered by bands a reader
+cannot tell apart on the page -- the printed heading, and slivers the engine
+cut under a neighbour -- so the typing drifted off the numbers. So now: the
+page offered is the one with the most *names* read and a column the width of
+a name; only the bands a reader can see are drawn and boxed
+(`desembarque.sheetbands`); and every box shows, greyed, what the engine read
+on that band, so the reader always knows which row a box is.
+
+    .venv/bin/python scripts/make_reading_sheet.py --records data/reread \\
+        --out ~/Downloads/desembarque-reading-sheet-2.html
 """
 from __future__ import annotations
 
 import argparse
 import base64
+import html as htmllib
 import io
 import json
+import random
+import re
 import sys
 from pathlib import Path
 
@@ -28,10 +45,35 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "scripts")]
 
 from desembarque.identity import cached_hash          # noqa: E402
+from desembarque.sheetbands import (is_heading, representative_bands,   # noqa: E402
+                                    visible_bands)
 
-# The draw of 2026-09-07, seed 20260907, recorded in
-# docs/TASKS-honest-measurement.md. Taken in order; a prefix of a random list
-# is still a random sample, so stopping early keeps the estimate honest.
+# The draw of 2026-09-07, recorded in docs/TASKS-honest-measurement.md T5:
+# `random.Random(SEED).sample` over the scans on disk in name order, the
+# documents of the tuned-on set excluded. Taken in order; a prefix of a random
+# list is still a random sample, so stopping early keeps the estimate honest,
+# and the same call asked for more documents gives the same first ten.
+SEED = 20260907
+
+
+def draw(pool, n: int) -> list[str]:
+    return random.Random(SEED).sample(sorted(pool), n)
+
+
+def drawn_documents(scans: Path, truth: Path, n: int) -> list[str]:
+    """The seeded draw over the scans on disk, the tuned-on documents out."""
+    exclude = set()
+    for f in truth.glob("*.json"):
+        try:
+            exclude.add(json.loads(f.read_text(encoding="utf-8")).get("pdf") or "")
+        except ValueError:
+            continue
+    pool = [p.name for p in scans.glob("*.pdf") if p.name not in exclude]
+    return draw(pool, min(n, len(pool)))
+
+
+# The first ten of that draw, as the first sheet carried them, so a change to
+# the pool on disk cannot silently change what was drawn.
 DRAWN = [
     "BR_RJANRIO_BS_0_RPV_ENT_016429_d0001de0001.pdf",
     "BR_RJANRIO_BS_0_RPV_ENT_016079_d0001de0001.pdf",
@@ -46,26 +88,47 @@ DRAWN = [
 ]
 
 
-def pick_page(record: dict) -> tuple[int, dict] | None:
-    """The page worth reading: the most rows, with a usable measurement.
+NAME_LIKE = re.compile(r"[A-Za-zÀ-ÿ]{3}")
+
+# A name column is between these, as a fraction of the sheet. Narrower is the
+# ordinal strip (0.017–0.06 on the pages measured 2026-08-29); wider is a page
+# the measurement gave up on and called one column.
+COLUMN_WIDTH = (0.07, 0.6)
+MIN_NAMES = 5
+
+
+def pick_page(record: dict) -> tuple[int, dict, dict[int, str]] | None:
+    """The page worth reading: the most names read, through a column the
+    width of a name. Returns the page, its geometry and the engine's reading
+    of each band, or None when no page of the dossier is worth a reader.
 
     Not page 2 by convention — page 2 is sometimes the cover's reverse and
-    sometimes the fullest list in the dossier, and a sheet of eight rows wastes
-    the reading.
+    sometimes the fullest list in the dossier. And not the most *bands*: the
+    cover note of OL.PRJ.17627 cut into 48 blank bands won the first sheet
+    that way.
     """
-    best = None
-    counts: dict[int, int] = {}
+    reads: dict[int, dict[int, str]] = {}
     for r in record.get("rows") or ():
-        counts[r.get("page")] = counts.get(r.get("page"), 0) + 1
+        if r.get("page") is None or r.get("n") is None:
+            continue
+        reads.setdefault(int(r["page"]), {})[int(r["n"])] = r.get("name_raw") or ""
+    best = None
     for p in record.get("pages") or ():
         geo = (p or {}).get("geometry") or {}
         rows, cols = geo.get("rows") or [], geo.get("columns") or []
-        if len(rows) < 5 or len(cols) < 2:
+        if len(rows) < MIN_NAMES or len(cols) < 2:
             continue
-        n = counts.get(p.get("n"), 0)
-        if best is None or n > best[2]:
-            best = (p.get("n"), geo, n)
-    return (best[0], best[1]) if best else None
+        width = cols[1] - cols[0]
+        if not COLUMN_WIDTH[0] <= width <= COLUMN_WIDTH[1]:
+            continue
+        on_page = reads.get(int(p.get("n")), {})
+        names = sum(1 for t in on_page.values()
+                    if NAME_LIKE.search(t) and not is_heading(t))
+        if names < MIN_NAMES:
+            continue
+        if best is None or names > best[3]:
+            best = (int(p.get("n")), geo, on_page, names)
+    return (best[0], best[1], best[2]) if best else None
 
 
 def _font(size: int):
@@ -82,8 +145,11 @@ def _font(size: int):
     return ImageFont.load_default()
 
 
-def strip(image: Path, geo: dict, pad: float = 0.02, width: int = 1000):
-    """The name column of the page, with every band outlined and numbered."""
+def strip(image: Path, geo: dict, pad: float = 0.02, width: int = 1000,
+          reads: dict[int, str] | None = None):
+    """The name column of the page, with every band a reader can see outlined
+    and numbered — by the band that carries the reading, when a sliver under
+    it does (`desembarque.sheetbands.representative_bands`)."""
     from PIL import Image, ImageDraw
 
     im = Image.open(image).convert("RGB")
@@ -104,25 +170,31 @@ def strip(image: Path, geo: dict, pad: float = 0.02, width: int = 1000):
     scale = width / cut.width
     cut = cut.resize((width, max(1, int(cut.height * scale))))
 
-    draw = ImageDraw.Draw(cut, "RGBA")
+    paint = ImageDraw.Draw(cut, "RGBA")
     font = _font(int(width * 0.032))
     gut = int(width * 0.062)          # the numbered gutter down the left
     marks = []
-    for i, (a, b) in enumerate(rows, start=1):
+    # only the bands a reader can see: a sliver the engine cut under its
+    # neighbour gets no number and no box, because nobody can type against it
+    all_bands = rows
+    rows = [tuple(b) for b in geo["rows"] if b and len(b) == 2]
+    numbered = representative_bands(rows, reads or {})
+    for i, label in zip(visible_bands(rows), numbered):
+        a, b = all_bands[i - 1]
         ya = (a * H - box[1]) * scale
         yb = (b * H - box[1]) * scale
         if yb < 0 or ya > cut.height:
             continue
         # the band shaded rather than outlined: on a faint page a hairline
         # rule is indistinguishable from the clerk's own ruling
-        draw.rectangle([gut, ya, cut.width - 1, yb],
-                       fill=(210, 60, 60, 26) if i % 2 else (50, 100, 210, 26),
-                       outline=(200, 40, 40, 150) if i % 2 else (40, 90, 200, 150))
-        draw.rectangle([0, ya, gut, yb], fill=(250, 250, 248, 235),
-                       outline=(150, 150, 150, 120))
-        draw.text((gut / 2, (ya + yb) / 2), str(i), fill=(20, 20, 20),
-                  font=font, anchor="mm")
-        marks.append(i)
+        paint.rectangle([gut, ya, cut.width - 1, yb],
+                        fill=(210, 60, 60, 26) if i % 2 else (50, 100, 210, 26),
+                        outline=(200, 40, 40, 150) if i % 2 else (40, 90, 200, 150))
+        paint.rectangle([0, ya, gut, yb], fill=(250, 250, 248, 235),
+                        outline=(150, 150, 150, 120))
+        paint.text((gut / 2, (ya + yb) / 2), str(label), fill=(20, 20, 20),
+                   font=font, anchor="mm")
+        marks.append(label)
     buf = io.BytesIO()
     cut.save(buf, "JPEG", quality=62, optimize=True)
     return base64.b64encode(buf.getvalue()).decode("ascii"), marks
@@ -135,14 +207,37 @@ def main(argv=None) -> int:
     ap.add_argument("--width", type=int, default=1000)
     ap.add_argument("--scans", type=Path, default=ROOT / "data" / "scans")
     ap.add_argument("--records", type=Path,
-                    default=ROOT / "data" / "transcriptions")
+                    default=ROOT / "data" / "transcriptions",
+                    help="the reading whose bands the sheet is cut from; the "
+                         "held-out score has to be taken against the same one")
+    ap.add_argument("--truth", type=Path, default=ROOT / "data" / "truth",
+                    help="the tuned-on set, excluded from the draw")
+    ap.add_argument("--done", type=Path, default=ROOT / "data" / "truth-heldout",
+                    help="documents already read by hand are not offered again")
     ap.add_argument("--work", type=Path, default=ROOT / "data" / "pagecache")
     a = ap.parse_args(argv)
 
     from page_geometry import page_image
 
+    done = set()
+    if a.done.exists():
+        for f in a.done.glob("*.json"):
+            try:
+                done.add(json.loads(f.read_text(encoding="utf-8")).get("pdf") or "")
+            except ValueError:
+                continue
+    order = drawn_documents(a.scans, a.truth, 60)
+    if order[:len(DRAWN)] != DRAWN[:len(order)]:
+        print("the draw on disk no longer matches the recorded one — the "
+              "scans or the tuned-on set changed; not drawing from it")
+        return 1
+
     sheets = []
-    for name in DRAWN[:a.pages]:
+    for name in order:
+        if len(sheets) >= a.pages:
+            break
+        if name in done:
+            continue
         pdf = a.scans / name
         if not pdf.exists():
             print(f"  {name}: not on disk, skipped")
@@ -153,15 +248,17 @@ def main(argv=None) -> int:
             continue
         got = pick_page(json.loads(rec.read_text(encoding="utf-8")))
         if not got:
-            print(f"  {name}: no measured page, skipped")
+            print(f"  {name}: no page with a name column and five names, skipped")
             continue
-        page, geo = got
+        page, geo, reads = got
         img = page_image(pdf, page, a.work)
         if img is None:
             print(f"  {name} p{page}: no image, skipped")
             continue
-        b64, marks = strip(img, geo, width=a.width)
-        sheets.append({"pdf": name, "page": page, "rows": marks, "jpg": b64})
+        b64, marks = strip(img, geo, width=a.width, reads=reads)
+        sheets.append({"pdf": name, "page": page, "rows": marks, "jpg": b64,
+                       "reads": {n: reads.get(n, "") for n in marks},
+                       "cut_from": a.records.name})
         print(f"  {name} p{page}: {len(marks)} rows, {len(b64) * 3 // 4 >> 10} KB")
 
     a.out.write_text(render(sheets), encoding="utf-8")
@@ -175,12 +272,14 @@ def render(sheets: list[dict]) -> str:
     from string import Template
     body = []
     for i, s in enumerate(sheets):
+        reads = s.get("reads") or {}
         opts = "".join(
             f'<div class=r><label>{n}</label>'
-            f'<input data-s="{i}" data-n="{n}" autocomplete=off spellcheck=false>'
+            f'<input data-s="{i}" data-n="{n}" autocomplete=off spellcheck=false'
+            f' placeholder="{htmllib.escape(str(reads.get(n) or ""), quote=True)}">'
             f'</div>' for n in s["rows"])
         body.append(f'''
-<section class=sheet data-pdf="{s['pdf']}" data-page="{s['page']}">
+<section class=sheet data-pdf="{s['pdf']}" data-page="{s['page']}" data-cut="{s.get('cut_from', '')}">
   <h2>{i + 1}. {s['pdf'][:-4]} — page {s['page']}</h2>
   <div class=hand><b>Mark which this page is</b> — it is the split that matters most:
     <label><input type=radio name=h{i} value=typed> typed</label>
@@ -236,11 +335,13 @@ TEMPLATE = """<!doctype html>
 picked the easy ones. <b>Take them in order and stop whenever you like</b> — a
 prefix of a random list is still a random sample.</p>
 <p><b>Click any image to enlarge it.</b> The red and blue bands are the rows
-<em>the machine</em> cut, numbered as it numbers them — so the first name on
-the page is often row 3, because the machine counts the printed heading and its
-rules as rows too. That is not a mistake to correct: type the name beside
-whatever number its band carries. Type what each row says beside its number. The numbers are the
-part that matters: a name typed against the wrong row is worse than no name.</p>
+<em>the machine</em> cut, numbered as it numbers them. <b>The grey text in each
+box is what the machine read on that band</b> — often wrong, sometimes the
+printed heading, sometimes nothing. It is there so you can tell which box is
+which row: find the band whose grey text matches (or whose number matches), and
+type what the row really says over it. The numbers may skip (1, 2, 4…): a
+skipped number is a band the machine cut by mistake, and it has no box. A name
+typed against the wrong row is worse than no name.</p>
 <table>
 <tr><td>José Fernandes</td><td>you read it and you are sure</td></tr>
 <tr><td>?José Guberti</td><td>you read it, <b>not</b> sure — a leading <b>?</b> marks the row uncertain</td></tr>
@@ -286,6 +387,7 @@ function collect(){
     s.querySelectorAll('.rows input').forEach(inp=>{rows[inp.dataset.n]=inp.value.trim();});
     const c=document.querySelector(`input[name=h${i}]:checked`);
     return {pdf:s.dataset.pdf,page:+s.dataset.page,hand:c?c.value:null,
+            cut_from:s.dataset.cut||null,
             reader:document.getElementById('reader').value.trim(),
             read_on:new Date().toISOString().slice(0,10),
             complete:true,rows};

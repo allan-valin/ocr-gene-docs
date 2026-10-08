@@ -93,3 +93,66 @@ class TestImport:
         import_sheet(sheet_file(tmp_path, SHEET), out)
         again = import_sheet(sheet_file(tmp_path, SHEET), out, replace=True)
         assert len(again) == 1
+
+
+# --- taking the first sheet back in, the way Allan actually typed it ----------
+#
+# The boxes were numbered by the engine's bands and the reader counted the rows
+# he could see: box 1 was the first name, not the heading, and a sliver band
+# under its neighbour was not a row. `--positional` maps that back.
+
+RECORD = {
+    "hash": "abc", "file": SHEET[0]["pdf"],
+    "pages": [{"n": 2, "geometry": {
+        "columns": [0.08, 0.30],
+        # bands 3 and 4 are the same ink, 3 a sliver under 4
+        "rows": [[0.100, 0.130], [0.120, 0.150], [0.140, 0.170],
+                 [0.146, 0.176], [0.164, 0.194], [0.184, 0.214]]}}],
+    "rows": [{"page": 2, "n": 1, "name_raw": "Nome e Cognomes"},
+             {"page": 2, "n": 2, "name_raw": ""},
+             {"page": 2, "n": 3, "name_raw": "Ana Silva"},
+             {"page": 2, "n": 4, "name_raw": ""},
+             {"page": 2, "n": 5, "name_raw": "Jose Costa"},
+             {"page": 2, "n": 6, "name_raw": "Rui Pires"}],
+}
+
+
+def records_dir(tmp_path):
+    d = tmp_path / "records"
+    d.mkdir()
+    (d / "abc.json").write_text(json.dumps(RECORD), encoding="utf-8")
+    return d
+
+
+class TestPositional:
+    def test_boxes_counted_down_the_page_land_on_the_bands_they_meant(self, tmp_path):
+        typed = [{**SHEET[0], "rows": {"1": "Ana Silva", "2": "Jose Costa",
+                                       "3": "Rui Pires", "4": "Zé Extra"}}]
+        written = import_sheet(sheet_file(tmp_path, typed), tmp_path / "out",
+                               records=records_dir(tmp_path), positional=True)
+        got = json.loads(written[0].read_text(encoding="utf-8"))
+        assert got["rows"] == {"3": "Ana Silva", "5": "Jose Costa", "6": "Rui Pires"}
+        assert got["lost"] == ["Zé Extra"]
+        assert got["mapping"] == "positional"
+
+    def test_a_sheet_typed_against_the_numbers_is_taken_as_it_stands(self, tmp_path):
+        written = import_sheet(sheet_file(tmp_path, SHEET), tmp_path / "out",
+                               records=records_dir(tmp_path))
+        got = json.loads(written[0].read_text(encoding="utf-8"))
+        assert got["rows"]["2"] == "José Fernandes"
+        assert got["mapping"] == "by band number"
+
+
+class TestUnusablePages:
+    def test_a_page_read_as_the_ordinal_column_is_set_aside_not_imported(self, tmp_path):
+        ordinal = {**SHEET[0], "page": 3,
+                   "rows": {str(i): str(i) for i in range(1, 12)}}
+        written = import_sheet(sheet_file(tmp_path, [ordinal, SHEET[0]]),
+                               tmp_path / "out")
+        assert [p.name for p in written] == ["BS_ENT_016429-p2.json"]
+
+    def test_a_page_with_one_word_on_it_is_set_aside_too(self, tmp_path):
+        cover = {**SHEET[0], "page": 5,
+                 "rows": {str(i): ("immigration" if i == 5 else "")
+                          for i in range(1, 49)}}
+        assert import_sheet(sheet_file(tmp_path, [cover]), tmp_path / "out") == []
