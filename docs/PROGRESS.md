@@ -119,25 +119,69 @@ sidecars `data/fullpage-heldout-{line,column,lines}.json`):
   already, and the DeepSeek API is a hosted service with the passengers'
   names leaving the machine, which the standing rule excludes.
 
+**The re-read finished at 10:45 and is the corpus.** 2,543 of 2,543 pages
+(07:40–10:45 today, about 3 a minute with the machine to itself; the
+watchdog never fired). `compare_corpora.py`: 644 of 660 documents changed,
+rows 71,449 → 86,766, **rows carrying a name 29,718 → 59,285 (+29,567)**,
+every row a person typed survived verbatim, 52 documents lost a few names
+(worst −21 on 88a50c3a). Pages with a plausible name column 1,231 → 2,272;
+**271 still measure as the ordinal strip or the whole sheet**, 214 of them
+cursive pages the re-read's own rules measured (1,855 named rows on 5,382
+bands, mostly not names). Promoted at 11:00: `data/transcriptions` is the
+re-read, the reading it replaced is whole at
+`data/transcriptions-before-reread-2026-10-08`, and `data/reread` is the
+identical copy today's sidecars are keyed to. One `mv` reverts it.
+
+**The matrix fell, and that was expected.** Tuned-on cursive 52/67/75 →
+**46/55/67** at 5/10/20 by name alone (typed 41 unchanged; naming the
+crossing 89/94/100 unchanged); held-out typed 81 → **74** of 93, cursive 3 of
+33. Two causes. Twice the rows now compete for every name — the cursive
+page's hits moved from ranks 9, 10, 16 to 19, 12, 35 with the same readings.
+And OL.PRJ.17318 p5 was cut into 45 bands instead of 46 with a column 0.01
+wider that catches the first letter of the next column (`DOMINGOS MARQUESB`,
+`MARTINEZORTEGAV`, `MARTHAFUCHSS`) — six names on one page. That overshoot is
+**not** corpus-wide: over the 440 typed pages whose band count did not
+change, 5,602 rows read the same and 3 gained a trailing letter. The 29,567
+people made searchable are invisible to a matrix over eleven pages that were
+readable already; both numbers are the truth and both get quoted.
+
+**Sidecars cut before today are keyed to the old bands** —
+`kraken-fondue-heldout.json`, `vlm-heldout.json`, `paddleocrvl-heldout.json`
+and the rest — and must be re-cut before being applied. The held-out truth
+files were re-imported against the new bands (`cut_from: transcriptions`,
+2026-10-08, positional with text alignment on the typed pages).
+
+**The engine's own recogniser on kraken's lines** — the half the whole-page
+spike had not tested (`scripts/spike_engine_on_lines.py`, sidecars
+`data/fullpage-{heldout,tunedon}-engine.json`): cursive unchanged, 3 of 33
+and 46 of 110; **typed held-out 74 → 84 of 93**, because a segmenter's line
+follows the ink and does not overshoot into the next column. So the row cut
+is a lever on typed pages and not on cursive ones, where every model and
+every cut reads the same three names. Cursive is the recogniser, full stop.
+
+**Measured and rejected today.** A mark *after* the name inheriting the end
+of the name above in the index, as the truth set now does — `VIOLA"` under
+*JULIA HUNT JONES* as Viola Hunt Jones. Held-out typed 81 → 83 at five;
+tuned-on cursive 52/67/75 → 50/64/73, because on BS.ENT.013947 p3 the
+recogniser puts the clerk's leading mark at the *end* of `Maratuai"` and
+the rule then took the given name above for the family. The quote's
+position is evidence on a typed page and noise on a cursive one, and the
+cursive pages are the point. Out, and not worth a per-hand rule for two
+typed names.
+
 **Next, in order.**
 
-1. **Let the re-read finish** (watchdog stops it under 1.5 GB or at 16:30;
-   PID in `data/reread.pid`, the real Python one). Then
-   `compare_corpora.py`, `bench_search.py --matrix --cache data/reread`,
-   re-import the held-out sheet with `--records data/reread` (OL.PRJ.17318
-   p5 is cut into 45 bands there against 46), and if it holds, the copy
-   becomes the corpus.
+1. ~~Let the re-read finish~~ — done and promoted, above.
 2. **Allan reads sheet 2** (`~/Downloads/desembarque-reading-sheet-2.html`,
    ten pages: the four re-cut ones and the next six of the draw). Import
    with `--records data/reread` and no `--positional`. That is the fresh
    held-out for the glue cut and for the McFondue question: one or two names
    of 33 is not a decision, and the sidecar over the corpus waits for it.
-3. **The ditto's position in the index** as in the truth set: `VIOLA"`
-   should inherit *Hunt Jones*, not *Julia Hunt*. Tuned-on first.
-4. **kraken's lines as the row and column finder** for the pages the re-read
-   still measures wrong (236 ordinal, 234 whole-sheet of 2,543): the lines'
-   x-ranges cluster into columns, and that is a geometry the engine's own
-   recogniser could read through. Measured on those pages, not the corpus.
+3. **kraken's lines as the row and column finder** for the 271 pages the
+   re-read still measures wrong: the lines' x-ranges cluster into columns,
+   and the engine's own recogniser reads the lines (84 of 93 typed above).
+   Validate the finder on the eleven pages whose column is known, then run
+   it on the 271, never on the corpus.
 
 ## 2026-09-30 — a 16 MB model at 0.05 s a row finds a third more cursive names
 
