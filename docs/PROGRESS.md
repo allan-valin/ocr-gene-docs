@@ -159,6 +159,33 @@ follows the ink and does not overshoot into the next column. So the row cut
 is a lever on typed pages and not on cursive ones, where every model and
 every cut reads the same three names. Cursive is the recogniser, full stop.
 
+**The 271 pages the re-read measures wrong, read through their siblings'
+column.** The same printed form runs the length of a dossier, and 225 of
+the 271 have a sibling page with a plausible name column.
+`scripts/sibling_column_reread.py` keeps each page's own row bands, borrows
+the median column of its siblings, and has the engine's recogniser read the
+crops that makes — 225 pages in 9 minutes. Counted by rows whose reading
+contains a name the archive has read (four letters or more): **138 → 177 on
+those pages** (+28%), 48 pages gaining; by the looser "searchable" rule
+1,628 → 1,644, because the whole-sheet readings they replace are long runs
+of letters that are not names. Applied as second readings
+(`apply_second_opinion.py --write --bands data/reread-index`): 2,181 rows
+across 117 documents, nothing overwritten, reversible. Modest, because
+these pages are 88% cursive and the recogniser reads cursive badly through
+any column; the 46 pages with no plausible sibling are left as they are.
+
+**Measured and rejected today, two more.** *A name-column finder on
+kraken's lines* (the left edge where the most letters begin, the right edge
+where those lines end): right on six of the eleven pages whose column is
+known and wrong on the rest, because a segmenter's line crosses the column
+rules — on BS.ENT.013947 p2 one line runs from 0.05 to 0.77 of the sheet —
+and on a surname-then-given-name page the given names make the taller
+cluster. Not reliable enough to run blind on 271 pages; the dossier's own
+sibling pages are the column finder instead (below). *Restoring pages the old
+reading read better*: by known-name rows, 16 pages are better in the old
+reading by five or more (112 rows) and 619 are better in the new; not worth a
+page-level merge.
+
 **Measured and rejected today.** A mark *after* the name inheriting the end
 of the name above in the index, as the truth set now does — `VIOLA"` under
 *JULIA HUNT JONES* as Viola Hunt Jones. Held-out typed 81 → 83 at five;
