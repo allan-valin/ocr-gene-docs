@@ -6,6 +6,75 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-09 — the corpus is read whole, on three workers; the GPU was there all along
+
+**The pass is running.** `scripts/read_fullpage.py` reads every page of the
+corpus the way the sheet said to: kraken's page segmenter finds the lines,
+McFondue reads them on cursive and unknown pages, typed pages keep their lines
+for the engine's recogniser (`spike_engine_on_lines.py`). One file per page in
+`data/fullpage/`, so it resumes from wherever it stops and never reads a page
+twice; cursive pages first. `--collect` turns the page files into the two
+sidecars `apply_second_opinion.py --write --bands data/reread-index` takes.
+Three workers (`--shard I/N`), each with its own pid file; the call-time pauser
+`data/pause-for-call.sh` SIGSTOPs them 14:55–16:05. Started 11:05, 2,541 pages.
+
+**The laptop has an RTX 4050 (6 GB), and every venv was a CPU build.** Months
+of "or a GPU" in this file without checking the machine. `.venv-kraken` now has
+torch 2.14.0+cu130 (kraken pins torch ≤ 2.14). Measured on one cursive page:
+recognition 4.6 s → 2.4 s, **segmentation 14 s → 13 s** — `blla.segment`'s cost
+is CPU vectorisation (`vec_lines`: Sato ridge filter, per-line ROI, reading order
+with half a million shapely calls), single-threaded, the same at any image scale
+because kraken rescales internally. So the GPU is not the lever on this pass;
+parallel workers are. Two workers fit in VRAM until the allocator grows past
+3 GB, then one; the rest run on CPU at 20–40 s a page under contention.
+`paddlepaddle-gpu` 3.4.0 (cu129) exists for the engine and is untried.
+
+**Every line is stored with its polygon and baseline** (`line_record` in
+`spike_fullpage.py`), not only its box, because reading the same lines with
+another model through axis-aligned boxes gave garbage (`atvot raca` where the
+polygon read a name) — the box takes the neighbours' ink. With the polygon on
+disk any recogniser can re-read the corpus for the 2 s of recognition instead of
+the 12 s of segmentation. The 165 pages read before this change have boxes only.
+
+**Models trained on the clerks' own hands, on the 212 held-out cursive names,
+top five by name alone** — Allan's question, whether a model trained on German
+or Dutch or Italian hands reads what McFondue cannot (`spike_lines_model.py`,
+same kraken lines, polygons, `bench_search.py --matrix --held-out
+--second-opinion`):
+
+| recogniser on kraken's lines, clipped to the column | at 5 | at 10 | at 20 |
+|---|---|---|---|
+| **ManuMcFondue** (French 17th–20th c.) | **68** | 75 | 89 |
+| McCATMuS (multilingual 16th–21st c.) | 61 | 67 | 84 |
+| UB Mannheim German handwriting | 58 | 60 | 73 |
+| Bohemian 19th c. (German-language registers) | 57 | 59 | 71 |
+
+McFondue stays. The lines on these lists are the pursers' Portuguese-Italian-
+French-Dutch office hands, not Kurrent; the German-trained models lose.
+Loghi (Dutch national archives, Royal Holland Lloyd is the corpus's biggest
+line) is a Docker/TensorFlow stack and was not tried.
+
+**Kubach.** The app exists to find August Friedrich Kubach, arrived 1919–24,
+most likely 1923, settled in Morretes (Paraná), married there 20 Dec 1924.
+Allan has read by hand every 1919–24 list of a ship that called at a German
+port or any port within ~400 km of Karlsruhe and did not find him. What the
+pass changes: a second machine reading of those same pages, and the ships via
+Amsterdam, Antwerp, Bordeaux and Genoa he did not read. What it cannot change:
+the 661 dossiers on disk are 9% of the 7,679 in the catalog, and a man who
+settled in Paraná may have landed at Paranaguá, which these two fundos do not
+cover. `download.py --window FUNDO:lo-hi` now fetches whole number ranges
+(dossier numbers are chronological; BS 16030–16690 and OL 18380–19175 are
+1923); the 1919–24 window is 6,663 dossiers, 561 on disk. Also fixed: the
+manifest skipped dossiers by number alone, and BS and OL share 15938–17398.
+The strongest lead is off this corpus: his RNE W039916-0 names a foreigner's
+file at the Arquivo Nacional that states the arrival.
+
+**Next, in order.** Let the pass finish; `--collect`; engine on the typed
+lines; apply both sidecars; `--matrix --held-out`; search for Kubach; commit.
+Then the window download when Allan starts it (the auto-mode classifier
+refused to let this session start it), engine read of the new dossiers, kraken
+second reading of those — one pass each, never re-run per tweak.
+
 ## 2026-10-08, afternoon — sheet 2 came back: 436 names, cursive 26%, and the whole page helps after all
 
 Allan read the second sheet the same day (ten pages, cut from the re-read,

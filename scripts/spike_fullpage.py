@@ -49,26 +49,37 @@ def chosen_image(work: Path, pdf: str, page: int) -> Path | None:
     return p if p.exists() else None
 
 
-def read_page(im, seg_model, rec_model, pad: int = 8) -> list[dict]:
-    """Every line on the page: its box, its text and where each character is."""
+def line_record(line, rec, width: int, height: int) -> dict:
+    """One segmented line as the pass stores it: its box, its polygon and
+    baseline (so another recogniser can read the same ink without the 12 s
+    of segmenting again), and what this recogniser said, with where each
+    character sits."""
+    xs = [p[0] for p in line.boundary]
+    ys = [p[1] for p in line.boundary]
+    cuts, text = [], ""
+    if rec is not None:
+        for cut in rec.cuts:
+            pts = cut if isinstance(cut[0], (list, tuple)) else [cut]
+            cuts.append(sum(p[0] for p in pts) / len(pts) / width)
+        text = unicodedata.normalize("NFC", rec.prediction)
+    return {"x0": min(xs) / width, "x1": max(xs) / width,
+            "y0": min(ys) / height, "y1": max(ys) / height,
+            "text": text, "cuts": cuts,
+            "boundary": [[x / width, y / height] for x, y in line.boundary],
+            "baseline": [[x / width, y / height] for x, y in (line.baseline or [])]}
+
+
+def read_page(im, seg_model, rec_model, pad: int = 8, device: str = "cpu") -> list[dict]:
+    """Every line on the page: its box, its polygon, its text and where each character is."""
     from kraken import blla, rpred
-    lines = []
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        seg = blla.segment(im, model=seg_model) if seg_model else blla.segment(im)
-        for rec, line in zip(rpred.rpred(rec_model, im, seg, pad=pad), seg.lines):
-            xs = [p[0] for p in line.boundary]
-            ys = [p[1] for p in line.boundary]
-            cuts = []
-            for cut in rec.cuts:
-                pts = cut if isinstance(cut[0], (list, tuple)) else [cut]
-                cx = sum(p[0] for p in pts) / len(pts)
-                cuts.append(cx / im.width)
-            lines.append({"x0": min(xs) / im.width, "x1": max(xs) / im.width,
-                          "y0": min(ys) / im.height, "y1": max(ys) / im.height,
-                          "text": unicodedata.normalize("NFC", rec.prediction),
-                          "cuts": cuts})
-    return lines
+        seg = (blla.segment(im, model=seg_model, device=device) if seg_model
+               else blla.segment(im, device=device))
+        if rec_model is None:
+            return [line_record(line, None, im.width, im.height) for line in seg.lines]
+        return [line_record(line, rec, im.width, im.height)
+                for rec, line in zip(rpred.rpred(rec_model, im, seg, pad=pad), seg.lines)]
 
 
 def clip(line: dict, x0: float, x1: float) -> str:

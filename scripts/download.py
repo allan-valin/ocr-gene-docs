@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -132,6 +133,38 @@ def sample_per_source(rows: list[dict], n: int, seed: int) -> list[dict]:
     return picked
 
 
+def in_windows(rows: list[dict], windows: list[str]) -> list[dict]:
+    """The rows whose number falls in a window, window by window, by number.
+
+    Dossier numbers run chronologically (BS 14400 is 1919, 17398 is 1924;
+    OL 16300 is 1919, 19900 is 1924), so `BS:16030-16690` is Santos in 1923
+    without opening a page. Windows are taken in the order given, so the
+    likeliest year is fetched first. A lettered index counts by its digits.
+    """
+    picked: list[dict] = []
+    for w in windows:
+        fundo, _, span = w.partition(":")
+        lo, hi = (int(x) for x in span.split("-"))
+        group = [r for r in rows if r["fundo"] == fundo
+                 and lo <= int(re.sub(r"\D", "", r["index"]) or 0) <= hi]
+        picked.extend(sorted(group, key=lambda r: int(re.sub(r"\D", "", r["index"]))))
+    return picked
+
+
+def already_fetched(manifest_path: Path) -> set[str]:
+    """Which dossiers the manifest already holds, as fundo.series.index.
+
+    By number alone BS and OL overlap (15938-17398 is in both), and an OL
+    dossier would be skipped because a BS one shares its number.
+    """
+    done: set[str] = set()
+    if manifest_path.exists():
+        for line in manifest_path.open(encoding="utf-8"):
+            r = json.loads(line)
+            done.add(f"{r.get('fundo')}.{r.get('series')}.{r['index']}")
+    return done
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--catalog", type=Path, default=Path("data/catalog.jsonl"))
@@ -139,6 +172,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--per-page", type=int, default=5)
     ap.add_argument("--seed", type=int, default=1919)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--window", action="append", default=None,
+                    help="FUNDO:lo-hi, repeatable; fetch every dossier in these "
+                         "number ranges in the order given, instead of sampling")
     args = ap.parse_args(argv)
 
     if not shutil.which("curl"):
@@ -146,15 +182,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     rows = [json.loads(l) for l in args.catalog.open(encoding="utf-8")]
-    picked = sample_per_source(rows, n=args.per_page, seed=args.seed)
-    print(f"sampling {len(picked)} dossiers from {len(rows)} catalogued", file=sys.stderr)
+    if args.window:
+        picked = in_windows(rows, args.window)
+        print(f"{len(picked)} dossiers in the windows, of {len(rows)} catalogued", file=sys.stderr)
+    else:
+        picked = sample_per_source(rows, n=args.per_page, seed=args.seed)
+        print(f"sampling {len(picked)} dossiers from {len(rows)} catalogued", file=sys.stderr)
 
     args.out.mkdir(parents=True, exist_ok=True)
     manifest_path = args.out / "manifest.jsonl"
-    done = set()
-    if manifest_path.exists():
-        for line in manifest_path.open(encoding="utf-8"):
-            done.add(json.loads(line)["index"])
+    done = already_fetched(manifest_path)
 
     unresolved: list[dict] = []
     fetched = skipped = 0
@@ -163,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         for i, row in enumerate(picked, 1):
             e = entry_from_row(row)
             tag = f"{e.fundo}.{e.series}.{e.index}"
-            if e.index in done:
+            if tag in done:
                 skipped += 1
                 continue
 

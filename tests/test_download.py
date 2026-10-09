@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
+import download
 from download import entry_from_row, resolve_parts, sample_per_source
 from parse_index import Entry
 
@@ -124,3 +125,21 @@ def test_sampling_is_deterministic_for_a_given_seed():
 def test_sampling_takes_everything_when_a_source_is_smaller_than_n():
     rows = [{"source": "tiny", "index": "1"}, {"source": "tiny", "index": "2"}]
     assert len(sample_per_source(rows, n=5, seed=1)) == 2
+
+
+def test_windows_pick_rows_by_number_in_the_order_the_windows_are_given():
+    rows = [{"fundo": "BS", "series": "ENT", "index": "16100"},
+            {"fundo": "BS", "series": "ENT", "index": "15600"},
+            {"fundo": "OL", "series": "PRJ", "index": "16100"},
+            {"fundo": "BS", "series": "ENT", "index": "16050A"},
+            {"fundo": "OL", "series": "PRJ", "index": "18500"}]
+    got = download.in_windows(rows, ["OL:18380-19175", "BS:16030-16690", "BS:15500-16029"])
+    assert [(r["fundo"], r["index"]) for r in got] == [
+        ("OL", "18500"), ("BS", "16050A"), ("BS", "16100"), ("BS", "15600")]
+
+
+def test_a_fetched_dossier_is_known_by_fundo_and_series_not_by_number_alone(tmp_path):
+    m = tmp_path / "manifest.jsonl"
+    m.write_text('{"fundo": "BS", "series": "ENT", "index": "16100", "files": ["x"]}\n')
+    done = download.already_fetched(m)
+    assert "BS.ENT.16100" in done and "OL.PRJ.16100" not in done
