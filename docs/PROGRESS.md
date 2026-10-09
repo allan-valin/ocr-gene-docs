@@ -6,6 +6,39 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-09, night — one worker's OOM took the terminal down; book 110's Augusts are not him
+
+**What killed the session.** At 21:03 the kernel OOM-killed one of the three
+hospedaria workers (6.7 GB resident; the three together ~11 GB of 14, swap
+full). systemd's `DefaultOOMPolicy=stop` then failed the whole Konsole scope the
+workers had been `nohup`ed into, so the terminal, the Claude session and the two
+surviving workers died together. Evidence: `journalctl -k | grep -i oom` and
+`journalctl --user | grep oom-kill`. **Rule from now on:** every heavy job gets
+its own transient scope with a cap, so an OOM kills that job alone and the
+readers resume:
+
+    systemd-run --user --scope --unit=hosp-w0 -p MemoryMax=5G -p OOMPolicy=continue --quiet \
+      bash -c ".venv-kraken/bin/python scripts/read_hospedaria.py --books <0101.pdf> <0102.pdf> \
+               --device cuda --shard 0/3 --pid-file <scratch>/w0.pid > <scratch>/w0.log 2>&1" &
+
+GPU worker 5G, CPU workers 3500M each (`--shard 1/3`, `2/3`); caps must stay
+under ~12 GB in total. Relaunched 23:17 on the 1911 books only (HIF.100 was
+complete at 423 odd pages; HIF.101 had its first 34 odd pages plus every sixth;
+HIF.102 nothing) — 296 odd pages, ~1.4 h.
+
+**Book 110, the August check: negative.** 150 rows whose name reads like
+August/Augusto (fuzzy ≥ 0.75 over `lines/0110-p*.json`) were cut from the PDF
+into six review strips and read by eye. No surname resembles Kubach; the K-names
+among them are Koch (p39, p291), Köhler, Kühn, Kolb, Kaminski, Küffer, Kneip.
+Three rows were a bare "August" aged 19–25 under a family head cut out of the
+strip; cropped with their head rows they are Oestreich August 21 (p17 l28), Busch
+August 21 (p23 l52), Schramm August 25 (p447 l38). So in HIF.110 (Oct 1922 –
+Jul 1924) no August Kubach entered the hostel under a readable name.
+
+**Next, in order.** 1911 pass finishes → `search_lines.py` for Kubach Wilhelm,
+August, Frida over 0100–0102 → crop hits from the PDF and look → engine on
+`fullpage-corpus-typed-lines.json` in the background → tests, commit.
+
 ## 2026-10-09 — the corpus is read whole, on three workers; the GPU was there all along
 
 **The pass is running.** `scripts/read_fullpage.py` reads every page of the
