@@ -53,7 +53,8 @@ the end** (~55 min for 672 pages, ~12 a minute), so a killed run is rerun whole:
     systemd-run --user --scope --unit=engine-typed -p MemoryMax=8G -p OOMPolicy=continue --quiet \
       bash -c ".venv-ocr/bin/python scripts/spike_engine_on_lines.py --lines data/fullpage-corpus-typed-lines.json > <log> 2>&1" &
 
-Started 01:08 on 2026-10-10. After it: `apply_second_opinion.py --sidecar
+Started 01:08 on 2026-10-10 and **stopped at 01:13 for the night** (nothing
+written; rerun it whole with the command above). After it: `apply_second_opinion.py --sidecar
 data/fullpage-corpus-typed-engine.json --records data/transcriptions --bands
 data/reread-index` as a dry run, `bench_search.py --matrix --held-out
 --second-opinion <that file>`, and `--write` only if typed (151/191) does not drop.
