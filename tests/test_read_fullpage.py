@@ -86,3 +86,19 @@ def test_a_line_record_keeps_the_polygon_so_no_model_has_to_segment_again():
     assert got["baseline"] == [[0.1, 0.175], [0.9, 0.175]]
     bare = sp["line_record"](Line(), None, 100, 200)
     assert bare["text"] == "" and bare["cuts"] == [] and bare["baseline"]
+
+
+def test_a_page_the_gpu_cannot_hold_is_read_on_the_cpu_instead():
+    calls = []
+
+    def read(im, seg, model, device="cpu"):
+        calls.append(device)
+        if device == "cuda":
+            raise RuntimeError("CUDA out of memory. Tried to allocate 2.54 GiB")
+        return [{"text": "ok"}]
+
+    got = pas["read_with_fallback"]("im", {"cuda": "m-gpu", "cpu": "m-cpu"}, "cuda", read=read)
+    assert got == [{"text": "ok"}] and calls == ["cuda", "cpu"]
+    calls.clear()
+    assert pas["read_with_fallback"]("im", {"cpu": "m-cpu"}, "cpu", read=read) == [{"text": "ok"}]
+    assert calls == ["cpu"]

@@ -75,6 +75,26 @@ def shard(todo: list, spec: str | None) -> list:
     return todo[int(i)::int(n)]
 
 
+def read_with_fallback(im, rec_models: dict, device: str, read=None) -> list[dict]:
+    """Read the page on `device`; a page the GPU cannot hold (one long line
+    asks the LSTM for gigabytes) is read again on the CPU instead of killing
+    the worker. `rec_models` maps device -> model, or {device: None} for a
+    typed page that is only segmented."""
+    read = read or read_page
+    try:
+        return read(im, None, rec_models.get(device), device=device)
+    except RuntimeError as e:
+        if device == "cpu" or "out of memory" not in str(e).lower():
+            raise
+        try:
+            import torch
+            torch.cuda.empty_cache()
+        except ImportError:
+            pass
+        print(f"    out of GPU memory, reading this page on the CPU", flush=True)
+        return read(im, None, rec_models.get("cpu"), device="cpu")
+
+
 def collect(out_dir: Path, records: Path) -> tuple[dict, dict]:
     """The per-page files as two things: McFondue's column reading, by row,
     for the pages it read; and the raw lines of the typed pages for the
@@ -153,6 +173,9 @@ def main(argv=None) -> int:
     from kraken.lib import models
     Image.MAX_IMAGE_PIXELS = None
     rec_model = models.load_any(str(a.model), device=a.device)
+    rec_models = {a.device: rec_model}
+    if a.device != "cpu":
+        rec_models["cpu"] = models.load_any(str(a.model), device="cpu")
 
     began, read = time.time(), 0
     try:
@@ -163,8 +186,8 @@ def main(argv=None) -> int:
                 continue
             t0 = time.time()
             im = Image.open(img).convert("L")
-            lines = read_page(im, None, None if hand == "typed" else rec_model,
-                              device=a.device)
+            lines = read_with_fallback(
+                im, {} if hand == "typed" else rec_models, a.device)
             secs = time.time() - t0
             out = page_file(a.out_dir, doc, page)
             tmp = out.with_suffix(".tmp")

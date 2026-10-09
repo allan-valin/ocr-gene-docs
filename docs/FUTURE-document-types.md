@@ -48,3 +48,22 @@ current corpus is one type. But every constant that assumes that type is a
 future bug in another one — which is the argument Allan has made twice today,
 and which both of today's fixes bear out: the page's own ink is the measurement,
 and the printing is only a hint about where to look.
+
+## 2026-10-09 — dynamic layout from the page's own captions (Allan's ask, deferred)
+
+The hospedaria registers (`data/hospedaria/`) are an open-book form unlike
+the passenger lists. Allan asked whether a model could tell the columns from
+the OCR output and redesign the HTML layout per document. Shape agreed, not
+started, after accuracy and Kubach:
+
+1. Column schema from geometry: printed captions (engine CER 0.01) plus
+   vertical rules give (caption, x0, x1) per page; vertical captions read
+   after rotating the header strip.
+2. Caption → canonical field through a template library, one template per
+   archive form, matched by caption fingerprint; unknown form flagged and
+   still read whole.
+3. A local model (Qwen 7B on disk) only offline, once per new form, to
+   propose a template a person confirms. Nothing in the request path.
+4. The review page renders columns from `schema` on the record instead of
+   fixed fields; a template may say "row continues on the next page at the
+   same height", so one row shows from two scans.
