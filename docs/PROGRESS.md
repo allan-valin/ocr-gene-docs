@@ -35,9 +35,33 @@ strip; cropped with their head rows they are Oestreich August 21 (p17 l28), Busc
 August 21 (p23 l52), Schramm August 25 (p447 l38). So in HIF.110 (Oct 1922 –
 Jul 1924) no August Kubach entered the hostel under a readable name.
 
-**Next, in order.** 1911 pass finishes → `search_lines.py` for Kubach Wilhelm,
-August, Frida over 0100–0102 → crop hits from the PDF and look → engine on
-`fullpage-corpus-typed-lines.json` in the background → tests, commit.
+**The 1911 books are read, and no Kubach is in them.** HIF.100 (423 odd
+pages), 101 (186), 102 (171), all in `data/hospedaria/lines/` by 01:10.
+`search_lines.py` for Kubach Wilhelm / August / Frida / Guilherme / Kubach over
+the three books: nothing above 0.70, and the ten weak hits cropped with their
+head rows are Burach Józef (100 p811), Pachna (100 p813), Banach Marcin (101
+p157), Konieczny Wojciech (102 p285), a child Rafael (101 p23), two children
+named Wilhelm under other heads (100 p251, 101 p73), and ink in other columns.
+These books are mostly Polish families via Bremen. So the hostel registers
+on disk — 1911 and Oct 1922 – Dec 1925 — do not hold him under a readable name;
+HIF.109 (1920–22) Allan read by hand. The engine's own recogniser is now running
+over the typed lines of the corpus pass (`spike_engine_on_lines.py --lines
+data/fullpage-corpus-typed-lines.json`, scope `engine-typed`, cap 6 GB, log in
+the scratchpad) and writes `fullpage-corpus-typed-engine.json`.
+
+**What the caps taught.** CPU worker RSS is not a leak: a page spikes (HIF.101
+p193 peaked at 5.4 GB for one page, then 0.7 GB) and a 3.5 GB or 4.5 GB cap
+kills the worker on that page; 6 GB holds. The GPU worker dies faster: when
+CUDA runs out it falls back to the CPU with both models loaded and passes 5 GB
+within a minute. With two CPU workers at 6 GB each the 1911 remainder (87
+pages) took 25 min; the GPU buys nothing here (segmentation is CPU-bound). Also:
+a worker's `--shard I/N` is taken over the pages *still missing at launch*, so
+halves started at different times do not tile — the last five pages needed one
+unsharded pass.
+
+**Next, in order.** Engine pass finishes → `apply_second_opinion.py` for the
+typed sidecar → `bench_search.py --matrix --held-out` → commit. Then the window
+download when Allan starts it.
 
 ## 2026-10-09 — the corpus is read whole, on three workers; the GPU was there all along
 
