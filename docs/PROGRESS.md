@@ -69,6 +69,46 @@ manifest skipped dossiers by number alone, and BS and OL share 15938–17398.
 The strongest lead is off this corpus: his RNE W039916-0 names a foreigner's
 file at the Arquivo Nacional that states the arrival.
 
+**Evening: the pass landed, and the corpus-wide number is below the held-out
+one.** 2,541 pages read (three workers, 11:05–19:00 with the call pause),
+`--collect`: 40,783 McFondue column readings on 1,726 pages, 40,475 written
+as second readings across 542 documents (`apply_second_opinion.py --bands
+data/reread-index --write`). `bench_search.py --matrix --held-out` after:
+
+| held-out, top five by name alone | before | sidecar at bench time (10-08) | written on the rows |
+|---|---|---|---|
+| cursive (212) | 56 | **68** | **62** |
+| typed (191) | 151 | 151 | 151 |
+| cursive, naming the crossing | 111 | 131 | **110** |
+
+Same recogniser, same lines, same pages — the difference is that the bench
+sidecar covered the fifteen held-out pages only, and the write covers every
+page. Two candidates, not yet separated: every row in the pool now carries
+a second spelling, so the true row competes against twice the near-misses
+(would show at five and ten, less at twenty: 84 vs 89 at twenty, so partly);
+or `desembarque.search` counts a written `second_read` differently from a
+bench-time sidecar, which the crossing number (131 → 110, below the engine
+alone) suggests. **Separate these before the engine sidecar is written:**
+bench with `--second-opinion data/fullpage-corpus-column.json` against the
+pre-apply records (`data/transcriptions-before-reread-2026-10-08` is the
+wrong baseline; the apply is reversible by model tag).
+
+**Hospedaria da Ilha das Flores.** The archive's orientation page
+(`consulta.an.gov.br/orientacaoDesembarque/1`) sends a searcher who found
+nothing in OL to the hostel registers, 1877–1932. Fund OB.0.EPE, series HIF,
+image URL `derivadas/BR_RJANRIO_OB/0/EPE/HIF/0110/BR_RJANRIO_OB_0_EPE_HIF_0110_d0001de0001.pdf`
+(four-digit folder, one part each). Books and their dates: HIF.108 to May
+1917, nothing until HIF.109 (19 Jan 1920 – Oct 1922), HIF.110 (27 Oct 1922 –
+17 Jul 1924), HIF.111 (Jul 1924 – Dec 1925); 1911 is HIF.100–102. Six books
+on disk in `data/hospedaria/`. Open-book layout: odd PDF pages carry date,
+ship, origin port, ordinal, NAMES, sex, family, age, status, nationality;
+even pages continue the same rows with profession, exit date, transport,
+destination, observations. One clerk's neat hand; McFondue on kraken's lines
+reads "Kuhlmann Wilhelm" as "Rublnann Wilheln" and `search_lines.py` still
+ranks it first (0.75). Allan read HIF.109 by hand: no Kubach. Machine order:
+110, 111, then the 1911 books (his 1939 foreigner's file declares residence
+"desde 1911", which Allan reads as stretched, not true).
+
 **Next, in order.** Let the pass finish; `--collect`; engine on the typed
 lines; apply both sidecars; `--matrix --held-out`; search for Kubach; commit.
 Then the window download when Allan starts it (the auto-mode classifier
