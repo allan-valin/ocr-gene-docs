@@ -47,7 +47,16 @@ on disk — 1911 and Oct 1922 – Dec 1925 — do not hold him under a readable 
 HIF.109 (1920–22) Allan read by hand. The engine's own recogniser is now running
 over the typed lines of the corpus pass (`spike_engine_on_lines.py --lines
 data/fullpage-corpus-typed-lines.json`, scope `engine-typed`, cap 6 GB, log in
-the scratchpad) and writes `fullpage-corpus-typed-engine.json`.
+the scratchpad) and writes `fullpage-corpus-typed-engine.json` — **only at
+the end** (~55 min for 672 pages, ~12 a minute), so a killed run is rerun whole:
+
+    systemd-run --user --scope --unit=engine-typed -p MemoryMax=8G -p OOMPolicy=continue --quiet \
+      bash -c ".venv-ocr/bin/python scripts/spike_engine_on_lines.py --lines data/fullpage-corpus-typed-lines.json > <log> 2>&1" &
+
+Started 01:08 on 2026-10-10. After it: `apply_second_opinion.py --sidecar
+data/fullpage-corpus-typed-engine.json --records data/transcriptions --bands
+data/reread-index` as a dry run, `bench_search.py --matrix --held-out
+--second-opinion <that file>`, and `--write` only if typed (151/191) does not drop.
 
 **What the caps taught.** CPU worker RSS is not a leak: a page spikes (HIF.101
 p193 peaked at 5.4 GB for one page, then 0.7 GB) and a 3.5 GB or 4.5 GB cap
