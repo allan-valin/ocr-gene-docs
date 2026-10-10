@@ -504,8 +504,8 @@ def spellings(row: dict, text: str, known=None,
             spelled = text.replace(word, split, 1)
             if spelled != text and spelled not in out:
                 out.append(spelled)
+    out += _other_recogniser(row, text, out)
     guesses = _stroke_spellings(text, vocab, out)
-    guesses += _other_recogniser(row, text, out + guesses)
     return out + guesses, len(guesses)
 
 
@@ -640,10 +640,16 @@ def _other_recogniser(row: dict, text: str, taken: list[str]) -> list[str]:
     the top five, and it was measured through a sidecar only the bench could
     read, so the application gained nothing from it until it was stored here.
 
-    Counted with the guesses rather than with the readings, which is the trade
-    the measurement asked for: as a *reading* it found six more by name alone
-    and lost three when the crossing was named, and losing a name somebody can
-    already reach is the worse half of that bargain.
+    Counted with the readings. It was counted with the guesses from 2026-09-08
+    because, measured then with a weaker recogniser over the engine's own crops,
+    a reading found six more by name alone and lost three when the crossing was
+    named. McFondue over kraken's whole-page lines, measured 2026-10-10 on the
+    436 held-out names with its reading on every row of the corpus, goes the
+    other way: as a guess 62 of 212 cursive names at five and 110 when the
+    crossing was named, as a reading 65 and 128. The bench had counted it as a
+    reading all along (`bench_search.py --second-opinion` puts it in `alts`
+    before the guesses), so this is also what closes most of the gap between
+    the bench's 68 and the 62 the written sidecar scored.
     """
     said = (row.get("second_read") or {}).get("text") or ""
     said = said.strip()

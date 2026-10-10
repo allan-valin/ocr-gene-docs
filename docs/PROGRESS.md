@@ -6,6 +6,45 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-10 — the 68 → 62 gap was the application's weighting, not the pool
+
+**Separated.** The bench and the application scored the same second reading
+differently. `bench_search.py --second-opinion` puts a sidecar's reading in
+`alts` *before* the guesses, at full weight and inside the crossing pass; the
+application's `search.spellings` put the stored `second_read` *with* the
+guesses (0.95, out of the crossing pass) — a trade measured on 2026-09-08 with
+a weaker recogniser over the engine's own crops. One bench told both suspects
+apart: the written records plus the corpus sidecar injected as a reading score
+65 / 128, so the weighting is most of the gap and the pool is the rest:
+
+| held-out cursive (212), top five | by name | naming the crossing |
+|---|---|---|
+| written `second_read` counted as a guess (app, 10-09) | 62 | 110 |
+| the same readings counted as readings (app, now) | **65** | **128** |
+| bench-time sidecar on the 15 held-out pages only | 68 | 131 |
+
+`spellings` now counts `_other_recogniser` with the readings; test flipped
+with the numbers in its docstring; 952 green. Typed naming the crossing moves
+152 → 149 (McFondue's typed-page readings now enter that pass); blended
+crossing 277 → 293. The remaining three names (65 vs 68) are pool
+competition — every row carries a second spelling, so the true row faces
+twice the near-misses — and at +4.6% are below the ten-percent rule, so no
+tie-break weight is tuned for them.
+
+**What this taught about the shape.** Readings are mutated into the record
+across four fields (`name_alts`, `alts`, `second_read`, `guessed`) by three
+code paths, and the bench has an injection path the application does not.
+That is how a measured 68 shipped as 62. The structural fix, in order, when
+the work is between runs: `second_read` becomes a list keyed by model (one
+slot cannot hold McFondue and the engine-on-lines on a mixed page); the
+kraken-lines reader moves from `scripts/` into the package as the primary
+reader, the grid engine becoming its typed-line recogniser; the bench reads
+records only and the injection path goes.
+
+**Engine pass relaunched** 11:40 (`engine-typed` scope, 8 GB cap, log in
+the scratchpad). Then: `apply_second_opinion.py` dry run → bench → `--write`
+only if typed (151) does not drop → commit.
+
 ## 2026-10-09, night — one worker's OOM took the terminal down; book 110's Augusts are not him
 
 **What killed the session.** At 21:03 the kernel OOM-killed one of the three

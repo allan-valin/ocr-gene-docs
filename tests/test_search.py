@@ -1471,13 +1471,25 @@ def test_a_second_recogniser_saying_nothing_new_adds_no_spelling():
     assert "guudo camtadore" not in [a.lower() for a in alts]
 
 
-def test_a_second_recogniser_reading_is_counted_with_the_guesses():
+def test_a_second_recogniser_reading_is_counted_with_the_readings():
+    """Another model read the same ink, so its reading scores as a reading:
+    full weight, and in the pass that runs when a crossing was named.
+
+    Measured 2026-10-10 on the 436 held-out names with McFondue's whole-page
+    readings on every row: counted with the guesses they found 62 of 212
+    cursive names at five and 110 when the crossing was named; counted with
+    the readings, 65 and 128. The bench had always counted them as readings
+    (68 / 131 on the held-out pages alone) and the application did not, which
+    is why the written sidecar scored below the bench. The older trade — a
+    guess, because as a reading it cost three names when the crossing was
+    named — was measured on a weaker recogniser over the engine's own crops.
+    """
     from desembarque.search import spellings
     row = {"n": 1, "second_read": {"model": "m", "text": "Guiso Cantadore"}}
     alts, guessed = spellings(row, "GUUDO CAMTADORE")
     assert "Guiso Cantadore" in alts
-    # it is a guess, so it sits in the tail the count names
-    assert "Guiso Cantadore" in alts[len(alts) - guessed:]
+    # a reading, so it sits before the tail the guess count names
+    assert "Guiso Cantadore" in alts[:len(alts) - guessed]
 
 
 def test_a_french_form_names_its_column_in_french():
