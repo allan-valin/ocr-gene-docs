@@ -59,7 +59,11 @@ and `-1`, 6 GB each, shard `I/2`) — kraken's segmenter and McFondue, one JSON 
 page with polygons, resumable, no records needed. Stop with `systemctl --user
 stop kraken-1923-0.scope kraken-1923-1.scope`; resume both together with the
 same `systemd-run` lines, the book list being `data/dossiers-1923/books.txt`
-and the logs anywhere. **6,823 pages** (the 1923
+and the logs anywhere; the list was reordered Rio (OL) first at 18:05 and the
+workers restarted, so the Rio pages land by about 01:00 and the Santos ones
+after. At 18:00, 1,484 pages (all Santos) were done and the thirty Kubach
+spellings over them found nothing (best hits were given names alone, 0.90).
+**6,823 pages** (the 1923
 dossiers run five pages, not four), ~25 s a page a worker, about 24 h from
 14:20. `search_lines.py --dir data/dossiers-1923/lines "<name>"` works on
 what has landed, and `scripts/find_person.py --queries data/kubach-queries.txt`
