@@ -45,13 +45,30 @@ hand search did not cover. Three single young Germans in a row on that list.
 Name forms to search together: Kubach/Kuback/Kubak/Kubasch/Cubach, the K→R
 confusion Rubach, and Augusto/August/Friedrich/Friederich/Frederico/Fritz.
 
-**Running now:** the app's own index over `data/scans` (`serve.py` in scope
-`index-1923`, four workers, 9 GB cap), which gives the new dossiers their
-records and geometry. Then kraken segmentation of the new pages (one night),
-McFondue on the cursive lines (an hour), the engine on the typed lines (an
-hour), apply, search. CHURRO over the ~175k new cursive column lines is 140 h
-on this CPU: either a CUDA toolkit and a GPU build of llama.cpp (Allan's
-sudo), or a rented 4090 for a few dollars.
+**The engine index was started and stopped.** `serve.py` over `data/scans`
+(four workers, 9 GB cap) indexed 12 of the new dossiers in 14 min: 84 s a
+dossier, 10 GB resident, 32–42 h for the window, and nothing else fits in
+memory beside it. The app needs it eventually (records, geometry, the review
+screen); the search does not. It resumes from the hash cache whenever it is
+started again (`POST /api/index?dir=.` on a running server; `/api/index/stop`
+only sets a flag the workers do not honour, so the scope was killed).
+
+**Running now, the Kubach path:** `read_hospedaria.py --pages all --dpi 200`
+over the 1,338 new PDFs (`data/dossiers-1923/lines/`, scopes `kraken-1923-0`
+and `-1`, 6 GB each, shard `I/2`) — kraken's segmenter and McFondue, one JSON a
+page with polygons, resumable, no records needed. **6,823 pages** (the 1923
+dossiers run five pages, not four), ~25 s a page a worker, about 24 h from
+14:20. `search_lines.py --dir data/dossiers-1923/lines "<name>"` works on
+what has landed, and `scripts/find_person.py --queries data/kubach-queries.txt`
+asks the application's index for all thirty spellings at once (today, over
+the 59k rows already indexed: nothing; best surname "Kubaschek Josef" 0.64).
+
+**After the lines land, in order:** the thirty spellings through
+`search_lines.py`; CHURRO over the cursive column lines, which needs a GPU
+(no `nvcc` here: Allan installs the CUDA toolkit and llama.cpp is rebuilt with
+`-DGGML_CUDA=ON`, or a rented 4090 for a few dollars — 175k crops is 140 h
+on this CPU); then the engine index for the app, on nights, and the two
+shippable sidecars through `apply_second_opinion.py`.
 
 ## 2026-10-10 — the 68 → 62 gap was the application's weighting, not the pool
 
