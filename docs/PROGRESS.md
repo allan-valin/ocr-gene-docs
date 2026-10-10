@@ -6,6 +6,53 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-10, afternoon — CHURRO on kraken's lines reads half the cursive names; 1923 is on disk
+
+**The gate, and it is not close.** `spike_vlm_on_lines.py` cuts every line
+kraken found across the name column out of the chosen page image (polygon-
+masked where the polygon is stored, box where the 2026-10-08 pages have only
+boxes), sends it to CHURRO 3B through llama-server with the row prompt, and
+writes the same `-column.json` shape the kraken spikes write. The 15 held-out
+pages, 678 column lines, 32 min on six CPU threads (the llama.cpp here is a
+CPU build; no `nvcc` on the machine). `bench_search.py --matrix --held-out
+--second-opinion` on top of the records as they stand:
+
+| held-out, top five | by name, on disk now | + CHURRO | crossing, on disk | + CHURRO |
+|---|---|---|---|---|
+| cursive (212) | 64 | **107** | 128 | 144 |
+| typed (191) | 164 | 171 | 154 | 162 |
+| mixed (33) | 19 | 22 | 16 | 23 |
+| blended (436) | 247 (57%) | **300 (69%)** | 298 | 329 |
+
+Research licence, so none of it ships (`LICENSING.md`); it reads for Allan's
+own search and under its model tag, which `apply_second_opinion.py` can strip.
+Note the spike is measurement code beside `read_vlm.py`; the readings live in
+`data/`, which is not versioned, so a branch would isolate nothing.
+
+**1923 is on disk.** `download.py --workers 8` (new: a thread pool with the
+per-request delay kept, exponential backoff on 429/5xx/dead connections, a
+per-file lock because a lettered dossier cross-references another's PDF and
+two workers once raced on it — one resumed the other's half file, got a 206,
+and deleted the finished copy). BS 16030–16690 and OL 18380–19175: 1,361
+dossiers, 6.5 GB, 36 min at 13:00 on a Saturday, no refusals from the
+archive. `data/scans` holds 2,016 PDFs.
+
+**What Allan told about the man** (in memory too): born 20 Sep 1902, so
+underage until 20 Sep 1923; the ship went to Canada, landing refused, then
+the USA, refused despite a sister there, then Rio — so the Rio list may be a
+New York departure (Lamport & Holt, Munson), not a German port, which his
+hand search did not cover. Three single young Germans in a row on that list.
+Name forms to search together: Kubach/Kuback/Kubak/Kubasch/Cubach, the K→R
+confusion Rubach, and Augusto/August/Friedrich/Friederich/Frederico/Fritz.
+
+**Running now:** the app's own index over `data/scans` (`serve.py` in scope
+`index-1923`, four workers, 9 GB cap), which gives the new dossiers their
+records and geometry. Then kraken segmentation of the new pages (one night),
+McFondue on the cursive lines (an hour), the engine on the typed lines (an
+hour), apply, search. CHURRO over the ~175k new cursive column lines is 140 h
+on this CPU: either a CUDA toolkit and a GPU build of llama.cpp (Allan's
+sudo), or a rented 4090 for a few dollars.
+
 ## 2026-10-10 — the 68 → 62 gap was the application's weighting, not the pool
 
 **Separated.** The bench and the application scored the same second reading

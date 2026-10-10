@@ -19,8 +19,10 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable, Iterable
@@ -52,9 +54,27 @@ def _curl(url: str, dest: Path | None = None, timeout: int = 180) -> int:
         return 0
 
 
+# What the archive says when it wants room, as against when a file is absent:
+# a 404 is an answer, these are a request to come back later.
+BUSY = {0, 408, 429, 500, 502, 503, 504}
+BACKOFF = 5  # seconds before the second attempt; doubles each time
+
+
+def with_backoff(request: Callable[[], int], attempts: int = 4,
+                 sleep: Callable[[float], None] = time.sleep) -> int:
+    """`request()` until it answers, waiting longer each time it is busy."""
+    code = request()
+    for i in range(1, attempts):
+        if code not in BUSY:
+            break
+        sleep(BACKOFF * 2 ** (i - 1))
+        code = request()
+    return code
+
+
 def http_probe(url: str) -> bool:
     time.sleep(DELAY)
-    return _curl(url) == 200
+    return with_backoff(lambda: _curl(url)) == 200
 
 
 def _candidate_folders(e: Entry) -> list[Entry]:
@@ -165,6 +185,83 @@ def already_fetched(manifest_path: Path) -> set[str]:
     return done
 
 
+# One lock per file on disk: a dossier that cross-references another shares
+# its PDFs, and two workers pulling the same file at once leave one of them
+# resuming the other's half-written download (a 206) and deleting the result.
+_FILE_LOCKS: dict[Path, threading.Lock] = {}
+_FILE_LOCKS_GUARD = threading.Lock()
+
+
+def fetch_file(dest: Path, curl: Callable[[], int]) -> bool:
+    """`dest` on disk, fetched by `curl` unless another worker already has."""
+    with _FILE_LOCKS_GUARD:
+        lock = _FILE_LOCKS.setdefault(dest.resolve(), threading.Lock())
+    with lock:
+        if dest.exists() and dest.stat().st_size > 0:
+            return True
+        time.sleep(DELAY)
+        code = with_backoff(curl)
+        if code != 200 or not dest.exists() or dest.stat().st_size == 0:
+            dest.unlink(missing_ok=True)
+            print(f"    failed {code}: {dest.name}", file=sys.stderr)
+            return False
+        print(f"    {dest.name} ({dest.stat().st_size//1024} KB)", file=sys.stderr)
+        return True
+
+
+def fetch_dossier(e: Entry, out: Path) -> dict | None:
+    """One dossier's PDFs onto disk; its manifest row, or None if unresolved."""
+    urls = resolve_parts(e)
+    if not urls:
+        print(f"    {e.fundo}.{e.series}.{e.index} unresolved", file=sys.stderr)
+        return None
+    local: list[str] = []
+    for url in urls:
+        dest = out / url.rsplit("/", 1)[-1]
+        if fetch_file(dest, lambda: _curl(url, dest=dest)):
+            local.append(dest.name)
+    return {**asdict(e), "files": local} if local else None
+
+
+def fetch_all(rows: list[dict], out: Path, fetch: Callable = fetch_dossier,
+              workers: int = 1) -> tuple[int, list[dict]]:
+    """Every dossier in `rows` not already in the manifest, `workers` at a time.
+
+    Each worker is as polite as the serial fetcher was (the delay and the
+    backoff are per request); the manifest is appended under a lock as each
+    dossier lands, so a killed run resumes from what is on disk. Returns how
+    many were fetched and the entries that could not be resolved.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    manifest_path = out / "manifest.jsonl"
+    done = already_fetched(manifest_path)
+    todo = [entry_from_row(r) for r in rows
+            if f"{r['fundo']}.{r['series']}.{r['index']}" not in done]
+    lock = threading.Lock()
+    fetched, unresolved = 0, []
+
+    def one(e: Entry):
+        nonlocal fetched
+        tag = f"{e.fundo}.{e.series}.{e.index}"
+        print(f"[{tag}] ({e.ship or 'no ship name'})", file=sys.stderr)
+        try:
+            row = fetch(e, out)
+        except Exception as exc:  # one bad dossier must not take the pool down
+            print(f"    {tag} failed: {exc}", file=sys.stderr)
+            row = None
+        with lock:
+            if row:
+                with manifest_path.open("a", encoding="utf-8") as mf:
+                    mf.write(json.dumps(row, ensure_ascii=False) + "\n")
+                fetched += 1
+            else:
+                unresolved.append(asdict(e))
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        list(pool.map(one, todo))
+    return fetched, unresolved
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--catalog", type=Path, default=Path("data/catalog.jsonl"))
@@ -172,6 +269,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--per-page", type=int, default=5)
     ap.add_argument("--seed", type=int, default=1919)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="dossiers in flight at once; a browser opens six "
+                         "connections to a host by itself, eight is one busy "
+                         "reader. Each worker keeps the delay and backs off "
+                         "when the archive answers busy")
     ap.add_argument("--window", action="append", default=None,
                     help="FUNDO:lo-hi, repeatable; fetch every dossier in these "
                          "number ranges in the order given, instead of sampling")
@@ -193,48 +295,16 @@ def main(argv: list[str] | None = None) -> int:
     manifest_path = args.out / "manifest.jsonl"
     done = already_fetched(manifest_path)
 
-    unresolved: list[dict] = []
-    fetched = skipped = 0
-
-    with manifest_path.open("a", encoding="utf-8") as mf:
+    picked = [r for r in picked
+              if f"{r['fundo']}.{r['series']}.{r['index']}" not in done]
+    skipped = len(done)
+    if args.dry_run:
         for i, row in enumerate(picked, 1):
             e = entry_from_row(row)
-            tag = f"{e.fundo}.{e.series}.{e.index}"
-            if tag in done:
-                skipped += 1
-                continue
-
-            print(f"[{i}/{len(picked)}] {tag} ({e.ship or 'no ship name'})", file=sys.stderr)
-            if args.dry_run:
-                continue
-
-            urls = resolve_parts(e)
-            if not urls:
-                print(f"    unresolved", file=sys.stderr)
-                unresolved.append(asdict(e))
-                continue
-
-            local: list[str] = []
-            for url in urls:
-                dest = args.out / url.rsplit("/", 1)[-1]
-                if dest.exists() and dest.stat().st_size > 0:
-                    local.append(dest.name)
-                    continue
-                time.sleep(DELAY)
-                code = _curl(url, dest=dest)
-                if code != 200 or not dest.exists() or dest.stat().st_size == 0:
-                    dest.unlink(missing_ok=True)
-                    print(f"    failed {code}: {url}", file=sys.stderr)
-                    continue
-                local.append(dest.name)
-                print(f"    {dest.name} ({dest.stat().st_size//1024} KB)", file=sys.stderr)
-
-            if local:
-                mf.write(json.dumps({**asdict(e), "files": local}, ensure_ascii=False) + "\n")
-                mf.flush()
-                fetched += 1
-            else:
-                unresolved.append(asdict(e))
+            print(f"[{i}/{len(picked)}] {e.fundo}.{e.series}.{e.index} "
+                  f"({e.ship or 'no ship name'})", file=sys.stderr)
+        return 0
+    fetched, unresolved = fetch_all(picked, args.out, workers=args.workers)
 
     if unresolved:
         report = args.out / "unresolved.jsonl"

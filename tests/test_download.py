@@ -143,3 +143,64 @@ def test_a_fetched_dossier_is_known_by_fundo_and_series_not_by_number_alone(tmp_
     m.write_text('{"fundo": "BS", "series": "ENT", "index": "16100", "files": ["x"]}\n')
     done = download.already_fetched(m)
     assert "BS.ENT.16100" in done and "OL.PRJ.16100" not in done
+
+
+def test_a_busy_server_is_waited_for_and_then_given_up_on():
+    """429, 503 and a dead connection are the archive asking for room, not a
+    missing file: wait longer each time, and stop after the last attempt."""
+    from download import with_backoff
+    waits, codes = [], iter([503, 0, 429, 200])
+    code = with_backoff(lambda: next(codes), attempts=4, sleep=waits.append)
+    assert code == 200
+    assert waits == [5, 10, 20]
+    waits, codes = [], iter([503, 503, 503])
+    assert with_backoff(lambda: next(codes), attempts=3, sleep=waits.append) == 503
+    assert waits == [5, 10]
+    # a 404 is an answer, not a request to wait
+    waits = []
+    assert with_backoff(lambda: 404, attempts=3, sleep=waits.append) == 404
+    assert waits == []
+
+
+def test_workers_fetch_every_dossier_once_and_the_manifest_holds_them_all(tmp_path):
+    """Eight in flight is one busy reader, not a flood; what must not happen is
+    a dossier fetched twice or lost between threads."""
+    from download import fetch_all
+    rows = [{"fundo": "BS", "series": "ENT", "index": str(n), "ship": "x",
+             "rv": None} for n in range(16000, 16040)]
+    seen = []
+    def fetch(e, out):
+        seen.append(e.index)
+        return {"fundo": e.fundo, "series": e.series, "index": e.index,
+                "files": [f"{e.index}.pdf"]}
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text('{"fundo": "BS", "series": "ENT", "index": "16003", "files": ["a"]}\n')
+    fetched, unresolved = fetch_all(rows, tmp_path, fetch=fetch, workers=8)
+    assert fetched == 39 and unresolved == []
+    assert sorted(seen) == sorted(str(n) for n in range(16000, 16040) if n != 16003)
+    lines = manifest.read_text().splitlines()
+    assert len(lines) == 40
+
+
+def test_two_dossiers_sharing_a_file_fetch_it_once(tmp_path):
+    """16591A cross-references 16607: with both in flight, one worker's resume
+    of the other's half-written file answered 206 and deleted a finished PDF."""
+    from download import fetch_all
+    rows = [{"fundo": "BS", "series": "ENT", "index": "16607", "ship": "andes", "rv": None},
+            {"fundo": "BS", "series": "ENT", "index": "16591A", "ship": "andes", "rv": None,
+             "see_also": ["BS", "ENT", "16607"]}]
+    pulls = []
+    def fetch(e, out):
+        from download import fetch_file
+        dest = out / "016607.pdf"
+        def curl():
+            pulls.append(e.index)
+            dest.write_bytes(b"pdf")
+            return 200
+        ok = fetch_file(dest, curl)
+        return {"fundo": e.fundo, "series": e.series, "index": e.index,
+                "files": [dest.name]} if ok else None
+    fetched, unresolved = fetch_all(rows, tmp_path, fetch=fetch, workers=2)
+    assert fetched == 2 and unresolved == []
+    assert len(pulls) == 1
+    assert (tmp_path / "016607.pdf").read_bytes() == b"pdf"
