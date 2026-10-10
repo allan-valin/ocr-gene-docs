@@ -41,9 +41,28 @@ kraken-lines reader moves from `scripts/` into the package as the primary
 reader, the grid engine becoming its typed-line recogniser; the bench reads
 records only and the injection path goes.
 
-**Engine pass relaunched** 11:40 (`engine-typed` scope, 8 GB cap, log in
-the scratchpad). Then: `apply_second_opinion.py` dry run → bench → `--write`
-only if typed (151) does not drop → commit.
+**The engine's sidecar is written, and typed is 164 of 191.** The pass ran
+11:38–12:13 (672 pages, 35 min, 8 GB scope, no errors); 20,580 rows across
+252 documents, model `PP-OCRv6-on-kraken-lines`, none of them a row McFondue
+had read (it read the cursive and unknown pages only, so one `second_read`
+slot was enough this once). The written state and the injected bench agree
+exactly, which is what step 1 bought. Held-out, top five:
+
+| | by name | naming the crossing |
+|---|---|---|
+| cursive (212) | 64 | 128 |
+| mixed (33) | 19 | 16 |
+| typed (191) | **164** (was 151) | **154** (was 149) |
+| blended (436) | **247** (was 232 on 10-09) | **298** (was 277) |
+
+Cursive gives back one (65 → 64) to pool competition from the new rows.
+Both sidecars are on the rows; the day's work took the held-out set from
+53% to 57% at five by name alone.
+
+**Next, in order.** `second_read` as a list keyed by model (the next
+recogniser lands on rows that already carry one); the kraken-lines reader
+into the package; bench reads records only. Then the window download when
+Allan starts it, read once by each pipeline, never re-run per tweak.
 
 ## 2026-10-09, night — one worker's OOM took the terminal down; book 110's Augusts are not him
 
