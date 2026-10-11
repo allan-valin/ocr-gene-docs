@@ -53,7 +53,18 @@ screen); the search does not. It resumes from the hash cache whenever it is
 started again (`POST /api/index?dir=.` on a running server; `/api/index/stop`
 only sets a flag the workers do not honour, so the scope was killed).
 
-**Running now, the Kubach path:** `read_hospedaria.py --pages all --dpi 200`
+**Done 2026-10-11 09:40, the Kubach path, McFondue reading negative:** all
+6,823 pages of the 1923 window are in `data/dossiers-1923/lines/` (616k lines,
+698 MB, 15.5 h a worker). The thirty spellings in `data/kubach-queries.txt`
+through `search_lines.py` found no Kubach: the only surname-shaped hits were
+"Rubache" (BS 016690 p7, cropped: Rubach, Franz, 32, married, carpenter, with
+wife Anne — not him) and "Rubiak" (OL 18730, a Slavic list). Everything else
+was a given name alone at 0.90. What remains is the CHURRO reading of the
+cursive name-column lines, which needs the rented GPU; `spike_vlm_on_lines.py`
+needs a no-record mode for these lines first (crop every name-column line,
+write a lines JSON, search with `search_lines.py`).
+
+**How the pass ran:** `read_hospedaria.py --pages all --dpi 200`
 over the 1,338 new PDFs (`data/dossiers-1923/lines/`, scopes `kraken-1923-0`
 and `-1`, 6 GB each, shard `I/2`) — kraken's segmenter and McFondue, one JSON a
 page with polygons, resumable, no records needed. Stop with `systemctl --user
