@@ -22,7 +22,11 @@ here, 7.1.1) loads them. Weights now in `~/.cache/kraken/ppocrv6-hist/`.
 2,486 lines, polygons on 9 pages, `data/fullpage-heldout15-lines-poly.json`
 built from `data/fullpage/`), through `spike_lines_model.py` — which gained a
 7.1 loader (`kraken.models.load_models` → `prepare_for_inference` →
-`predict`) beside the CoreML one. Medium: 217 s on CPU, **0.09 s a line**.
+`predict`) beside the CoreML one. Medium: 217 s on CPU, **0.09 s a line**;
+**35 s on the RTX 4050 (`--device cuda:0`), 0.014 s a line** — `.venv-kraken`
+carries CUDA torch (2.14+cu130), so the 2026-10-09 note that the venvs were
+CPU builds is stale for recognition; only kraken's segmenter is CPU-bound,
+and these passes re-read stored lines without segmenting.
 `bench_search.py --matrix --held-out --second-opinion`, top five:
 
 | held-out, by name | on disk (engine + McFondue) | CHURRO (research) | **PP-OCRv6 medium** | PP-OCRv6 small |
@@ -45,14 +49,15 @@ it takes McFondue's slot over kraken's lines. It also matches CHURRO on typed
 pages, above the engine's 164. The VLM question is closed for now — a CTC
 line recogniser trained on the right corpus wins on this ink.
 
-**Next, in order.** (1) Corpus pass: medium over every line in `data/fullpage/`
-(the McFondue readings' lines, polygons stored), written with
-`apply_second_opinion.py --write` in McFondue's place — at 0.09 s a line the
-40,475-row sidecar is about an hour; re-measure held-out after. (2) The 1923
-window: `data/dossiers-1923/lines/` holds 616k McFondue lines; re-read with
-medium (~15 h CPU, resumable, own scope) and run the thirty Kubach spellings
-through `search_lines.py` again — the reading that found nothing was
-McFondue's. (3) Few-shot: the paper says 40–80 lines of a hand lift it
+**Next, in order, on the GPU (`--device cuda:0`, own scope).** (1) Corpus
+pass: medium over every line in `data/fullpage/` (the McFondue readings'
+lines, polygons stored), written with `apply_second_opinion.py --write` in
+McFondue's place — at 0.014 s a line the 40,475-row sidecar is about ten
+minutes; re-measure held-out after. (2) The 1923 window:
+`data/dossiers-1923/lines/` holds 616k McFondue lines; re-read with medium
+(~2.5 h on the GPU, 15 h on CPU; resumable) and run the thirty Kubach
+spellings through `search_lines.py` again — the reading that found nothing
+was McFondue's. (3) Few-shot: the paper says 40–80 lines of a hand lift it
 further; Allan's 436 hand-read names are that budget for the clerks' hands.
 
 **Also found, lower priority:** MEDUSA 0.1/0.2 (ENC-PSL, Qwen3.5-based
