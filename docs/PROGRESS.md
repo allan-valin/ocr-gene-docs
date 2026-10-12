@@ -6,6 +6,45 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-12, 14:30 — PP-OCRv6 medium is on the rows: held-out cursive 64 → 107
+
+**Applied corpus-wide.** `reread_fullpage.py --device cuda:0` re-read the
+1,871 cursive and unknown pages of `data/fullpage/` (220,811 lines, polygons
+stored, no segmentation) with Kiessling's PP-OCRv6 medium into
+`data/fullpage-ppocrv6/` — 70.7 min on the RTX 4050 while two other GPU jobs
+ran beside it, no page failed. `--collect` gave 39,869 column rows on 1,716
+pages (`data/fullpage-ppocrv6-corpus-column.json`); `apply_second_opinion.py
+--write --bands data/reread-index` put **39,578 of them on 540 documents**, in
+McFondue's `second_read` slot (model `PP-OCRv6-hist-medium-page-column`).
+Reversible: McFondue's reading stays in `data/fullpage/` and
+`data/fullpage-corpus-column.json`; applying that sidecar again restores it.
+Typed pages keep the engine's second reading (`PP-OCRv6-on-kraken-lines`),
+because medium's 171 vs 164 on typed is under the ten-percent rule.
+
+`bench_search.py --matrix --held-out` on the records as written:
+
+| held-out, top five | by name, before | **by name, now** | crossing, before | **crossing, now** |
+|---|---|---|---|---|
+| cursive (212) | 64 | **107** | 128 | **143** |
+| mixed (33) | 19 | 21 | 16 | 21 |
+| typed (191) | 164 | 162 | 154 | 148 |
+| blended (436) | 247 (57%) | **290 (67%)** | 298 | **312** |
+
+The bench-time sidecar said 113 on cursive; written, it is 107 — the same
+pool-competition gap McFondue showed on 10-10 (68 → 65), every cursive row
+now carrying a stronger second spelling. Typed gives back two names and six
+on the crossing to the same competition; that is the next thing to look at
+if the ranking is tuned (the 10-10 structural fix, `second_read` as a list
+keyed by model, is still the right shape for it). The application reads the
+records at search time, so the search already sees this.
+
+**Running:** the 1923 window re-read, `reread_fullpage.py --shard I/2
+--in-dir data/dossiers-1923/lines --out-dir data/dossiers-1923/lines-ppocrv6`
+(scopes `ppocrv6-1923-0/1`, logs `data/ppocrv6-1923-*.log`, resumable:
+rerun the same two lines). Then the thirty spellings in
+`data/kubach-queries.txt` through `search_lines.py --dir
+data/dossiers-1923/lines-ppocrv6`.
+
 ## 2026-10-12, afternoon — a shippable recogniser beats CHURRO: kraken's PP-OCRv6 medium
 
 **Allan asked for a search of the field.** The find: Benjamin Kiessling
