@@ -6,6 +6,83 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-12, 19:00 — few-shot on the clerks' hands: +1%, closed; the held-out sheet for OL_PRJ_19266 p4 drifted
+
+**Few-shot adaptation of PP-OCRv6 medium (step 3), measured, not worth
+shipping.** `scripts/build_fewshot_lines.py` cuts one training line per
+hand-read cursive or mixed name of `data/truth-heldout/` from the kraken
+lines (`data/fullpage-heldout15-lines-poly.json`), clipped to the name
+column, Allan's reading as ground truth, kraken `path` format in
+`data/fewshot/lines/`: **222 lines of 245 names** (23 skipped: ditto marks,
+stacked lines, no line; 63 stitched from two side-by-side segments, slivers
+of the next column dropped; 26 names moved to the band medium's reading
+matches, see below). Pages dealt into two folds (A: 4 pages/107 lines, B:
+4/115), so each model is scored only on pages it never saw; `--merge`
+joins the fold readings with medium's for the typed pages into one
+sidecar. Training: `ketos -d cuda:0 --precision bf16-mixed train --arch
+ppocrv6 -i ~/.cache/kraken/ppocrv6-hist/medium.safetensors --resize union
+-f path -t data/fewshot/train-A.txt -p 0.9 -q fixed -N 20 -B 4 --lrate
+1e-4` (batch 8 is CUDA OOM on the 6 GB card; `-q early` crashes the
+PP-OCRv6 scheduler with `OverflowError: cannot convert float infinity to
+integer`; 4 min a fold at 20 epochs, 12 at 60). Validation on the 10 %
+split of the training pages climbs (0.68/0.79 at 20 epochs, 0.76/0.91 at
+60) — that is the training hands being learnt. On the fold-out pages:
+
+| held-out, top five by name | medium | few-shot 20 ep. | few-shot 60 ep. |
+|---|---|---|---|
+| cursive (212), truth as written | 113 | 109 | 108 |
+| cursive (212), OL_PRJ_19266 p4 renumbered | 123 | 126 | 125 |
+| mixed (33) | 22 | 23 | 22 |
+| crossing, cursive, renumbered | 161 | 166 | 166 |
+
++2 to +3 of 212 (about 1 %) with the truth right, −4 with it as written:
+under the two-digit rule by an order of magnitude. The paper's 40–80 lines
+lift *one hand*; these are a dozen clerks' hands and the pages the model is
+scored on are other clerks again. **Closed; medium stays as it is.** The
+fold models and sidecars sit in `data/fewshot/` (gitignored) and must not
+ship anyway — they were trained on the held-out set.
+
+**The sheet for OL_PRJ_19266 p4 is off by one band from row 5 and by two
+from row 23** (24 of its 28 names), found while pairing names with ink: the
+crop labelled "jose ribeiro" showed *Vandestraeten Marie*. Measured on a
+scratch copy of the truth with that page renumbered by similarity to
+medium's band readings, in page order (`align_page` in the script), the
+bench as written goes cursive **107 → 122** by name, 143 → 160 on the
+crossing, blended 290 → 305; with medium's bench-time sidecar 113 → 123.
+The truth file is Allan's and was not touched; the renumbering is a
+one-line apply once he says so. Every other page lines up (the stray ±1s
+are family members with near-identical names).
+
+**The 1923 window, searched (see 17:30 above): no Kubach.** Allan corrected
+the route note: he was never let off the ship in Canada or the USA, so the
+boarding port on any manifest is European.
+
+**Off-corpus, for the citizenship file (Allan's question, answered in
+chat):** the one document that ties the German birth to the Brazilian life
+is his Arquivo Nacional prontuário (RNE W039916-0, ficha 1.138 SRE Paraná
+23 Feb 1939, index card BR_RJANRIO_BN_0_FIN_49_02_17, ref. 26.374, processo
+310): its modelo-19 sheet carries date/port/ship of entry and the passport
+data. A request text in Portuguese was written for Allan's mother, who has
+a contact there; it also asks for a carta negativa de naturalização
+(1823–1959) and a certidão de desembarque. Free databases named and
+linked: FamilySearch **Brazil, Foreigner Files 1653–2022** (the AN
+registration files, 3.5 M persons, arrival date as a field), Canada Form
+30A 1919–24 (refused passengers are still listed), Ellis Island 1892–1924,
+Canada→USA border lists, Hamburg lists 1920–34 (images locked to
+FamilySearch Centers; Ancestry has them, index partial after 1914 — browse
+the 1923 Namensverzeichnis), Bremen 1920–39 (Die Maus, free: **searched
+today with Soundex, 1,126 hits, no August Kubach** — the Kubachs there are
+Karl of Kochendorf 1925 and four in 1933–37; a third of the 1920s lists
+are lost), LEO-BW Baden emigration, Generallandesarchiv Karlsruhe,
+Politisches Archiv AA (consulate Curitiba Matrikel).
+
+**Next, in order.** (1) Allan's word on renumbering the drifted page.
+(2) Pool-competition tuning / `second_read` as a list keyed by model (the
+10-10 structural fix): typed gave back two names when medium went on the
+cursive rows. (3) The remaining 1919–24 dossiers not on disk, when he
+downloads them: `reread_fullpage.py` reads a window at 1.3 s a page on the
+GPU, then `search_lines.py`.
+
 ## 2026-10-12, 17:30 — the 1923 window re-read with PP-OCRv6 medium: no Kubach
 
 **Done.** Both shards finished: **6,823 of 6,823 pages**, 0 failures, 143 min
