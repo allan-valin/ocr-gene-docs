@@ -6,6 +6,51 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-12, 17:30 — the 1923 window re-read with PP-OCRv6 medium: no Kubach
+
+**Done.** Both shards finished: **6,823 of 6,823 pages**, 0 failures, 143 min
+on the RTX 4050 (two workers, three render threads each), in
+`data/dossiers-1923/lines-ppocrv6/` beside McFondue's
+`data/dossiers-1923/lines/`. Same line geometry, so a page's row reads the
+same way in both and `search_lines.py` works on either directory.
+
+**Searched.** The thirty spellings in `data/kubach-queries.txt` through
+`search_lines.py --dir data/dossiers-1923/lines-ppocrv6 --limit 5` (about a
+minute a spelling, one core; hits kept in `data/kubach-1923-ppocrv6-hits.txt`).
+Nothing is him. Every surname-shaped hit was cut from the PDF and read by eye:
+
+| hit | score | ink says | row |
+|---|---|---|---|
+| `kumbach 2on 69f`, PRJ_18860 p6 | 0.92 | **Grumbach**, in the origin column (Böhringen, Bühl around it — Baden towns) | Zuchetti, chauffeur |
+| `Rubach`, ENT_016690 p7 | 1.00 on "Rubach" | Rubach, correct | Rubach **Franz**, married carpenter, with Anna |
+| `Dubach Jahob`, PRJ_18804 p5/p11 | 0.83 | Dubach Jakob | not him |
+| `Stefan / Karol Kubiak`, PRJ_18730 | 0.91 | Kubiak, Polish family | not him |
+| `Trumbach Herm.`, `Grumbach Lévie`, `Suzanna Grumbach` | 0.86 | as read | not him |
+
+The given-name spellings (`August Kubach`, `Fritz Kubach`, …) rank bare
+given names at 0.90 — the scorer's first-word rule — and their surnames are
+Wandsberg, Kleinschmidt, Indrad, Martines: none near Kubach. McFondue's
+reading of the same window had found "Rubache"/"Rubiak" for the same rows;
+medium's reading is cleaner (`Sültenfuss, Wilhelm / Rubach Franz / Anna`
+where McFondue had `ultenjurs / Rubache / Taang`), so the negative is firmer
+than before, not merely repeated.
+
+**What this means.** The 1923 window on disk — 2,016 dossiers, Rio (OL) and
+Santos (BS) — holds no August Kubach under a reading either recogniser can
+make, and the hostel registers 1911 and Oct 1922 – Dec 1925 were negative
+earlier. What remains open is what the window does not contain: dossiers not
+yet downloaded, a page the segmenter cut badly, or a hand neither model
+reads (the few-shot step below is the test of that last one). Allan's
+reading that he may have come through New York, not a German port, points
+at the BS/OL lists of US-origin ships, which these dossiers include.
+
+**Next, in order.** (3) Few-shot adaptation of medium on Allan's 436
+hand-read held-out names (the paper: 40–80 lines of a hand lift it); measure
+on a held-out split of those pages, not on the training lines. Then, if it
+clears the ten-percent bar, the 1923 window again — at 1.3 s a page it is
+2.4 h on the GPU, resumable. The pool-competition tuning (typed 164 → 162)
+stays after that.
+
 ## 2026-10-12, 14:30 — PP-OCRv6 medium is on the rows: held-out cursive 64 → 107
 
 **Applied corpus-wide.** `reread_fullpage.py --device cuda:0` re-read the
@@ -38,10 +83,10 @@ if the ranking is tuned (the 10-10 structural fix, `second_read` as a list
 keyed by model, is still the right shape for it). The application reads the
 records at search time, so the search already sees this.
 
-**Running:** the 1923 window re-read, `reread_fullpage.py --shard I/2
---render-workers 3 --in-dir data/dossiers-1923/lines --out-dir
-data/dossiers-1923/lines-ppocrv6` (scopes `ppocrv6-1923-0/1`, logs
-`data/ppocrv6-1923-*.log`, resumable: rerun the same two lines).
+**Ran (finished 17:00, see the entry above):** the 1923 window re-read,
+`reread_fullpage.py --shard I/2 --render-workers 3 --in-dir
+data/dossiers-1923/lines --out-dir data/dossiers-1923/lines-ppocrv6` (scopes
+`ppocrv6-1923-0/1`, logs `data/ppocrv6-1923-*.log`).
 
 **Why the GPU sat at 5% (Allan asked twice).** Measured on the held-out
 pages under the same load: `batch_size` 8 → 62 s and 32 → CUDA out of memory
