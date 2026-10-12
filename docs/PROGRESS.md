@@ -6,6 +6,50 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-12 — DeepSeek-OCR-2 cannot read this ink: rejected
+
+**Allan asked** whether DeepSeek-OCR (the "Contexts Optical Compression"
+paper, Oct 2025; DeepSeek-OCR-2 "Visual Causal Flow", Jan 2026) was worth a
+test. It was the one VLM of CHURRO's shape with a licence this project can
+ship — **Apache-2.0 weights, 3B MoE, 570M active** — so the question was
+whether it reads cursive like CHURRO (research-only) rather than like the
+shippable stack. It was cheap to ask: the llama.cpp here already carries
+`PROJECTOR_TYPE_DEEPSEEKOCR2`, the GGUF is 3.6 GB (`sabafallah/DeepSeek-OCR-2-GGUF`,
+q8_0 decoder + q8_0 mmproj, in the hub cache), and `spike_vlm_on_lines.py`
+reads any llama.cpp VLM over kraken's held-out lines.
+
+**Plumbing** (`read_vlm.py`, tested): a `deepseek-ocr` style — no persona,
+the picture before the words, row prompt `"\nFree OCR."` as its card has it,
+and llama-server started `--no-jinja --chat-template deepseek-ocr` because
+the GGUF carries no template and the server's default jinja engine drops the
+image marker from a built-in name (`number of media markers in text (0)`,
+HTTP 400). The spike takes `--style`, `--model`, `--mmproj`; the sidecar tag is
+the weights' file name.
+
+**Cursive, the page it was for** (ENT_0163 p4, 75 lines, 40 bands, 672 s on
+8 CPU threads = 9 s a line): **0 of 40 readings are name-shaped.** 20 are
+LaTeX integrals, 14 HTML tables, 2 token loops, 1 refusal ("I am sorry, but
+the image provided"), 3 other junk. CHURRO read 40 names on the identical
+crops; McFondue reads about a third of them. The model's training is printed
+documents, charts and formulae, and shown a cursive line it emits the thing it
+was trained on. Allan's reading of the paper was right: the OCR is the test
+bed for compressing context into vision tokens, not a handwriting model.
+
+**Typed** (ENT_0167 p2, 44 bands, 6.7 s a line): the right alphabet, below
+CHURRO on the same crops (`DETECT LEOPOLD` for `DEJEL LEOPOLD`, `SOUND
+LEONHARD` for `SCHMIDT LEONHARD`, `BADER` for `RADER`), and the engine on
+kraken's lines is already 164 of 191 at 0.1 s a line. The pass was stopped
+there; the partial sidecar is `data/fullpage-heldout15-deepseek-ocr2-column.json`
+(two pages), the page lists `data/heldout-pages-{cursive-first,typed}.json`.
+
+**Against the other branch, held-out at five by name:** shippable stack
+(engine + McFondue on kraken's lines) cursive 64 / typed 164; CHURRO 107 /
+171; DeepSeek-OCR-2 adds nothing on cursive and reads typed worse than both,
+at 150× McFondue's cost a line and 3× CHURRO's. Rejected; nothing applied.
+The licence gap CHURRO leaves is still open: the next candidates stay a
+permissive fine-tune on CHURRO-DS, or Qwen2.5-VL-7B measured again on
+kraken's lines rather than the engine's crops.
+
 ## 2026-10-10, afternoon — CHURRO on kraken's lines reads half the cursive names; 1923 is on disk
 
 **The gate, and it is not close.** `spike_vlm_on_lines.py` cuts every line

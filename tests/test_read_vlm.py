@@ -205,6 +205,52 @@ class TestMessages:
         assert churro["STYLES"]["paddleocr"]["system"] is None
         assert churro["STYLES"]["paddleocr"]["row"] == "OCR:"
 
+    def test_deepseek_ocr_is_asked_with_the_image_first_and_no_persona(self):
+        """DeepSeek-OCR's card prompts `<image>\\nFree OCR.`; llama.cpp's
+        `deepseek-ocr` template wraps nothing, so the order of the parts is the
+        prompt."""
+        style = churro["STYLES"]["deepseek-ocr"]
+        assert style["system"] is None
+        assert style["row"] == "\nFree OCR."
+        assert style["image_first"] is True
+        assert style["chat_template"] == "deepseek-ocr"
+        got = churro["messages"]("\nFree OCR.", "abc", system=None, image_first=True)
+        assert [m["role"] for m in got] == ["user"]
+        assert got[0]["content"][0]["type"] == "image_url"
+        assert got[0]["content"][1]["text"] == "\nFree OCR."
+
+    def test_churro_keeps_the_words_before_the_image(self):
+        got = churro["messages"]("read this", "abc")
+        assert got[1]["content"][0]["type"] == "text"
+
+
+class TestServerFromStyle:
+    """The server is told the model's template when the GGUF carries none."""
+
+    def test_a_style_with_a_chat_template_passes_it_to_llama_server(self):
+        s = churro["Server"].from_style(Path("m.gguf"), Path("p.gguf"), 1, 1,
+                                        churro["STYLES"]["deepseek-ocr"])
+        i = s.cmd.index("--chat-template")
+        assert s.cmd[i + 1] == "deepseek-ocr"
+        # a named template is one of llama.cpp's legacy ones; under the server's
+        # default jinja engine it renders the turn without the image marker
+        assert "--no-jinja" in s.cmd
+        assert s.image_first is True
+        assert s.system is None
+
+    def test_churro_style_passes_no_template_and_keeps_its_persona(self):
+        s = churro["Server"].from_style(Path("m.gguf"), Path("p.gguf"), 1, 1,
+                                        churro["STYLES"]["churro"])
+        assert "--chat-template" not in s.cmd
+        assert s.image_first is False
+        assert s.system == churro["SYSTEM"]
+
+    def test_the_turn_a_server_sends_follows_its_style(self):
+        s = churro["Server"].from_style(Path("m.gguf"), Path("p.gguf"), 1, 1,
+                                        churro["STYLES"]["deepseek-ocr"])
+        turn = s.turn("\nFree OCR.", "abc")
+        assert turn[0]["content"][0]["type"] == "image_url"
+
 
 class TestReadRows:
     """One row the server chokes on is one row unread, not a run lost.

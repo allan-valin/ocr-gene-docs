@@ -84,21 +84,31 @@ STRIP_PROMPT = ("This is the name column cut from a scanned passenger list. "
 # CHURRO's client sends a persona and wants tags, PaddleOCR-VL's card sends the
 # two characters `OCR:` and nothing else -- it is a recogniser with a chat
 # template, not a chat model, and a system message it never saw only costs tokens.
+# DeepSeek-OCR (Apache-2.0, 3B MoE) is prompted `<image>\nFree OCR.` -- the
+# picture first, then the words. Its GGUF carries no chat template; llama.cpp's
+# `deepseek-ocr` template wraps nothing and joins the image marker to the text
+# with no newline, so the newline is the prompt's own.
 STYLES = {
     "churro": {"system": SYSTEM, "row": ROW_PROMPT},
     "paddleocr": {"system": None, "row": "OCR:"},
+    "deepseek-ocr": {"system": None, "row": "\nFree OCR.", "image_first": True,
+                     "chat_template": "deepseek-ocr"},
 }
 
 
-def messages(prompt: str, b64: str, system: str | None = SYSTEM) -> list[dict]:
-    """The chat turn a crop is read with: a persona only if the model has one."""
+def messages(prompt: str, b64: str, system: str | None = SYSTEM,
+             image_first: bool = False) -> list[dict]:
+    """The chat turn a crop is read with: a persona only if the model has one,
+    the picture before or after the words as the model's card has it."""
     out = []
     if system:
         out.append({"role": "system", "content": system})
-    out.append({"role": "user", "content": [
-        {"type": "text", "text": prompt},
-        {"type": "image_url",
-         "image_url": {"url": f"data:image/png;base64,{b64}"}}]})
+    parts = [{"type": "text", "text": prompt},
+             {"type": "image_url",
+              "image_url": {"url": f"data:image/png;base64,{b64}"}}]
+    if image_first:
+        parts.reverse()
+    out.append({"role": "user", "content": parts})
     return out
 
 
@@ -121,13 +131,32 @@ class Server:
     """A llama-server holding the model, so a hundred crops load it once."""
 
     def __init__(self, model: Path, mmproj: Path, port: int, threads: int,
-                 ctx: int = 8192, system: str | None = SYSTEM):
+                 ctx: int = 8192, system: str | None = SYSTEM,
+                 image_first: bool = False, chat_template: str | None = None):
         self.url = f"http://127.0.0.1:{port}"
         self.system = system
+        self.image_first = image_first
         self.cmd = [str(LLAMA / "llama-server"), "-m", str(model),
                     "--mmproj", str(mmproj), "--port", str(port),
                     "-t", str(threads), "-c", str(ctx), "--no-warmup"]
+        if chat_template:
+            # llama-server renders chat with jinja by default, and a built-in
+            # template name only works through the legacy engine: with jinja
+            # the image part is dropped and the server says 400.
+            self.cmd += ["--no-jinja", "--chat-template", chat_template]
         self.proc = None
+
+    @classmethod
+    def from_style(cls, model: Path, mmproj: Path, port: int, threads: int,
+                   style: dict, **kw) -> "Server":
+        """A server asked the way one of STYLES asks."""
+        return cls(model, mmproj, port, threads, system=style["system"],
+                   image_first=bool(style.get("image_first")),
+                   chat_template=style.get("chat_template"), **kw)
+
+    def turn(self, prompt: str, b64: str) -> list[dict]:
+        return messages(prompt, b64, getattr(self, "system", SYSTEM),
+                        getattr(self, "image_first", False))
 
     def __enter__(self):
         log = open(ROOT / "data" / "churro-server.log", "w")
@@ -149,7 +178,7 @@ class Server:
     def read(self, image: Path, prompt: str, predict: int = 512) -> tuple[str, float]:
         b64 = base64.b64encode(image.read_bytes()).decode()
         body = json.dumps({
-            "messages": messages(prompt, b64, getattr(self, "system", SYSTEM)),
+            "messages": self.turn(prompt, b64),
             "temperature": 0.0, "n_predict": predict, "max_tokens": predict,
         }).encode()
         req = urllib.request.Request(f"{self.url}/v1/chat/completions", data=body,
@@ -441,12 +470,13 @@ def main(argv=None) -> int:
         return 0
 
     if a.serve:
-        with Server(model, mmproj, a.port, a.threads, system=style["system"]) as s:
+        with Server.from_style(model, mmproj, a.port, a.threads, style) as s:
             return run(s)
 
     class Remote(Server):
         def __init__(self, url):
             self.url, self.proc, self.system = url, None, style["system"]
+            self.image_first = bool(style.get("image_first"))
     return run(Remote(a.url))
 
 

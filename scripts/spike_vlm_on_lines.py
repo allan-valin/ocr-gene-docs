@@ -30,8 +30,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "scripts")]
 
-from read_vlm import ROW_PROMPT, SYSTEM, Server, find  # noqa: E402
+from read_vlm import STYLES, Server, find  # noqa: E402
 from spike_fullpage import chosen_image, onto_bands  # noqa: E402
+
+
+def tag_for(model: Path) -> str:
+    """What a sidecar read by these weights is named after: CHURRO's keeps the
+    tag the earlier sidecars carry, anything else is its file's name."""
+    return model.name.replace("churro-3B.", "churro-3B-").replace(".gguf", "")
 
 
 def column_of(geo: dict) -> tuple[float, float]:
@@ -83,6 +89,8 @@ def main(argv=None) -> int:
     ap.add_argument("--work", type=Path, default=ROOT / "data" / "pagecache")
     ap.add_argument("--model", type=Path, default=None)
     ap.add_argument("--mmproj", type=Path, default=None)
+    ap.add_argument("--style", choices=sorted(STYLES), default="churro",
+                    help="how the model is asked (see read_vlm.STYLES)")
     ap.add_argument("--serve", action="store_true")
     ap.add_argument("--port", type=int, default=8788)
     ap.add_argument("--threads", type=int, default=6)
@@ -91,12 +99,14 @@ def main(argv=None) -> int:
 
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = None
-    model = a.model or find("churro-3B.Q4_K_M.gguf")
-    mmproj = a.mmproj or find("churro-3B.mmproj-f16.gguf")
+    style = STYLES[a.style]
+    model = a.model or (a.style == "churro" and find("churro-3B.Q4_K_M.gguf"))
+    mmproj = a.mmproj or (a.style == "churro" and find("churro-3B.mmproj-f16.gguf"))
     if not model or not mmproj:
-        print("no CHURRO weights in the hub cache")
+        print("no weights: --model and --mmproj, or CHURRO's in the hub cache")
         return 1
-    tag = model.name.replace("churro-3B.", "churro-3B-").replace(".gguf", "")
+    tag = tag_for(model)
+    row_prompt = style["row"]
 
     by_file = {}
     for f in a.records.glob("*.json"):
@@ -142,7 +152,7 @@ def main(argv=None) -> int:
                 tmp = a.work / f"{doc[:8]}-p{page}-l{i}-vlm.png"
                 piece.save(tmp)
                 try:
-                    text, _ = server.read(tmp, ROW_PROMPT, predict=64)
+                    text, _ = server.read(tmp, row_prompt, predict=64)
                 except Exception as e:  # llama-server says 500 on a crop it cannot see
                     print(f"    line {i} refused: {e}")
                     text = ""
@@ -162,10 +172,10 @@ def main(argv=None) -> int:
         print(f"wrote {out}: {rows} lines in {time.time() - began:.0f}s")
 
     if a.serve:
-        with Server(model, mmproj, a.port, a.threads, system=SYSTEM) as server:
+        with Server.from_style(model, mmproj, a.port, a.threads, style) as server:
             run(server)
     else:
-        server = Server(model, mmproj, a.port, a.threads, system=SYSTEM)
+        server = Server.from_style(model, mmproj, a.port, a.threads, style)
         server.url = f"http://127.0.0.1:{a.port}"
         run(server)
     return 0
