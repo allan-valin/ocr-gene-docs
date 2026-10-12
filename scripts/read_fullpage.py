@@ -95,10 +95,11 @@ def read_with_fallback(im, rec_models: dict, device: str, read=None) -> list[dic
         return read(im, None, rec_models.get("cpu"), device="cpu")
 
 
-def collect(out_dir: Path, records: Path) -> tuple[dict, dict]:
-    """The per-page files as two things: McFondue's column reading, by row,
-    for the pages it read; and the raw lines of the typed pages for the
-    engine to read."""
+def collect(out_dir: Path, records: Path, tag: str = MODEL_TAG) -> tuple[dict, dict]:
+    """The per-page files as two things: the recogniser's column reading, by
+    row, for the pages it read (McFondue's unless `tag` says another model
+    re-read them, see `reread_fullpage.py`); and the raw lines of the typed
+    pages for the engine to read."""
     by_hash = {}
     for f in records.glob("*.json"):
         try:
@@ -124,7 +125,7 @@ def collect(out_dir: Path, records: Path) -> tuple[dict, dict]:
         _by_line, by_col = onto_bands(lines, geo)
         if by_col:
             column.setdefault(doc, {})[str(page)] = by_col
-    sidecar = {"model": MODEL_TAG, "by": "row", "variant": "column", "read": column}
+    sidecar = {"model": tag, "by": "row", "variant": "column", "read": column}
     return sidecar, typed
 
 
