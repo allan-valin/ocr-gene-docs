@@ -83,3 +83,24 @@ def test_shards_split_the_due_pages(tmp_path):
     b = rr["shard"](rr["pages_due"](src, out), "1/2")
     assert sorted(f.name for f in a + b) == [f"d{i}-p2.json" for i in range(5)]
     assert not set(a) & set(b)
+
+
+def test_pages_are_rendered_ahead_in_order(tmp_path, monkeypatch):
+    """Rendering a page from its PDF costs more than reading it, so the next
+    pages render in threads while the recogniser works; the order stays."""
+    import threading, time
+    started = []
+    def slow_image(work, pdf, page, scans, dpi, tmp):
+        started.append(page); time.sleep(0.05); return f"im{page}"
+    monkeypatch.setitem(rr["render_ahead"].__globals__, "page_image", slow_image)
+    files = []
+    for n in range(6):
+        f = tmp_path / f"d-p{n}.json"
+        f.write_text(json.dumps({"pdf": "d.pdf", "page": n, "lines": []})); files.append(f)
+    got = []
+    for f, d, img in rr["render_ahead"](files, tmp_path, tmp_path, 200, tmp_path, workers=3):
+        got.append((f.name, d["page"], img))
+        if len(got) == 1:
+            assert len(started) >= 2  # more than the first page was under way
+    assert [g[1] for g in got] == list(range(6))
+    assert [g[2] for g in got] == [f"im{n}" for n in range(6)]

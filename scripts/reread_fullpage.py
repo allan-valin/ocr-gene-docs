@@ -75,6 +75,31 @@ def page_image(work: Path, pdf: str, page: int, scans: Path, dpi: int, tmp: Path
     return render(scan, page, dpi, tmp)
 
 
+def render_ahead(files: list[Path], work: Path, scans: Path, dpi: int, tmp: Path,
+                 workers: int = 3):
+    """(file, its JSON, its page image) in order, the images made `workers`
+    pages ahead in threads. pdftoppm is a subprocess, so threads overlap it;
+    with one thread the recogniser idles for the seconds a render takes."""
+    from concurrent.futures import ThreadPoolExecutor
+    def job(f):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        return d, page_image(work, d["pdf"], int(d["page"]), scans, dpi, tmp)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        pending = []
+        it = iter(files)
+        for f in it:
+            pending.append((f, pool.submit(job, f)))
+            if len(pending) >= workers:
+                break
+        while pending:
+            f, fut = pending.pop(0)
+            nxt = next(it, None)
+            if nxt is not None:
+                pending.append((nxt, pool.submit(job, nxt)))
+            d, img = fut.result()
+            yield f, d, img
+
+
 def write_page(out: Path, src_file: Path, lines: list[dict], model: str, secs: float) -> Path:
     """The re-read page under the original's name, every key of the original
     kept (`search_lines.py` wants the book), whole or not at all."""
@@ -103,6 +128,8 @@ def main(argv=None) -> int:
                     help="render resolution for pages without a cached image "
                          "(read_hospedaria.py read the 1923 window at 200)")
     ap.add_argument("--shard", default=None, help="I/N: this worker's share")
+    ap.add_argument("--render-workers", type=int, default=3,
+                    help="pages rendered ahead in threads while one is read")
     ap.add_argument("--limit", type=int, default=0, help="pages to read this run")
     ap.add_argument("--collect", action="store_true")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "fullpage-ppocrv6-corpus",
@@ -131,10 +158,9 @@ def main(argv=None) -> int:
     model = load_recogniser(a.model, a.device)
     began, read = time.time(), 0
     tmpdir = tempfile.TemporaryDirectory()
-    for f in todo:
-        d = json.loads(f.read_text(encoding="utf-8"))
+    for f, d, img in render_ahead(todo, a.work, a.scans, a.dpi, Path(tmpdir.name),
+                                  workers=max(1, a.render_workers)):
         t0 = time.time()
-        img = page_image(a.work, d["pdf"], int(d["page"]), a.scans, a.dpi, Path(tmpdir.name))
         if img is None:
             print(f"  {d['pdf'][16:28]} p{d['page']}: no image, skipped", flush=True)
             continue

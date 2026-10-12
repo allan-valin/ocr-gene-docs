@@ -39,9 +39,19 @@ keyed by model, is still the right shape for it). The application reads the
 records at search time, so the search already sees this.
 
 **Running:** the 1923 window re-read, `reread_fullpage.py --shard I/2
---in-dir data/dossiers-1923/lines --out-dir data/dossiers-1923/lines-ppocrv6`
-(scopes `ppocrv6-1923-0/1`, logs `data/ppocrv6-1923-*.log`, resumable:
-rerun the same two lines). Then the thirty spellings in
+--render-workers 3 --in-dir data/dossiers-1923/lines --out-dir
+data/dossiers-1923/lines-ppocrv6` (scopes `ppocrv6-1923-0/1`, logs
+`data/ppocrv6-1923-*.log`, resumable: rerun the same two lines).
+
+**Why the GPU sat at 5% (Allan asked twice).** Measured on the held-out
+pages under the same load: `batch_size` 8 → 62 s and 32 → CUDA out of memory
+against 46 s at 1 (lines pad to the widest, CTC gains nothing); kraken's
+`num_line_workers` 4 → 123 s (the pool pickles the page per line). The cost
+was **pdftoppm**: one 1923 page at 200 dpi took up to 13 s under load, inside
+the 5.5 s a page the shards logged, while recognition is a fraction of a
+second. `render_ahead` now renders the next three pages in threads while one
+is read: 2.5 → 1.3 s a page across both shards, GPU 5 → 66%. The corpus pass
+had cached images and no such cost. Then the thirty spellings in
 `data/kubach-queries.txt` through `search_lines.py --dir
 data/dossiers-1923/lines-ppocrv6`.
 
