@@ -55,13 +55,37 @@ def segmentation_of(lines: list[dict], width: int, height: int, imagename: str):
                         script_detection=False, lines=recs)
 
 
-def reread(im, lines: list[dict], model, pad: int = 8) -> list[dict]:
+def load_recogniser(path: Path, device: str = "cpu"):
+    """A kraken recogniser from either generation of weights: `.safetensors`
+    (kraken >= 7.1, the PP-OCRv6 base models among them) through
+    `kraken.models.load_models`, anything else through the CoreML loader."""
+    if path.suffix == ".safetensors":
+        from kraken.models import load_models
+        return load_models(path, tasks=["recognition"])[0]
+    from kraken.lib import models
+    return models.load_any(str(path), device=device)
+
+
+def predictions(model, im, seg, pad: int, device: str = "cpu"):
+    """Records for every line of `seg`, from a 7.1 model's `.predict` or the
+    older `rpred` -- both yield records with a prediction and cuts."""
+    if hasattr(model, "prepare_for_inference"):
+        from kraken.configs import RecognitionInferenceConfig
+        from kraken.ketos.util import to_ptl_device
+        accelerator, devices = to_ptl_device(device)
+        model.prepare_for_inference(RecognitionInferenceConfig(
+            padding=pad, accelerator=accelerator, device=devices, num_line_workers=0))
+        return model.predict(im, seg)
     from kraken import rpred
+    return rpred.rpred(model, im, seg, pad=pad)
+
+
+def reread(im, lines: list[dict], model, pad: int = 8, device: str = "cpu") -> list[dict]:
     seg = segmentation_of(lines, im.width, im.height, "page")
     out = []
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        for rec, line in zip(rpred.rpred(model, im, seg, pad=pad), lines):
+        for rec, line in zip(predictions(model, im, seg, pad, device), lines):
             cuts = []
             for cut in rec.cuts:
                 pts = cut if isinstance(cut[0], (list, tuple)) else [cut]
@@ -82,9 +106,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     from PIL import Image
-    from kraken.lib import models
     Image.MAX_IMAGE_PIXELS = None
-    model = models.load_any(str(a.model), device=a.device)
+    model = load_recogniser(a.model, a.device)
     by_hash = {}
     for f in a.records.glob("*.json"):
         d = json.loads(f.read_text(encoding="utf-8"))
@@ -102,7 +125,7 @@ def main(argv=None) -> int:
             geo = next((p.get("geometry") for p in rec.get("pages") or ()
                         if str(p.get("n")) == page), None) or {}
             im = Image.open(img).convert("L")
-            said = reread(im, lines, model)
+            said = reread(im, lines, model, device=a.device)
             _by_line, by_col = onto_bands(said, geo)
             col_side.setdefault(doc, {})[page] = by_col
             print(f"  {rec['file'][16:28]} p{page}: {len(by_col)} bands", flush=True)

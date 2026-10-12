@@ -31,3 +31,43 @@ def test_a_line_with_its_polygon_becomes_a_baseline_line_not_a_box():
     bare = spike["segmentation_of"]([{k: v for k, v in lines[0].items()
                                       if k not in ("boundary", "baseline")}], 1000, 2000, "p")
     assert bare.type == "bbox"
+
+
+class FakeRecord:
+    def __init__(self, text, cuts):
+        self.prediction, self.cuts = text, cuts
+
+
+class FakeSevenOne:
+    """A kraken 7.1 model: loaded by `kraken.models.load_models`, given its
+    config by `prepare_for_inference`, run through `.predict(im, segmentation)`,
+    no `rpred` involved."""
+    def __init__(self):
+        self.calls, self.config = [], None
+
+    def prepare_for_inference(self, config):
+        self.config = config
+
+    def predict(self, im, segmentation):
+        self.calls.append((segmentation.type, self.config.padding, self.config.accelerator))
+        for line in segmentation.lines:
+            yield FakeRecord("Kubach", [[(10, 0), (12, 0)]])
+
+
+def test_a_model_with_predict_is_read_through_it_and_the_padding_follows(tmp_path):
+    from PIL import Image
+    im = Image.new("L", (1000, 2000), 255)
+    lines = [{"x0": 0.1, "x1": 0.5, "y0": 0.2, "y1": 0.25, "text": "", "cuts": []}]
+    model = FakeSevenOne()
+    got = spike["reread"](im, lines, model, pad=8)
+    assert got[0]["text"] == "Kubach"
+    assert got[0]["cuts"] == [0.011]
+    assert model.calls == [("bbox", 8, "cpu")]
+
+
+def test_safetensors_weights_go_to_the_seven_one_loader(monkeypatch):
+    seen = {}
+    import kraken.models as km
+    monkeypatch.setattr(km, "load_models", lambda path, tasks=None: seen.update(path=path, tasks=tasks) or ["m"])
+    assert spike["load_recogniser"](Path("medium.safetensors"), "cpu") == "m"
+    assert seen["tasks"] == ["recognition"]

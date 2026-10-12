@@ -6,6 +6,63 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-12, afternoon — a shippable recogniser beats CHURRO: kraken's PP-OCRv6 medium
+
+**Allan asked for a search of the field.** The find: Benjamin Kiessling
+(kraken's author), "A Free Lunch? Adapting PP-OCRv6 for Historical Text
+Recognition" (arXiv 2609.20064, 17 Sep 2026). He adapts the engine's own
+architecture (PP-OCRv6, CTC, no language model, so no hallucination) for
+historical lines and releases generalized base models **for kraken, Apache-2.0,
+on Zenodo** (tiny 2.8 MB / small 13 MB / medium 64 MB; records 21788403 /
+21788405 / 21788410): 44 languages, 10 scripts, handwritten and printed,
+Portuguese, Spanish, Italian, German, French among them. kraken 7.1 (installed
+here, 7.1.1) loads them. Weights now in `~/.cache/kraken/ppocrv6-hist/`.
+
+**Measured the same afternoon, on the held-out kraken lines** (the 15 pages,
+2,486 lines, polygons on 9 pages, `data/fullpage-heldout15-lines-poly.json`
+built from `data/fullpage/`), through `spike_lines_model.py` — which gained a
+7.1 loader (`kraken.models.load_models` → `prepare_for_inference` →
+`predict`) beside the CoreML one. Medium: 217 s on CPU, **0.09 s a line**.
+`bench_search.py --matrix --held-out --second-opinion`, top five:
+
+| held-out, by name | on disk (engine + McFondue) | CHURRO (research) | **PP-OCRv6 medium** | PP-OCRv6 small |
+|---|---|---|---|---|
+| cursive (212) | 64 | 107 | **113** | — |
+| mixed (33) | 19 | 22 | 22 | 23 |
+| typed (191) | 164 | 171 | **171** | 171 |
+| blended (436) | 247 | 300 | **306** | 289 |
+| naming the crossing, blended | 298 | 329 | **333** | — |
+
+Sidecars: `data/fullpage-heldout15-ppocrv6-{medium,small}-column.json`.
+Cursive readings on ENT_0163 p4 are names, not noise: `Franco Gino`,
+`Chidora Antonina`, `Luciano Anela`, `Lynardi Giordano` where McFondue had
+`9 20`, `Chudora Butouina`, `uciarns Augeta`, `Lgnard Jontand`.
+
+**What this means.** Cursive by name alone goes 64 → 113 at five, +77% over
+what is on disk, past CHURRO, with a licence that ships and a cost that is
+McFondue's order (0.05 → 0.09 s a line), inside the pipeline as it stands:
+it takes McFondue's slot over kraken's lines. It also matches CHURRO on typed
+pages, above the engine's 164. The VLM question is closed for now — a CTC
+line recogniser trained on the right corpus wins on this ink.
+
+**Next, in order.** (1) Corpus pass: medium over every line in `data/fullpage/`
+(the McFondue readings' lines, polygons stored), written with
+`apply_second_opinion.py --write` in McFondue's place — at 0.09 s a line the
+40,475-row sidecar is about an hour; re-measure held-out after. (2) The 1923
+window: `data/dossiers-1923/lines/` holds 616k McFondue lines; re-read with
+medium (~15 h CPU, resumable, own scope) and run the thirty Kubach spellings
+through `search_lines.py` again — the reading that found nothing was
+McFondue's. (3) Few-shot: the paper says 40–80 lines of a hand lift it
+further; Allan's 436 hand-read names are that budget for the clerks' hands.
+
+**Also found, lower priority:** MEDUSA 0.1/0.2 (ENC-PSL, Qwen3.5-based
+line recognisers, CC-BY-4.0, medieval-trained, 4B/9B — Kiessling's paper
+beats them with fine-tuned PP-OCRv6 and they are 45× slower); Qwen3-VL and
+Qwen3.5 (all sizes Apache-2.0) — Qwen3-VL-8B leads in-context HTR on 5 of 6
+historical collections (arXiv 2609.37195), an option if a VLM is ever wanted;
+`wjbmattingly/nara-qwen-3.5-2b`, Qwen3.5-2B tuned on 18th–19th c. American
+cursive, Apache-2.0, page-level. No CHURRO 2.
+
 ## 2026-10-12 — DeepSeek-OCR-2 cannot read this ink: rejected
 
 **Allan asked** whether DeepSeek-OCR (the "Contexts Optical Compression"
