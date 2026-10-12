@@ -40,9 +40,11 @@ Santos (BS) — holds no August Kubach under a reading either recogniser can
 make, and the hostel registers 1911 and Oct 1922 – Dec 1925 were negative
 earlier. What remains open is what the window does not contain: dossiers not
 yet downloaded, a page the segmenter cut badly, or a hand neither model
-reads (the few-shot step below is the test of that last one). Allan's
-reading that he may have come through New York, not a German port, points
-at the BS/OL lists of US-origin ships, which these dossiers include.
+reads (the few-shot step below is the test of that last one). Allan
+corrected one thing here: he was never let off the ship in Canada or the
+USA, so whatever the route, the manifest's boarding port is European — the
+US-origin lists are not where to look, a European-port list of a ship that
+may have called at North America first is.
 
 **Next, in order.** (3) Few-shot adaptation of medium on Allan's 436
 hand-read held-out names (the paper: 40–80 lines of a hand lift it); measure
