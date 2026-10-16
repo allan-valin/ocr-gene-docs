@@ -1,12 +1,16 @@
-# kraken, a CTC line recogniser (Apache-2.0) with archive-trained models for
-# historical Latin-script hands. Measured 2026-09-30 as a second reading: see
-# docs/PROGRESS.md. Installed in its own venv because it pins its own torch:
+# kraken, a CTC line recogniser (Apache-2.0), and with it Kiessling's PP-OCRv6
+# medium weights for historical hands (Apache-2.0, Zenodo 21788410): the
+# second reading of every handwritten page, run per document at index time by
+# `desembarque.secondreading` since 2026-10-16. The launcher's Instalar step
+# installs this into .venv-ocr after a CPU-only torch and fetches the weights
+# to ~/.cache/kraken/ppocrv6-hist/medium.safetensors (61 MB). By hand:
 #
-#   python3 -m venv .venv-kraken
-#   .venv-kraken/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
-#   .venv-kraken/bin/pip install -r requirements-kraken.txt
+#   .venv-ocr/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+#   .venv-ocr/bin/pip install -r requirements-kraken.txt
+#   .venv-ocr/bin/python -c "from desembarque.secondreading import fetch_model; fetch_model()"
 #
-# Models (CC-BY-4.0, from Zenodo) go in ~/.cache/kraken/:
-#   McCATMuS_nfd_nofix_V1.mlmodel  https://zenodo.org/records/13788177
+# The corpus passes (`scripts/read_fullpage.py`, `scripts/reread_fullpage.py`)
+# ran in a separate .venv-kraken with a CUDA torch; that venv is not needed
+# for the application.
 kraken==7.1.1
 pypdfium2==5.13.0

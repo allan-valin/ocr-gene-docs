@@ -49,6 +49,14 @@ def install_command(root: Path = ROOT) -> list[list[str]]:
         [str(py), "-m", "pip", "install", "--upgrade", "pip"],
         [str(py), "-m", "pip", "install", "-r", str(root / "requirements.txt"),
          "-r", str(root / "requirements-ocr.txt")],
+        # the second reading of handwritten pages: kraken on a CPU-only torch
+        # (the default torch pulls CUDA, five gigabytes nobody here needs), and
+        # its PP-OCRv6 weights from Zenodo into ~/.cache/kraken
+        [str(py), "-m", "pip", "install", "--index-url",
+         "https://download.pytorch.org/whl/cpu", "torch", "torchvision"],
+        [str(py), "-m", "pip", "install", "-r", str(root / "requirements-kraken.txt")],
+        [str(py), "-c", "from desembarque.secondreading import fetch_model; "
+                        "print(fetch_model())"],
     ]
 
 

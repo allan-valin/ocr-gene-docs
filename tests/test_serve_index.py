@@ -1029,3 +1029,30 @@ def test_a_reading_written_as_two_words_is_not_flagged_as_glued():
 
     why = serve._why_check({"n": 1, "name_raw": "Palai Nello"}, Names({"PALAI": 9}))
     assert "colado" not in why
+
+
+def test_the_handwritten_pages_get_a_second_reading_when_indexed(server, engine, monkeypatch):
+    """The kraken reading used to be an offline pass over the corpus in a venv
+    of its own, so a launcher install read cursive pages with the engine alone.
+    It runs per document now, on the page images the engine just read."""
+    from desembarque import secondreading
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda pdf, n, dpi=200: Path(f"p{n}.png"))
+    calls = []
+
+    def read_record(record, images, **kw):
+        calls.append(images)
+        return {**record, "second_reading": {"pages": sorted(images)}}, 3
+
+    monkeypatch.setattr(secondreading, "read_record", read_record)
+    base, folder = server
+    docs(folder, 1)
+
+    class Job:
+        total = 2
+        page = 0
+
+    data = serve.transcribe_document(folder / "doc0.pdf", Job())
+    assert calls == [{1: Path("p1.png"), 2: Path("p2.png")}]
+    assert data["second_reading"] == {"pages": [1, 2]}
+    assert data["rows"], "the engine's rows are still the record's"

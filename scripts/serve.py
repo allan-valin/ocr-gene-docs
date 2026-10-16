@@ -53,6 +53,7 @@ from desembarque import search as searchlib          # noqa: E402
 from desembarque.gazetteer import (Names, fold, menu_for,   # noqa: E402
                                    names_by_language, spoken_names)
 from desembarque import pdf as pdflib               # noqa: E402
+from desembarque import secondreading               # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -449,12 +450,14 @@ def transcribe_document(pdf: Path, job) -> dict:
 
     ident = identify(pdf)
     pages, rows, cover_text, voyage = [], [], "", None
+    images: dict[int, Path] = {}
     for n in range(1, job.total + 1):
         job.page = n
         img = page_image(pdf, n, CACHE) or render_page(pdf, n, dpi=200)
         if img is None:
             pages.append({"n": n, "error": "render failed"})
             continue
+        images[n] = img
         want = text_wanted(n, bool(ident.notation) or bool(cover_text),
                            is_complete(voyage))
         res = eng.transcribe_page(img, classify(n), source=pdf, page=n,
@@ -489,7 +492,7 @@ def transcribe_document(pdf: Path, job) -> dict:
             rows.append(r)
 
     ident = identify(pdf, cover_text=cover_text or None)
-    return {
+    record = {
         "schema": searchlib.SCHEMA,
         # how the pages were read, as opposed to how the record was parsed. A
         # re-parse lifts `schema` and must not lift this one.
@@ -503,6 +506,12 @@ def transcribe_document(pdf: Path, job) -> dict:
         "rows": rows,
         **({"voyage": voyage.as_dict()} if voyage else {}),
     }
+    # The handwritten pages read a second time, by lines, when kraken and
+    # its model are installed. Without them the document is indexed by the
+    # engine alone and the record says so; it is poorer, not wrong.
+    record, _landed = secondreading.read_record(record, images,
+                                                log=lambda m: print(f"  {pdf.name}: {m}", flush=True))
+    return record
 
 
 def hash_index(folder: Path) -> dict[str, str]:

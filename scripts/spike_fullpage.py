@@ -22,8 +22,6 @@ import argparse
 import json
 import sys
 import time
-import unicodedata
-import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,73 +47,8 @@ def chosen_image(work: Path, pdf: str, page: int) -> Path | None:
     return p if p.exists() else None
 
 
-def line_record(line, rec, width: int, height: int) -> dict:
-    """One segmented line as the pass stores it: its box, its polygon and
-    baseline (so another recogniser can read the same ink without the 12 s
-    of segmenting again), and what this recogniser said, with where each
-    character sits."""
-    xs = [p[0] for p in line.boundary]
-    ys = [p[1] for p in line.boundary]
-    cuts, text = [], ""
-    if rec is not None:
-        for cut in rec.cuts:
-            pts = cut if isinstance(cut[0], (list, tuple)) else [cut]
-            cuts.append(sum(p[0] for p in pts) / len(pts) / width)
-        text = unicodedata.normalize("NFC", rec.prediction)
-    return {"x0": min(xs) / width, "x1": max(xs) / width,
-            "y0": min(ys) / height, "y1": max(ys) / height,
-            "text": text, "cuts": cuts,
-            "boundary": [[x / width, y / height] for x, y in line.boundary],
-            "baseline": [[x / width, y / height] for x, y in (line.baseline or [])]}
-
-
-def read_page(im, seg_model, rec_model, pad: int = 8, device: str = "cpu") -> list[dict]:
-    """Every line on the page: its box, its polygon, its text and where each character is."""
-    from kraken import blla, rpred
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        seg = (blla.segment(im, model=seg_model, device=device) if seg_model
-               else blla.segment(im, device=device))
-        if rec_model is None:
-            return [line_record(line, None, im.width, im.height) for line in seg.lines]
-        return [line_record(line, rec, im.width, im.height)
-                for rec, line in zip(rpred.rpred(rec_model, im, seg, pad=pad), seg.lines)]
-
-
-def clip(line: dict, x0: float, x1: float) -> str:
-    """The characters of a line whose cuts fall inside the column."""
-    text, cuts = line["text"], line["cuts"]
-    if len(cuts) != len(text):
-        # no per-character geometry: keep the whole line if it is mostly inside
-        mid = (line["x0"] + line["x1"]) / 2
-        return text if x0 <= mid <= x1 else ""
-    return "".join(c for c, x in zip(text, cuts) if x0 <= x <= x1)
-
-
-def onto_bands(lines: list[dict], geo: dict) -> tuple[dict, dict]:
-    """Each band's text, two ways, from the lines that cross the name column."""
-    cols = geo.get("columns") or []
-    x0, x1 = (cols[0], cols[1]) if len(cols) >= 2 else (0.05, 0.35)
-    bands = [tuple(b) for b in geo.get("rows") or [] if b and len(b) == 2]
-    by_line, by_col = {}, {}
-    for line in lines:
-        if line["x1"] < x0 or line["x0"] > x1:
-            continue
-        yc = (line["y0"] + line["y1"]) / 2
-        best, best_ov = None, 0.0
-        for n, (a, b) in enumerate(bands, start=1):
-            ov = min(b, line["y1"]) - max(a, line["y0"])
-            if ov > best_ov and a <= yc <= b:
-                best, best_ov = n, ov
-        if best is None:
-            continue
-        col = clip(line, x0, x1).strip()
-        whole = line["text"].strip()
-        if whole:
-            by_line[str(best)] = (by_line.get(str(best), "") + " " + whole).strip()
-        if col:
-            by_col[str(best)] = (by_col.get(str(best), "") + " " + col).strip()
-    return by_line, by_col
+from desembarque.secondreading import (  # noqa: E402,F401
+    clip, line_record, onto_bands, read_page)
 
 
 def main(argv=None) -> int:

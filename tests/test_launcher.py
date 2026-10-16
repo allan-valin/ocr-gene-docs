@@ -148,3 +148,15 @@ def test_a_server_too_busy_to_answer_is_not_reported_as_nothing_to_index():
     assert core.describe_index({"status": "idle"}) == "nada para indexar ainda"
     import inspect
     assert inspect.signature(core.index_status).parameters["timeout"].default >= 15
+
+
+def test_the_install_brings_the_second_reading_with_it():
+    """A launcher install read cursive pages with the engine alone until
+    2026-10-16: kraken and its model lived in a venv on one machine. The
+    install now puts kraken on a CPU-only torch into the same venv and
+    fetches the weights, so the friend's copy reads what Allan's reads."""
+    cmds = [" ".join(c) for c in core.install_command(Path("/r"))]
+    assert any("download.pytorch.org/whl/cpu" in c and "torch" in c for c in cmds)
+    assert any("requirements-kraken.txt" in c for c in cmds)
+    assert any("fetch_model" in c for c in cmds)
+    assert cmds.index(next(c for c in cmds if "fetch_model" in c)) == len(cmds) - 1

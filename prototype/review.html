@@ -552,7 +552,12 @@ function docmetaLine(){
 // `Raymundo Cassaudii` and the row showed `Cassaudii Nayomgo`. The split into
 // surname and given name is a derivation, and on these forms it is derived the
 // wrong way round often enough to matter; the reading is not.
+// A row read twice shows the second reading first: it exists only on the
+// handwritten pages, where the band reading is mostly noise (`Taurte` for
+// Joseph Brooks) and the line reading is the one worth a person's eyes. The
+// engine's own reading stays on the row and in the search.
 function nameText(r){
+  if(r.second_read && r.second_read.text) return r.second_read.text;
   if(r.name_raw) return r.name_raw;
   return [r.given, r.surname].filter(Boolean).join(" ");
 }
