@@ -496,6 +496,10 @@ window.addEventListener("load",async()=>{
          n===4 && document.querySelectorAll("#rdlist h3").length===3
          && document.querySelectorAll("#rdlist button[data-o]").length===4);
     }
+    ok("the scan pans by dragging: a press that moves scrolls the pane",
+       typeof panStart==="function" && (()=>{ const pane=q("#scanPane"); setZoom(3);
+         panStart({button:0, clientX:100, clientY:100, preventDefault(){}});
+         panMove({clientX:40, clientY:70}); const moved=pane.scrollLeft>=0 && PAN && PAN.moved; panEnd(); setZoom(1); return moved; })());
     ok("a row from a distrusted grid still offers other readings for each word",
        nameCell({name_raw: "Ling pilt", whole_line: true, line: "Ling · pilt 13 M."}).includes("altword"));
     ok("a row cut from a written line shows that line, not the band it came from",

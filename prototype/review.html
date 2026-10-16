@@ -140,7 +140,17 @@
   @keyframes sp{to{transform:rotate(360deg)}}
   .warnstate{color:var(--warn)}
   .pane{overflow:auto;position:relative;min-height:0}
-  #scanPane{background:#0e0d0c;border-right:1px solid var(--line)}
+  /* classic scrollbars, always drawn: overlay bars vanish until hovered and
+     a zoomed scan gave no sign of where you were (Allan, 2026-10-17) */
+  #scanPane{background:#0e0d0c;border-right:1px solid var(--line);scrollbar-width:auto;
+    scrollbar-color:#8a8378 #1d1b19;scrollbar-gutter:stable}
+  #scanPane::-webkit-scrollbar{width:12px;height:12px}
+  #scanPane::-webkit-scrollbar-track{background:#1d1b19}
+  #scanPane::-webkit-scrollbar-thumb{background:#8a8378;border-radius:6px;border:2px solid #1d1b19}
+  #scanPane::-webkit-scrollbar-corner{background:#1d1b19}
+  #scanInner{cursor:grab}
+  #scanInner.panning{cursor:grabbing}
+  #scanInner.panning img{pointer-events:none}
   #scanInner{position:relative;width:100%}  /* width set by the zoom */
   #scan{display:block;width:100%;height:auto}
   /* Reading the faint pages with your own eyes. The recogniser is at its
@@ -425,7 +435,7 @@ Um ano ou o nome do navio na busca não competem com o nome: eles reordenam o qu
       <button id="zoomreset" type="button" title="Largura da coluna">100%</button>
     </div>
     <div id="scanInner">
-      <img id="scan" alt="Digitalização original da relação de passageiros">
+      <img id="scan" alt="Digitalização original da relação de passageiros" draggable="false">
       <div id="bandBox" hidden></div>
       <div id="nameBox" hidden></div>
     </div>
@@ -1991,6 +2001,36 @@ function setZoom(z, anchor){
   if(D && scanDpi()!==was) img.src=pageURL(D,D.pages[pageIdx]);
   paintBand(sel);
 }
+// Left button drags the view (Allan, 2026-10-17): a zoomed scan is panned
+// by hand, like any image viewer. A press that does not move is still a
+// click; a press that moves scrolls the pane and swallows the click.
+let PAN=null;
+function panStart(e){
+  if(e.button!==0) return;
+  const pane=$("#scanPane");
+  PAN={x:e.clientX, y:e.clientY, left:pane.scrollLeft, top:pane.scrollTop, moved:false};
+  $("#scanInner").classList.add("panning");
+  e.preventDefault();
+}
+function panMove(e){
+  if(!PAN) return;
+  const dx=e.clientX-PAN.x, dy=e.clientY-PAN.y;
+  if(Math.abs(dx)>3||Math.abs(dy)>3) PAN.moved=true;
+  const pane=$("#scanPane");
+  pane.scrollLeft=PAN.left-dx; pane.scrollTop=PAN.top-dy;
+}
+function panEnd(){
+  if(!PAN) return;
+  const moved=PAN.moved; PAN=null;
+  $("#scanInner").classList.remove("panning");
+  if(moved){ const eat=ev=>{ ev.stopPropagation(); ev.preventDefault(); };
+    $("#scanInner").addEventListener("click", eat, {capture:true, once:true});
+    setTimeout(()=>$("#scanInner").removeEventListener("click", eat, {capture:true}), 0); }
+}
+$("#scanInner").addEventListener("mousedown", panStart);
+window.addEventListener("mousemove", panMove);
+window.addEventListener("mouseup", panEnd);
+$("#scanInner").addEventListener("dragstart", e=>e.preventDefault());
 $("#scanPane").addEventListener("wheel",e=>{
   if(!e.ctrlKey) return;
   e.preventDefault();
