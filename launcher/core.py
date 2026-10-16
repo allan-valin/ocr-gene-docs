@@ -86,7 +86,17 @@ def describe_index(st: dict) -> str:
     eta = st.get("eta_s")
     if status == "running":
         if eta is None:
-            parts.append("a estimar o tempo…")
+            # the first document gives no ETA until it is done, and that can
+            # be minutes: name it and say how long, so working looks unlike stuck
+            cur = str(st.get("current") or "")
+            if cur:
+                cur = cur.rsplit(".", 1)[0]
+                cur = cur if len(cur) <= 40 else cur[:37] + "…"
+                mins = int(st.get("elapsed_s") or 0) // 60
+                parts.append(f"a ler {cur} há {mins} min" if mins
+                             else f"a ler {cur}")
+            else:
+                parts.append("a estimar o tempo…")
         else:
             h = f"{eta / 3600:.1f}".rstrip("0").rstrip(".")
             parts.append(f"faltam cerca de {h} h" if eta >= 3600
@@ -116,9 +126,11 @@ class Server:
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
-    def start(self, folder: Path, port: int, wait: float = 60.0) -> bool:
+    def start(self, folder: Path, port: int, wait: float = 180.0) -> bool:
         """True once the port answers. False, with `last_error`, when the
-        process dies first or the wait runs out."""
+        process dies first or the wait runs out. Three minutes: the engine
+        loads its models before the port answers, and on a laptop already
+        busy with another job that took over a minute."""
         if self.alive:
             return True
         self.port = port

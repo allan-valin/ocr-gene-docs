@@ -82,3 +82,23 @@ def test_settings_remember_the_folder(tmp_path):
     core.save_settings(f, {"folder": "/x", "port": 8765})
     assert json.loads(f.read_text())["folder"] == "/x"
     assert core.load_settings(f)["port"] == 8765
+
+
+def test_the_first_document_shows_its_name_and_the_clock_before_any_eta():
+    """Allan watched the window for minutes on a folder of five PDFs and saw
+    nothing move: the first document takes 3+ min (nine pages, the engine
+    loading, another job on the machine), and until it is done there is no
+    ETA to print. The line names the document and says how long it has been
+    at it, so a person can tell working from stuck."""
+    s = core.describe_index({"status": "running", "done": 0, "skipped": 0,
+                             "total": 5, "eta_s": None, "failed": 0,
+                             "elapsed_s": 150,
+                             "current": "BR_RJANRIO_BS_0_RPV_ENT_015033_d0001de0001.pdf"})
+    assert "0 de 5" in s
+    assert "BR_RJANRIO_BS_0_RPV_ENT_015033" in s
+    assert "há 3 min" in s or "há 2 min" in s
+
+
+def test_the_server_is_given_three_minutes_to_load_its_models():
+    import inspect
+    assert inspect.signature(core.Server.start).parameters["wait"].default >= 180
