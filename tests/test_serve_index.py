@@ -1056,3 +1056,36 @@ def test_the_handwritten_pages_get_a_second_reading_when_indexed(server, engine,
     assert calls == [{1: Path("p1.png"), 2: Path("p2.png")}]
     assert data["second_reading"] == {"pages": [1, 2]}
     assert data["rows"], "the engine's rows are still the record's"
+
+
+def test_the_page_can_watch_a_document_being_read(server, monkeypatch):
+    """The engine reports bands and names as it goes (`desembarque.live`);
+    the server serves them at /api/live for the document's file name, and
+    nothing is left once the document is stored."""
+    from desembarque import live
+    base, folder = server
+    docs(folder, 1)
+    seen = {}
+
+    class Watched(FakeEngine):
+        def transcribe_page(self, image, kind="unknown", source=None, page=None, text=True):
+            seen["watching"] = live.watching()
+            live.emit({"event": "bands", "page": page, "bands": [(0.1, 0.2)], "written": [0]})
+            live.emit({"event": "read", "bands": [(0, "ROCA AMPARO")]})
+            seen["live"] = call(f"{base}/api/live?pdf=doc0.pdf")[1]
+            return super().transcribe_page(image, kind, source, page, text)
+
+    monkeypatch.setattr(engines, "_ACTIVE", Watched())
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+
+    class Job:
+        total = 1
+        page = 0
+
+    serve.transcribe_document(folder / "doc0.pdf", Job())
+    assert seen["watching"] == "doc0.pdf"
+    assert seen["live"]["rows"] == [{"n": 1, "name_raw": "ROCA AMPARO"}]
+    assert seen["live"]["at"] == 0 and seen["live"]["page"] == 1
+    _, after = call(f"{base}/api/live?pdf=doc0.pdf")
+    assert after["page"] == 0 and after["reading"] == []

@@ -1007,3 +1007,34 @@ def test_an_ordinal_glued_to_a_capital_is_taken_off():
     assert strip_ordinal("9szaac. burico") == "9szaac. burico"
     # a run of more than three digits is not a line number
     assert strip_ordinal("1234Maria") == "1234Maria"
+
+
+# --- watching a page being read ------------------------------------------------
+
+def test_a_watcher_hears_the_bands_then_each_batch_of_names():
+    """Allan asked to see rows appear as they are read (2026-10-16). The
+    crops go to the recogniser sixteen at a time -- its own batch -- and
+    the watcher hears each batch with the band it belongs to."""
+    geo = Band([(0.05 * i, 0.05 * i + 0.04) for i in range(20)])
+    calls, events = [], []
+
+    def recognize(crops):
+        calls.append(len(crops))
+        return [(f"name {c}", 0.9) for c in crops]
+
+    rows = rows_from_bands(geo, (1000, 2000), recognize, crop=lambda i, box: i,
+                           progress=events.append)
+    assert calls == [16, 4], "sixteen at a time, as the recogniser batches anyway"
+    assert events[0]["event"] == "bands" and len(events[0]["bands"]) == 20
+    assert events[0]["written"] == list(range(20))
+    assert [e["event"] for e in events[1:]] == ["read", "read"]
+    assert events[1]["bands"][0] == (0, "name 0") and events[2]["bands"][-1] == (19, "name 19")
+    assert [r["name_raw"] for r in rows][:2] == ["name 0", "name 1"]
+
+
+def test_without_a_watcher_the_recogniser_is_called_once():
+    geo = Band([(0.05 * i, 0.05 * i + 0.04) for i in range(20)])
+    calls = []
+    rows_from_bands(geo, (1000, 2000), lambda crops: calls.append(len(crops)) or
+                    [("x", 0.5)] * len(crops), crop=lambda i, box: i)
+    assert calls == [20]

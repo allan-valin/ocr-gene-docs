@@ -929,6 +929,35 @@ function startTranscription(force){
       poll=setInterval(()=>pollJob(j.id),600);
     }).catch(e=>renderEmpty(`<b>Falhou.</b><br>${e}`));
 }
+// ---- watching the engine read ----
+// The rows appear as they are read and the band being read is outlined on
+// the scan (Allan, 2026-10-16: "you see the lines being populated and the
+// line being scanned is highlighted"). `/api/live?pdf=` is what the engine
+// has reported for this document so far: the page it is on, the bands it
+// cut, the names in. Nothing here is saved; the stored record arrives with
+// finishTranscription and replaces it.
+let liveShown=null;
+function showLive(l){
+  if(!D || !l || !l.page || !(l.bands||[]).length) return false;
+  const at=D.pages.findIndex(p=>p.n===l.page);
+  if(at<0) return false;
+  if(at!==pageIdx || liveShown!==l.page){
+    pageIdx=at; liveShown=l.page;
+    $("#scan").src=pageURL(D,D.pages[pageIdx]);
+    renderPageStrip();
+  }
+  D.geometry={rows:l.bands, columns:l.columns||[], bands_source:"live"};
+  rows=(l.rows||[]).map(r=>({...r,verified:false}));
+  sel=Math.max(0, l.at==null?0:l.at);
+  $("#tbl").hidden=false; $("#empty").hidden=true;
+  render(); paintBand(sel);
+  $("#stat").textContent=`lendo… ${l.done||0} de ${l.total||rows.length} linhas da página ${l.page}`;
+  return true;
+}
+function pollLive(){
+  if(!SERVED||!D) return;
+  fetch(`/api/live?pdf=${encodeURIComponent(D.file)}`).then(r=>r.json()).then(showLive).catch(()=>{});
+}
 function pollJob(id){
   fetch(`/api/job?id=${id}`).then(r=>r.json()).then(j=>{
     if(j.status==="running"||j.status==="queued"){
@@ -936,6 +965,7 @@ function pollJob(id){
       const bar=document.querySelector(".bar i"), pr=$("#prog");
       if(bar) bar.style.width=pct+"%";
       if(pr) pr.textContent=`página ${j.page||0} de ${j.total} · ${j.elapsed}s`;
+      pollLive();
       return;
     }
     clearInterval(poll);
@@ -945,6 +975,7 @@ function pollJob(id){
   });
 }
 function finishTranscription(){
+  liveShown=null;
   fetch(`/api/corpus?path=${encodeURIComponent(STATE.dir||"")}`).then(r=>r.json()).then(d=>{
     DB=d; openDoc(docIdx);
   });
@@ -1101,6 +1132,8 @@ function renderIndexBar(st){
 function pollIndex(){
   fetch("/api/index").then(r=>r.json()).then(st=>{
     renderIndexBar(st);
+    // the open document is the one being read: watch it come in
+    if(st.status==="running" && D && st.current===D.file) pollLive();
     if(st.status!=="running"){
       clearInterval(idxPoll); idxPoll=null;
       if(st.status==="finished"||st.status==="stopped") finishTranscription();

@@ -54,6 +54,7 @@ from desembarque.gazetteer import (Names, fold, menu_for,   # noqa: E402
                                    names_by_language, spoken_names)
 from desembarque import pdf as pdflib               # noqa: E402
 from desembarque import secondreading               # noqa: E402
+from desembarque import live                        # noqa: E402
 from page_geometry import analyze_pdf_page, page_image  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -448,6 +449,14 @@ def transcribe_document(pdf: Path, job) -> dict:
     if not eng.available():
         return {"unavailable": True, "message": engines.status()["detail"]}
 
+    live.watch(pdf.name)
+    try:
+        return _transcribe_document(pdf, job, eng)
+    finally:
+        live.unwatch(pdf.name)
+
+
+def _transcribe_document(pdf: Path, job, eng) -> dict:
     ident = identify(pdf)
     pages, rows, cover_text, voyage = [], [], "", None
     images: dict[int, Path] = {}
@@ -749,6 +758,13 @@ class Handler(BaseHTTPRequestHandler):
 
             if u.path == "/api/engine":
                 return self._send(200, engines.status())
+
+            if u.path == "/api/live":
+                # what the engine is reading on this document right now:
+                # the bands it cut and the names so far, for the page to paint
+                got = live.get(q.get("pdf", ""))
+                return self._send(200, got or {"file": q.get("pdf", ""), "page": 0,
+                                               "reading": sorted(live.names())})
 
             if u.path == "/api/job":
                 job = JOBS.get(q.get("id", ""))

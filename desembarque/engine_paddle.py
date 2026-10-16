@@ -556,15 +556,24 @@ def band_boxes(geo, size: tuple[int, int]) -> list[tuple[int, tuple]]:
     return out
 
 
+READ_BATCH = 16     # the recogniser's own batch size; a report per batch
+
+
 def rows_from_bands(geo, size: tuple[int, int],
                     recognize: Callable[[list], list[tuple[str, float]]],
                     crop: Callable[[int, tuple[int, int, int, int]], object],
+                    progress: Callable[[dict], None] | None = None,
                     ) -> list[dict]:
     """One row per detected band, in page order.
 
     `recognize` is injected so the row-building can be tested without the
     model. A short result from the recogniser pads with nulls rather than
     shifting later names up a row, which would be a silent corruption.
+
+    `progress`, when given, hears the bands as soon as they are cut and
+    each batch of names as it is read (`desembarque.live`): the crops go to
+    the recogniser sixteen at a time, which is the batch it reads in anyway,
+    so watching costs nothing.
     """
     bands = geo.normalized_rows()
     cut = band_boxes(geo, size)
@@ -575,7 +584,25 @@ def rows_from_bands(geo, size: tuple[int, int],
     # An empty ruled row is the commonest thing on these pages. Reading it costs
     # as much as reading a name and can only ever say nothing.
     written = [(i, c) for i, c in zip(keep, crops) if has_ink(c)]
-    said = list(recognize([c for _i, c in written])) if written else []
+    if progress:
+        try:
+            cols = geo.name_column()
+        except Exception:
+            cols = None
+        progress({"event": "bands", "bands": [list(b) for b in bands],
+                  "written": [i for i, _c in written],
+                  "columns": list(cols) if cols else None})
+    said: list[tuple[str, float]] = []
+    if written and not progress:
+        said = list(recognize([c for _i, c in written]))
+    elif written:
+        for start in range(0, len(written), READ_BATCH):
+            chunk = written[start:start + READ_BATCH]
+            got = list(recognize([c for _i, c in chunk]))
+            got += [("", 0.0)] * (len(chunk) - len(got))
+            said += got
+            progress({"event": "read",
+                      "bands": [(i, strip_ordinal(t)) for (i, _c), (t, _s) in zip(chunk, got)]})
     said += [("", 0.0)] * (len(written) - len(said))
     by_band = dict(zip([i for i, _c in written], said))
 
@@ -1170,8 +1197,13 @@ class PaddleEngine:
 
             im = Image.open(image).convert("L")
             im = im.rotate(geo.skew, resample=Image.BICUBIC, fillcolor=255)
+            # the first reading is the one a watcher sees come in; the render
+            # fallback and the loose second reading below are refinements
+            from . import live
             rows = rows_from_bands(geo, im.size, self._recognize,
-                                   self._carved_crops(im, geo))
+                                   self._carved_crops(im, geo),
+                                   progress=(lambda e: live.emit({**e, "page": page}))
+                                   if live.watching() else None)
             # The render is still the fallback it always was: a second opinion
             # asked for only when the first reading came back nearly empty, and
             # kept only when it reads more. That was settled by measurement and
