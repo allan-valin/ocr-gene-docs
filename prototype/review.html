@@ -151,7 +151,11 @@
      stroke on grey paper becomes a light stroke on black. Done in the browser,
      on the image already downloaded, so it costs nothing and no scan is
      rewritten. */
-  #scantools{position:sticky;top:0;z-index:3;display:flex;gap:6px;align-items:center;
+  /* pinned at the top AND the left of the pane: zoomed, the scan is wider than
+     the pane and the pane scrolls sideways; stuck only at the top the toolbar
+     went with the image and its buttons left the screen (Allan, 2026-10-17) */
+  #scantools{position:sticky;top:0;left:0;z-index:3;display:flex;gap:6px;align-items:center;
+    flex-wrap:wrap;box-sizing:border-box;width:100%;max-width:100%;
     padding:6px 8px;background:rgba(14,13,12,.92);border-bottom:1px solid var(--line);
     backdrop-filter:blur(3px)}
   #scantools span{font-size:11px;color:var(--muted);margin-right:2px}
