@@ -156,7 +156,9 @@ def test_the_install_brings_the_second_reading_with_it():
     install now puts kraken on a CPU-only torch into the same venv and
     fetches the weights, so the friend's copy reads what Allan's reads."""
     cmds = [" ".join(c) for c in core.install_command(Path("/r"))]
-    assert any("download.pytorch.org/whl/cpu" in c and "torch" in c for c in cmds)
-    assert any("requirements-kraken.txt" in c for c in cmds)
+    kraken = [c for c in cmds if "requirements-kraken.txt" in c]
+    assert len(kraken) == 1
+    assert "download.pytorch.org/whl/cpu" in kraken[0] and " torch " in kraken[0], \
+        "torch and kraken in one resolution, or pip brings the CUDA torch back"
     assert any("fetch_model" in c for c in cmds)
     assert cmds.index(next(c for c in cmds if "fetch_model" in c)) == len(cmds) - 1

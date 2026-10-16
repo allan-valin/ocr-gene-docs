@@ -7,7 +7,7 @@
 3. **Abra `Desembarque.bat`** (Windows) ou `Desembarque.command` (Mac) ou
    `Desembarque.sh` (Linux) com um clique duplo.
 4. Na janela que abre, clique em **Instalar (uma vez)**. Leva alguns minutos
-   e precisa de internet: baixa o motor de leitura (cerca de 1 GB).
+   e precisa de internet: baixa os leitores (cerca de 3 GB).
 5. Em **Pasta com os PDFs**, escolha a pasta onde estão as listas de passageiros.
 6. **Ligar**. Inicia o programa que lê os PDFs (1 a 2 minutos carregando), o
    navegador abre sozinho na página do Desembarque e a pasta começa a ser

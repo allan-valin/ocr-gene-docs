@@ -52,9 +52,12 @@ def install_command(root: Path = ROOT) -> list[list[str]]:
         # the second reading of handwritten pages: kraken on a CPU-only torch
         # (the default torch pulls CUDA, five gigabytes nobody here needs), and
         # its PP-OCRv6 weights from Zenodo into ~/.cache/kraken
-        [str(py), "-m", "pip", "install", "--index-url",
-         "https://download.pytorch.org/whl/cpu", "torch", "torchvision"],
-        [str(py), "-m", "pip", "install", "-r", str(root / "requirements-kraken.txt")],
+        # one command, with the CPU wheels as an extra index: installed in two
+        # (CPU torch first, then kraken) pip resolved torch again from PyPI
+        # and the CUDA build came back, 2026-10-16
+        [str(py), "-m", "pip", "install", "--extra-index-url",
+         "https://download.pytorch.org/whl/cpu", "torch", "torchvision",
+         "-r", str(root / "requirements-kraken.txt")],
         [str(py), "-c", "from desembarque.secondreading import fetch_model; "
                         "print(fetch_model())"],
     ]
@@ -132,8 +135,9 @@ Onde estão as listas. Só arquivos .pdf contam; imagens (JPG, PNG) são
 ignoradas. Pode trocar de pasta e clicar em Ligar de novo.
 
 Instalar (uma vez)
-Cria um ambiente Python próprio e baixa o motor de leitura (cerca de
-1,5 GB, precisa de internet). Só aparece enquanto não estiver instalado.
+Cria um ambiente Python próprio e baixa os dois leitores: o motor que
+corta a página em linhas e o que lê a letra manuscrita (cerca de 3 GB,
+precisa de internet). Só aparece enquanto não estiver instalado.
 
 Ligar
 Inicia o servidor: o programa que lê os PDFs e serve a página. Carregar os
