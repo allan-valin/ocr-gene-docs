@@ -115,7 +115,19 @@ def with_page_remeasured(record: dict, page_n: int, page: dict,
     theirs = {r.get("n"): r for r in record.get("rows") or []
               if isinstance(r, dict) and r.get("page") == page_n
               and typed_by_a_person(r)}
-    fresh = [dict(theirs.get(r.get("n"), r), page=page_n) for r in rows]
+    # The second reading is keyed to the band, not to what the engine read
+    # off it, and a page read again keeps its bands: each new row inherits
+    # the old row's second reading unless it brings its own.
+    second = {r.get("n"): r.get("second_read")
+              for r in record.get("rows") or []
+              if isinstance(r, dict) and r.get("page") == page_n
+              and r.get("second_read")}
+    fresh = []
+    for r in rows:
+        row = dict(theirs.get(r.get("n"), r), page=page_n)
+        if not row.get("second_read") and second.get(r.get("n")):
+            row["second_read"] = second[r.get("n")]
+        fresh.append(row)
     # a row somebody typed that the new reading has no band for is kept
     kept = [r for n, r in theirs.items()
             if not any(f.get("n") == n for f in fresh)]

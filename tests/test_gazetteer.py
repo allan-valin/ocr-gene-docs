@@ -238,3 +238,19 @@ def test_a_close_archive_guess_keeps_the_first_line():
     names = Names({"TUANS": 40, "JUAN": 2})
     menu = menu_for("Tuan", names)
     assert menu[0]["name"] == "TUANS", [(g["name"], g["how"]) for g in menu]
+
+
+def test_a_stroke_reading_near_an_archive_name_offers_that_name():
+    """`Yosi A. Olnerra` on BS.ENT.013990 p2 is *José*. The archive's string
+    neighbours of `YOSI` are *Yoshiko* and *Rossi*; the ascender rule reads
+    the `Y` as a `J` and gives `JOSI`, which nobody has read either, so it sat
+    among `BOSI`, `DOSI`, `FOSI` at the tail and *José* — read 230 times on
+    these ships — was nowhere in the twenty. A stroke reading that is itself
+    one letter from a name the archive has read is two readings composed, and
+    the second one is the archive's own."""
+    from desembarque.gazetteer import Names, menu_for
+
+    names = Names({"JOSE": 230, "YOSHIKO": 3, "ROSSI": 12})
+    menu = menu_for("Yosi", names)
+    offered = [g["name"] for g in menu]
+    assert "JOSE" in offered[:5], offered

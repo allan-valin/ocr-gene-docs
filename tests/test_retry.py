@@ -171,3 +171,24 @@ def test_a_re_measure_that_reads_nothing_is_refused():
     r = record(pages=[{"n": 2, "kind": "list"}],
                rows=[{"page": 2, "n": 1, "name_raw": "lio da C"}])
     assert with_page_remeasured(r, 2, {"n": 2, "kind": "list"}, []) is None
+
+
+def test_a_re_read_keeps_the_second_reading_of_the_rows_it_replaces():
+    """The kraken second reading sits on the row and is keyed to the band, not
+    to what the engine read off it. A page read again because its name column
+    was measured wrong keeps the same bands, so the second reading still
+    belongs to each row — and on a typewritten page it was the clean one."""
+    from desembarque.retry import with_page_remeasured
+
+    record = {"pages": [{"n": 2, "kind": "list"}],
+              "rows": [{"n": 1, "page": 2, "name_raw": "Enzo SantoniBra",
+                        "second_read": {"model": "x", "text": "Enzo Santoni"}},
+                       {"n": 2, "page": 2, "name_raw": "Jose OliveiraBra"}]}
+    out = with_page_remeasured(record, 2, {"n": 2, "kind": "list"},
+                               [{"n": 1, "name_raw": "Enzo Santoni"},
+                                {"n": 2, "name_raw": "Jose Oliveira",
+                                 "second_read": {"model": "y", "text": "J"}}])
+    rows = {r["n"]: r for r in out["rows"]}
+    assert rows[1]["name_raw"] == "Enzo Santoni"
+    assert rows[1]["second_read"] == {"model": "x", "text": "Enzo Santoni"}
+    assert rows[2]["second_read"] == {"model": "y", "text": "J"}

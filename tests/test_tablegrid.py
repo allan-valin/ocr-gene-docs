@@ -468,3 +468,52 @@ def test_the_writing_only_moves_an_edge_the_page_did_not_print():
     frs.append(box(0.03, 0.62, 200, 225))   # the one row read as a single box
     x0 = columns(frs, W, H)["name"][0] / W
     assert 0.09 <= x0 <= 0.13, x0
+
+
+def test_nacao_is_the_nationality_heading():
+    """The Companhia Nacional de Navegação Costeira prints *Nação* where the
+    other companies print *Nacionalidade*. Unnamed, the column was folded into
+    *Profissão* and nobody could crop it."""
+    frs, W, H = page("013981-2")
+    got = {c["field"]: c for c in columns(frs, W, H)["others"]}
+    assert "nacionalidade" in got
+    assert got["nacionalidade"]["named_by"] == "impresso"
+    assert 0.40 <= got["nacionalidade"]["box"][0] / W <= 0.43
+
+
+def test_the_name_column_ends_where_the_next_columns_writing_begins():
+    """`Nação` is five letters printed in the middle of a column whose values
+    are typed from its left rule: on BS.ENT.013981 p2 the heading starts at
+    0.453 of the sheet and *Brazileiro* at 0.421. Cut at the heading, every
+    name on the page carried the first letters of a nationality — `Enzo
+    SantoniBra`, `José dos SantosPor` — on a typewritten page with a finger's
+    width of blank paper between the two. The rows say where the next column
+    starts, as they already say where the name column does."""
+    # where the nationality is typed from on each page, less the crop's air
+    for name, typed_from in (("013981-2", 0.430), ("013994-2", 0.419)):
+        frs, W, H = page(name)
+        x0, x1 = columns(frs, W, H)["name"]
+        assert 0.39 <= x1 / W <= typed_from - 0.004, (name, x1 / W)
+        assert 0.05 <= x0 / W <= 0.10, (name, x0 / W)
+
+
+def test_a_box_merging_name_and_nationality_does_not_move_the_edge():
+    """One detector box that runs from the name into the nationality starts
+    where the name starts; taken as the next column's edge it would leave no
+    name column at all. Only boxes that begin nearer the next heading than
+    the name's count."""
+    frs, W, H = page("013981-2")
+    before = columns(frs, W, H)["name"][1]
+    merged = [dict(f, x0=0.09 * W, x1=0.50 * W, text="Enzo Santoni Brazileiro")
+              for f in frs if f["text"] == "Brazileiro"][:6]
+    x1 = columns(frs + merged, W, H)["name"][1]
+    assert abs(x1 - before) <= 2, (x1 / W, before / W)
+
+
+def test_a_cursive_page_keeps_its_names_whole_to_the_rule():
+    """On BS.ENT.013947 p4 the nationality is written from the printed rule at
+    0.355 of the sheet and *Fernando* and *Lucrezia* end at 0.35: the edge
+    moves from the heading (0.363) to the rule, and not past it."""
+    frs, W, H = page("013947-4")
+    x0, x1 = columns(frs, W, H)["name"]
+    assert 0.345 <= x1 / W <= 0.356, x1 / W

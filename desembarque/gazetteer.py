@@ -248,6 +248,33 @@ def names_by_language(path: Path) -> dict[str, set[str]]:
             for lang, names in (d.get("by_language") or {}).items()}
 
 
+# How many names reached by composing a stroke reading with the archive's
+# spelling neighbours may sit in one menu, and how close the neighbour has to
+# be: these are two guesses stacked, and the second has to be a near one.
+COMPOSED_LIMIT = 2
+COMPOSED_FLOOR = 0.74
+
+
+def _composed(unknown: list[dict], names: "Names", word: str,
+              limit: int) -> list[dict]:
+    """Archive names a letter or so from a stroke reading nobody has read."""
+    out, seen = [], set()
+    for g in unknown:
+        plain = g["name"].replace(" ", "")
+        for near in names.suggest(plain, limit=1, floor=COMPOSED_FLOOR):
+            if near["name"] in seen or near["name"] == word:
+                continue
+            seen.add(near["name"])
+            out.append({"name": near["name"], "how": "traço≈arquivo",
+                        "rule": g["rule"], "cost": g["cost"] + 1,
+                        "score": near["score"], "seen": near["seen"],
+                        "why": (f"{g['why']} dá {g['name']}, parecido com "
+                                f"este nome do acervo")})
+            if len(out) >= limit:
+                return out
+    return out
+
+
 def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
              spoken: set[str] | None = None,
              language_names: set[str] | None = None) -> list[dict]:
@@ -308,10 +335,18 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
         # read under a word that is right is noise, and noise is what makes a
         # person stop reading the menu.
         unknown = []
+    # A stroke reading that spells nothing anybody has read, but is itself
+    # close to a name the archive has: `Yosi` is *José* on BS.ENT.013990 p2,
+    # the ascender rule gives `JOSI`, and `JOSI` is a letter from a name read
+    # 230 times on these ships, while the archive's own neighbours of `YOSI`
+    # are *Yoshiko* and *Rossi*. Two readings composed — the ink's and then
+    # the archive's — reach names neither does alone.
+    composed = _composed(unknown, names, w, limit=COMPOSED_LIMIT)
 
     out: list[dict] = []
     at: dict[str, dict] = {}
-    for g in near[:1] + seen_names + near[1:] + from_list + unknown[:UNKNOWN_LIMIT]:
+    for g in (near[:1] + seen_names + composed + near[1:] + from_list
+              + unknown[:UNKNOWN_LIMIT]):
         was = at.get(g["name"])
         if was is not None:
             # Both sources arriving at the same name is the strongest thing

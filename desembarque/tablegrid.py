@@ -105,6 +105,40 @@ def _left_from_writing(fragments: list[dict], head: dict,
     return starts[int(EDGE_QUANTILE * (len(starts) - 1))]
 
 
+# How much air is left between the next column's writing and the name
+# column's edge, as a fraction of the sheet: the edge of a `B` cut in half
+# reads as a stray mark, and `name_strip_box` pads the crop out by 0.004. Not
+# more: on BS.ENT.013947 p4 the nationality is written from the printed rule
+# at 0.355 and the longest cursive names end at 0.35, so every hundredth of
+# air here is taken off a tail.
+NEXT_COLUMN_AIR = 0.006
+# Which of the next column's starts to take. Lower than the name's own
+# EDGE_QUANTILE: this edge has to clear *every* row's nationality, so it is
+# nearly the leftmost start, with one stray speck's worth of tolerance.
+NEXT_COLUMN_QUANTILE = 0.1
+
+
+def _right_from_writing(fragments: list[dict], head: dict, nxt: dict,
+                        width: float) -> float | None:
+    """Where the rows under the heading beside the name actually start.
+
+    Only boxes that begin nearer the next heading than the name's count: one
+    detector box that runs from a name into its nationality starts where the
+    name starts, and taken as the next column's edge it would leave no name
+    column at all. The same minimum number of rows as the left edge, for the
+    same reason.
+    """
+    nw = nxt["x1"] - nxt["x0"]
+    mid = (head["x1"] + nxt["x0"]) / 2
+    starts = sorted(f["x0"] for f in fragments
+                    if f["y0"] > head["y1"] and f["x0"] > mid
+                    and _overlap(f["x0"], f["x1"], nxt["x0"], nxt["x1"]) >= 0.3 * nw)
+    if len(starts) < MIN_ROWS_FOR_EDGE:
+        return None
+    return (starts[int(NEXT_COLUMN_QUANTILE * (len(starts) - 1))]
+            - NEXT_COLUMN_AIR * width)
+
+
 def columns(fragments: list[dict], width: float, height: float,
             labelled: list[dict] | None = None) -> dict | None:
     """The name column, the ordinal column beside it, and where the table starts.
@@ -133,6 +167,18 @@ def columns(fragments: list[dict], width: float, height: float,
         written = _left_from_writing(fragments, head, width)
         x0 = written if written is not None else head["x0"] - margin
     x1 = min((f["x0"] for f in right), default=head["x1"] + margin)
+    # The heading beside the name is narrower than its column and printed in
+    # the middle of it, while the values are typed from its left rule. On
+    # BS.ENT.013981 p2 `Nação` starts at 0.453 of the sheet and *Brazileiro*
+    # at 0.421, so a name column cut at the heading handed the recogniser
+    # `Enzo SantoniBra` and `José dos SantosPor` off a typewritten page with a
+    # finger of blank paper between the two. The rows under the next heading
+    # say where that column begins, the way they say where this one does.
+    if right:
+        written = _right_from_writing(fragments, head,
+                                      min(right, key=lambda f: f["x0"]), width)
+        if written is not None and written < x1:
+            x1 = written
     others = _other_columns(right, x1, width,
                             labelled if labelled is not None else fragments)
     ordinal = None
@@ -149,6 +195,8 @@ def columns(fragments: list[dict], width: float, height: float,
 # `observacoes`: the accents and the second word are the printing's business.
 FIELDS = {
     "nacionalidade": "nacionalidade", "nacionalid": "nacionalidade",
+    # the Companhia Nacional de Navegação Costeira prints *Nação*
+    "nacao": "nacionalidade",
     # the older printings spell it *Edade*, and one prints *Sexo* where the
     # later ones fold it into the civil state
     "idade": "idade", "edade": "idade", "estado": "estado", "profissao": "profissao",
