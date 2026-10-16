@@ -227,6 +227,18 @@ def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
     # printed header (`NOME`, `procedente de`), one below the last is the
     # foot of the sheet, and neither is a passenger. Half a band of slack.
     top, bottom = _table_extent(bands)
+    # A grid that found a fraction of the writing is wrong, not a table:
+    # the APESP list's faint purple rules gave 5 bands on a page of 33
+    # written lines, in a column that was not the name's, and the page came
+    # out as five empty rows (2026-10-16). Then every line on the page is a
+    # row carrying its whole text, with no band and no column: a name in
+    # a row with its age and trade beside it is found; a name in no row is
+    # not. The row says so (`whole_line`).
+    written = [ln for ln in lines if (ln.get("text") or "").strip()]
+    weak = len(bands) * 2 < len(written)
+    drawn = bands            # where the engine's bands were, for a person's row
+    if weak:
+        x0, x1, top, bottom, bands, heading = 0.0, 1.0, 0.0, 1.0, [], set()
     placed: dict[int | None, list[dict]] = {}
     inside = []
     for line in lines:
@@ -255,6 +267,8 @@ def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
             row = {k: v for k, v in band.items() if k != "n"}
         else:
             row = {"name_raw": clip(line, x0, x1).strip(), "read_by": MODEL_TAG}
+            if weak:
+                row["whole_line"] = True
             if band is not None:
                 said = (band.get("name_raw") or "").strip()
                 if said:
@@ -278,8 +292,11 @@ def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
     for n, r in sorted(by_band.items(), key=lambda kv: kv[0] or 0):
         if n in seen_band or n is None:
             continue
+        # a distrusted grid keeps nothing of the engine's but a person's word
+        if weak and not typed_by_a_person(r):
+            continue
         if r.get("header") or typed_by_a_person(r) or (r.get("name_raw") or "").strip():
-            a, b_ = bands[n - 1] if 0 < n <= len(bands) else (0.0, 0.0)
+            a, b_ = drawn[n - 1] if 0 < n <= len(drawn) else (0.0, 0.0)
             out.append({k: v for k, v in r.items() if k != "n"} | {"band": n})
             extents.append([a, b_])
     order = sorted(range(len(out)), key=lambda i: extents[i][0])

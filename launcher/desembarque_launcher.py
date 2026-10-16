@@ -120,8 +120,12 @@ class Window:
 
     def _refresh(self) -> None:
         installed = core.venv_python() is not None
+        complete = installed and core.second_reading_installed()
         running = self.server.alive
-        self.b_install.configure(state=NORMAL if not installed and not self._installing else DISABLED)
+        self.b_install.configure(
+            text="Instalar (uma vez)" if not installed
+                 else "Completar a instalação (leitor de manuscritos)",
+            state=NORMAL if not complete and not self._installing and not running else DISABLED)
         self.b_start.configure(state=NORMAL if installed and not running
                                and not self._stopping else DISABLED)
         self.b_stop.configure(state=NORMAL if running and not self._stopping else DISABLED)
@@ -130,6 +134,10 @@ class Window:
         if not installed and not self._installing:
             self.status.set("Nada instalado ainda: clique em Instalar (uma vez). "
                             "Demora alguns minutos e precisa de internet.")
+        elif not complete and not self._installing and not running:
+            self.status.set("Falta o leitor de letra manuscrita: sem ele os nomes à mão "
+                            "saem na leitura fraca do motor. Clique em Completar a "
+                            "instalação (baixa uns 2 GB; precisa de internet).")
         elif self._stopping:
             self.status.set("Desligando…")
         elif not running and not self._installing:
@@ -158,7 +166,8 @@ class Window:
         threading.Thread(target=self._install_worker, daemon=True).start()
 
     def _install_worker(self) -> None:
-        for cmd in core.install_command():
+        complete = core.venv_python() is not None
+        for cmd in core.install_command(complete=complete):
             self.events.put(("log", "$ " + " ".join(cmd)))
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  text=True, cwd=str(core.ROOT))

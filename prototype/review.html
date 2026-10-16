@@ -705,6 +705,8 @@ function splitDitto(word){
   return m ? [m[1], m[2]] : ["", String(word||"")];
 }
 function nameCell(r){
+  // a line read whole, the grid distrusted: name, age, trade in one string
+  if(r.whole_line) return `<span class="whole" title="linha inteira da página: a grade da tabela não foi encontrada, então o nome vem com o resto da linha">${displayName(nameText(r))}</span>`;
   const text = nameText(r);
   if(EDIT) return text;
   // Every word opens its readings, not only the words the engine happened to
@@ -1963,7 +1965,17 @@ if(SERVED){ $("#warn").textContent="Carregando a pasta…"; say("carregando a pa
 loadData().then(d=>{
   DB=d;
   $("#scan").onload=()=>paintBand(sel);
-  if(SERVED) fetch("/api/engine").then(r=>r.json()).then(x=>{ENGINE=x; renderIndexBar(idxState); if(D&&!rows.length) renderEmpty();}).catch(()=>{});
+  if(SERVED) fetch("/api/engine").then(r=>r.json()).then(x=>{
+    ENGINE=x; renderIndexBar(idxState); if(D&&!rows.length) renderEmpty();
+    // without the handwriting reader a cursive page is read by the engine
+    // alone, and until now the only note of it was inside the record
+    const sr=x.second_reading;
+    if(sr && !sr.available){
+      const msg="O leitor de letra manuscrita não está instalado: nomes à mão saem na leitura fraca do motor. "
+        +"Na janela do Desembarque, clique em Completar a instalação.";
+      say(msg, "err"); $("#warn").textContent=msg;
+    }
+  }).catch(()=>{});
   const g=(d.documents.find(x=>x.geometry)||{}).geometry;
   $("#warn").textContent="Protótipo. "+(g?g.note:"");
   const t=d.documents.filter(x=>x.transcribed||x.rows).length;

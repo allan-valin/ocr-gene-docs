@@ -32,6 +32,17 @@ def venv_python(root: Path = ROOT) -> Path | None:
     return exe if exe.exists() else None
 
 
+def second_reading_installed(root: Path = ROOT) -> bool:
+    """Whether kraken is in the engine venv. A venv made before the
+    handwriting reader shipped with the launcher (2026-10-16) reads cursive
+    pages with the engine alone, and the record says so where nobody
+    looks; the launcher looks here and offers to complete the install."""
+    venv = root / ".venv-ocr"
+    if os.name == "nt":
+        return (venv / "Lib" / "site-packages" / "kraken").is_dir()
+    return any(p.is_dir() for p in venv.glob("lib/python*/site-packages/kraken"))
+
+
 def serve_command(python: Path, root: Path, folder: Path, port: int) -> list[str]:
     """The server, on this folder, on this port, not opening a browser of its
     own — the launcher opens one when the port answers."""
@@ -39,12 +50,14 @@ def serve_command(python: Path, root: Path, folder: Path, port: int) -> list[str
             "--root", str(folder), "--port", str(port), "--no-open"]
 
 
-def install_command(root: Path = ROOT) -> list[list[str]]:
+def install_command(root: Path = ROOT, complete: bool = False) -> list[list[str]]:
     """Make the venv and install into it, in order. `sys.executable` is the
-    Python the launcher itself runs under, which is the one the person has."""
+    Python the launcher itself runs under, which is the one the person has.
+    With `complete`, only the handwriting reader's steps, into a venv that
+    exists already."""
     py = (root / ".venv-ocr" / "Scripts" / "python.exe" if os.name == "nt"
           else root / ".venv-ocr" / "bin" / "python")
-    return [
+    steps = [
         [sys.executable, "-m", "venv", str(root / ".venv-ocr")],
         [str(py), "-m", "pip", "install", "--upgrade", "pip"],
         [str(py), "-m", "pip", "install", "-r", str(root / "requirements.txt"),
@@ -61,6 +74,7 @@ def install_command(root: Path = ROOT) -> list[list[str]]:
         [str(py), "-c", "from desembarque.secondreading import fetch_model; "
                         "print(fetch_model())"],
     ]
+    return steps[-2:] if complete else steps
 
 
 def _get(port: int, path: str, timeout: float = 2.0, post: bool = False) -> dict | None:
@@ -177,7 +191,9 @@ ignoradas. Pode trocar de pasta e clicar em Ligar de novo.
 Instalar (uma vez)
 Cria um ambiente Python próprio e baixa os dois leitores: o motor que
 corta a página em linhas e o que lê a letra manuscrita (cerca de 3 GB,
-precisa de internet). Só aparece enquanto não estiver instalado.
+precisa de internet). Só aparece enquanto não estiver instalado. Se o
+botão disser "Completar a instalação", falta só o leitor de manuscritos:
+sem ele, os nomes à mão saem na leitura fraca do motor.
 
 Ligar
 Inicia o servidor (o programa que lê os PDFs) e abre a página no navegador,

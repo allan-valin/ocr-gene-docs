@@ -225,3 +225,23 @@ def test_the_reading_can_be_stopped_from_the_launcher():
     assert callable(core.stop_index)
     src = inspect.getsource(dl.Window._build)
     assert "Parar ao fim da página" in src
+
+
+def test_an_install_missing_the_handwriting_reader_can_be_completed(tmp_path):
+    """A venv made before kraken shipped with the launcher reads cursive
+    with the engine alone, silently. The launcher sees the venv without
+    kraken in it and offers to complete the install: the kraken steps
+    only, not the whole thing again."""
+    venv = tmp_path / ".venv-ocr"
+    site = venv / "lib" / "python3.12" / "site-packages"
+    site.mkdir(parents=True)
+    (venv / "bin").mkdir()
+    (venv / "bin" / "python").write_text("")
+    assert core.venv_python(tmp_path) is not None
+    assert not core.second_reading_installed(tmp_path)
+    (site / "kraken").mkdir()
+    assert core.second_reading_installed(tmp_path)
+    cmds = core.install_command(tmp_path, complete=True)
+    assert len(cmds) == 2
+    assert "requirements-kraken.txt" in " ".join(cmds[0])
+    assert "fetch_model" in " ".join(cmds[1])

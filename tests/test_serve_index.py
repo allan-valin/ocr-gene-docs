@@ -1286,3 +1286,14 @@ def test_the_page_endpoint_reads_one_page_and_can_be_stopped(server, monkeypatch
     assert code == 200 and s["stop"] is True
     code, s = call(f"{base}/api/index/stop?abort=1", method="POST")
     assert code == 200
+
+
+def test_the_engine_status_says_whether_the_handwriting_reader_is_there(server, monkeypatch):
+    """Allan's server venv had no kraken, so every cursive page was read by
+    PaddleOCR alone and the record said 'kraken is not installed' where
+    nobody looked. The page is told."""
+    base, _ = server
+    monkeypatch.setattr(serve.secondreading, "status",
+                        lambda *a, **k: {"available": False, "detail": "kraken is not installed"})
+    _, e = call(f"{base}/api/engine")
+    assert e["second_reading"] == {"available": False, "detail": "kraken is not installed"}

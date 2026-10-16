@@ -6,6 +6,39 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-16, last — the APESP page: a distrusted grid, and no kraken in the server venv
+
+Allan read page 6 of the APESP list alone (the Kubach page): "from about
+30 lines only 5 were identified and they come up empty". Two causes,
+both found on disk:
+
+* **The server venv has no kraken.** `.venv-ocr` on this machine was made
+  before the handwriting reader shipped with the launcher; the record
+  says `second_reading: {skipped: "kraken is not installed"}` where
+  nobody looks. So every cursive page he has read today was PaddleOCR
+  alone. Now: `/api/engine` carries `second_reading`, the page says so in
+  the warn bar and the log, and the launcher's install button turns into
+  *Completar a instalação (leitor de manuscritos)* when the venv exists
+  without kraken (`core.second_reading_installed`, `install_command(…,
+  complete=True)` = the two kraken steps). **Allan has to click it** (a
+  2 GB download; not done for him).
+* **The grid was wrong, not weak.** The page's rules are faint purple;
+  the detector found 5 bands of pitch 0.075 on a page of 33 written
+  lines, in a column that is not the name's (`columns[0..1]` is the port
+  column on this form). `rows_from_lines` trusted them: lines outside
+  the 5 bands' extent and outside that column were dropped. Now, when the
+  bands are fewer than half the written lines, the grid is distrusted:
+  every line on the page becomes a row carrying its whole text
+  (`whole_line: true`; the page says so on hover), no band, no column;
+  only a person's rows are kept from the engine's. A name with its age
+  and trade beside it is found; a name in no row is not.
+* The earlier note that this list is "859 px, unreadable" was wrong:
+  that is the JPX layer; the JBIG2 mask is 2577×2307 and the page is
+  legible at 120 dpi (looked at it).
+
+Verification on the real page with `.venv-kraken` (one page, capped
+scope): see the line under this when it lands. Tests: 1053 pass.
+
 ## 2026-10-16, latest — stop at the end of the page, one page alone, zoom on the scan
 
 Allan's third round. What he asked and what is on disk:

@@ -233,3 +233,24 @@ def test_a_band_the_engine_named_that_no_line_fell_in_keeps_its_row():
     assert [(r["name_raw"], r.get("band")) for r in rows] == [("First", 1), ("band 2", 2), ("Last", 4)]
     assert "read_by" not in rows[1]
     assert extents[1] == [0.20, 0.29]
+
+
+def test_a_grid_that_found_a_fraction_of_the_writing_is_not_trusted():
+    """APESP list, p6 (Allan, 2026-10-16): the rule detector found 5 bands
+    on a page of 33 written lines, in a column that is not the name's, and
+    the page came out as five empty rows. When the bands are fewer than
+    half the lines the grid is wrong, and every line on the page becomes a
+    row carrying its whole text — a name in a line is found; a name in no
+    row is not."""
+    geo = {"columns": [0.14, 0.20, 0.23, 0.26, 0.36],
+           "rows": [[0.27, 0.35], [0.35, 0.42], [0.42, 0.50], [0.50, 0.57], [0.57, 0.65]]}
+    bands = [{"page": 6, "n": i, "name_raw": "K" if i == 3 else "", "conf": {"name": 0.0}}
+             for i in range(1, 6)]
+    lines = [line(0.05 + i * 0.027, 0.07 + i * 0.027, f"Name {i} 18 m", x0=0.18, x1=0.6)
+             for i in range(30)]
+    rows, extents = sr.rows_from_lines(bands, lines, geo)
+    assert len(rows) == 30
+    assert rows[0]["name_raw"] == "Name 0 18 m" and rows[29]["name_raw"] == "Name 29 18 m"
+    assert all(r["whole_line"] for r in rows)
+    assert all("band" not in r for r in rows)
+    assert extents[0] == [0.05, 0.07]

@@ -847,7 +847,11 @@ class Handler(BaseHTTPRequestHandler):
                                         **engines.status()})
 
             if u.path == "/api/engine":
-                return self._send(200, engines.status())
+                # and whether the handwriting reader is there: without it
+                # a cursive page is read by the engine alone, and the
+                # record's note of that is where nobody looks
+                return self._send(200, {**engines.status(),
+                                        "second_reading": secondreading.status()})
 
             if u.path == "/api/live":
                 # what the engine is reading on this document right now:
