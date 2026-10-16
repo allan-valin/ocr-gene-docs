@@ -40,7 +40,16 @@ reads those pages again in page order per dossier (so a continuation page
 inherits the heading page's columns), through `retry.with_page_remeasured`,
 which keeps every row a person typed and — new today — each row's kraken
 `second_read`, which on a typed page was the clean reading. Both passes
-resume. Results go below when they are in.
+resume.
+
+*Survey, 224 min, 3 workers:* 1316 of the corpus's list pages, in 496 of
+658 dossiers, have an edge that moves. All but four moves shrink the
+column; the median move is 0.017 of the page width (a letter or two), the
+largest is OL.PRJ.16897, whose stored edges were nonsense (0.03, 0.97,
+0.86 on consecutive pages) and now sit at 0.29 on every page. The four
+pages whose column grows had an edge cut into the names. The apply pass on
+those 1316 pages runs at about 20 s a page; its numbers go below when it
+is in.
 
 **The menu.** `Yosi A. Olnerra` (BS.ENT.013990 p2) is *José*. The archive's
 spelling neighbours of `YOSI` are *Yoshiko*, *Yoshino*, *Rossi*; the
