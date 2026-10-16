@@ -6,6 +6,69 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-16, evening — the apply was stopped and measured; the second reading ships with the launcher
+
+**Allan stopped the edge re-read at 341 of 496 dossiers** ("idk why you keep
+doing full corpus passes... we already talked about this"). The rule, again
+and absolute: a change is checked on about ten dossiers; nothing runs over
+the corpus without his word in that session; pending tweaks go into one pass
+he approves. `data/edges-survey.applied.json` lists the 341; the other 155
+keep the old edge. Glued-digit post-pass ran on what was there
+(`scripts/strip_glued_ordinals.py --write`: 1948 names in 267 dossiers).
+
+**What the 341 did, old copy (`data/reread`) against now, typed pages only
+(258 pages re-read):** the nationality and hotel tails are gone as intended,
+and 277 of 17,197 names lost their inner spaces (`ELISABETH ILLES` →
+`ELISABETHILLES`; OL.PRJ.17318 p5 alone 32), rows 8642 → 8594, and
+OL.PRJ.18644 p4 — a held-out page — lost its last two names (THOMAS and
+THEREZA PLEYTE) and renumbered from row 9 when a garbage band vanished.
+Held-out bench (`bench_search.py --matrix --held-out`): typed top-5
+162 → 155, cursive 107 → 105, blended 290 → 281; naming the crossing
+312 → 306. Gains inside that: Erna Werner 40 → 2, Louise Werner 46 → 1,
+Francisc Bagi 42 → 1. Net, not a win, and the ten-dossier eye check before
+the pass looked only at the tails. Second readings survived on the re-read
+pages (24,505 rows). Whether to revert the 341 to the 2026-10-08 copy is
+Allan's; the lines-first rebuild below makes band re-reading moot.
+
+**The second reading runs per document, at index time** (commit 8149e9a).
+Allan's test folder showed why: the AN list BR_RJANRIO…015033, indexed from
+the launcher, came back with 294 names of noise (`Taurte`, `escaleebatuo`)
+because kraken lived in `.venv-kraken` on this machine only.
+`desembarque/secondreading.py` reads the pages `hands.label_page` calls
+cursive or unknown by lines (kraken segmenter, PP-OCRv6-hist medium,
+Apache-2.0, Zenodo 21788410), clips each line to the name column, writes
+`second_read` on the row; `scripts/serve.py` calls it on every document;
+without kraken the record says so under `second_reading`. The launcher's
+install puts kraken on a CPU-only torch into `.venv-ocr` in one pip command
+(two commands let pip bring the 7 GB CUDA torch back) and fetches the 61 MB
+weights to `~/.cache/kraken/ppocrv6-hist/`; a fresh venv is about 3 GB. The
+review page shows the line reading before the band reading. Measured on
+the same AN list from a merged venv: 299 of 328 rows got a reading
+(`Schaefer Emilo`, `Spilmann Paolo`, `del Soldato bito` where the bands
+said `Sehaer Cuuuti`, `Shihnaun. Taoto`, `Wl Soliato brito`); 11 pages of
+two documents took 842 s on four threads. Not yet tried on Windows.
+
+**Two bugs found by the test folder.** `Certidão de casamento 1.pdf` p1 was
+stored as an error: the server's four reader threads met the oneDNN
+failure at once, one rebuilt the page pipeline and the other three raised
+(commit 31707fb, lock and one retry; the same error sat on 3 corpus pages).
+And the launcher's status read "nada para indexar" for minutes while five
+documents were being read: `/api/index` takes 2–20 s to answer under load
+and the 2 s poll gave up (commit aa461a2, polled off the UI thread, 20 s).
+Launcher strings are pt-BR now (bb1f248). What the folder's other files
+did: the APESP copy of the Principe di Udine list is 859×769 px a page and
+unreadable by anything; `Certidão de casamento 2.pdf` p1 (Registro Civil
+prose) was read whole — "Cidade Blaulenlack, Provincia de Baden", "Augarts
+Fredericl Kuhach", "Kubach e Edaliza Grille bordecro" — and stored as page
+text that nothing searches or shows yet. The engine renders every page at
+300 dpi whatever the scan carries, so a 6.6 MB 300-ppi file costs what a
+200-ppi one does; a lower render would be faster and lose cursive strokes.
+
+**Next, in order:** Allan's word on the 341; lines first, table second
+(`docs/FUTURE-document-types.md`), which also puts the ~9k cursive names
+now merged into shared bands on rows of their own; search and show page
+text for pages with no table; try the launcher on Windows.
+
 ## 2026-10-16 — the name column reached into the nationality; the menu composes; a launcher to double-click
 
 **Allan looked at the first dossiers in the browser and saw names carrying
