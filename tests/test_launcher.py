@@ -215,3 +215,13 @@ def test_stopping_tells_the_page_first():
     import inspect
     src = inspect.getsource(core.Server.stop)
     assert "shutdown" in src
+
+
+def test_the_reading_can_be_stopped_from_the_launcher():
+    """Allan: "I can't stop the indexing anywhere with the browser or
+    launcher". A button on the window, live while the index runs."""
+    import inspect
+    import launcher.desembarque_launcher as dl
+    assert callable(core.stop_index)
+    src = inspect.getsource(dl.Window._build)
+    assert "Parar a leitura" in src

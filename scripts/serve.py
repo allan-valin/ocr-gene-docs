@@ -482,7 +482,7 @@ def transcribe_document(pdf: Path, job) -> dict:
     if not eng.available():
         return {"unavailable": True, "message": engines.status()["detail"]}
 
-    live.watch(pdf.name)
+    live.watch(pdf.name, pages=job.total)
     try:
         return _transcribe_document(pdf, job, eng)
     finally:
@@ -495,6 +495,7 @@ def _transcribe_document(pdf: Path, job, eng) -> dict:
     images: dict[int, Path] = {}
     for n in range(1, job.total + 1):
         job.page = n
+        live.emit({"event": "page", "page": n})
         img = page_image(pdf, n, CACHE) or render_page(pdf, n, dpi=200)
         if img is None:
             pages.append({"n": n, "error": "render failed"})
@@ -835,7 +836,12 @@ class Handler(BaseHTTPRequestHandler):
 
             if u.path == "/api/index":
                 st = BATCH.state
-                return self._send(200, st.as_dict() if st else {"status": "idle"})
+                # and what is being read this moment, page of pages per
+                # document: the count moves once a document, and a document
+                # is minutes (Allan, 2026-10-16: "five minutes and no
+                # progress until it finished one file")
+                return self._send(200, {**(st.as_dict() if st else {"status": "idle"}),
+                                        "reading": live.summary()})
 
             if u.path == "/api/export":
                 data = JOBS.cached(q.get("hash", ""))
@@ -925,11 +931,11 @@ class Handler(BaseHTTPRequestHandler):
             if not folder or not folder.is_dir():
                 return self._send(404, {"error": "no such folder"})
             if BATCH.running():
-                return self._send(200, BATCH.state.as_dict())
+                return self._send(200, {**BATCH.state.as_dict(), "reading": live.summary()})
             state = index_folder(folder)
             if state is None:
                 return self._send(409, {"error": engines.status()["detail"]})
-            return self._send(202, state.as_dict())
+            return self._send(202, {**state.as_dict(), "reading": live.summary()})
 
         if u.path == "/api/ping":
             # the page is here; `closing` tells it the launcher is stopping us

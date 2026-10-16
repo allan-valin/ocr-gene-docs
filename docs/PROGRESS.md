@@ -6,6 +6,40 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-16, later — a progress box with numbers; the index polled all the time
+
+Allan's second round on his folder (22:39–22:45): five minutes with no
+sign of progress until a document finished; the "o servidor demora"
+line every 30 s; no way to stop the reading from the page or the
+launcher; a certidão read while he watched stayed "ainda não lido"; and
+the help window's "esta é só a ajuda" line was itself the confusing
+part once the window had its own size and button.
+
+* **Progress is a box over the faded panes** (`renderProgress`): the
+  folder (documents done of total, ETA), each document being read (page
+  of pages, four at a time, from `reading` on `/api/index`, which
+  `live.summary()` fills; `_transcribe_document` now emits a `page` event
+  at the start of every page, so a page with no table moves the bar too),
+  and the open document's page (names read of names cut). *Parar a
+  leitura* and *Esconder* (to a corner; it goes there by itself when the
+  open document is the one being read, since its rows arriving are the
+  progress). The top bar is gone.
+* **The index is polled all the time** (2.5 s, one in flight): the
+  launcher starts the index right after opening the browser, and a page
+  that asked once, heard idle and stopped never showed it. A document
+  finishing refreshes the folder list, and the open document comes in
+  if it was the one.
+* **Parar a leitura on the launcher** (`core.stop_index`), live while
+  the index runs.
+* **"demora a responder" once per busy spell**, not every 30 s.
+* The certidões read fine: 503 and 3,132 characters of prose on their
+  first pages, stored under `form.text`, shown as "texto lido pelo motor
+  — não há tabela nesta página". Not searched yet.
+
+Not seen by Allan yet; his launcher and server are old code until
+restarted. Headless load on the running server: no script error, the
+box shows while the folder is read.
+
 ## 2026-10-16, late — the page answers every click; the launcher is two buttons
 
 Allan tried the program on his own folder (one APESP list, two AN

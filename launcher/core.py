@@ -124,6 +124,11 @@ def browser_gone(c: dict | None, grace: float = 15.0, silence: float = 180.0) ->
     return seen >= silence
 
 
+def stop_index(port: int) -> dict:
+    """Stop the folder index; the document being read finishes first."""
+    return _get(port, "/api/index/stop", post=True, timeout=20.0) or {"status": "unknown"}
+
+
 def describe_index(st: dict) -> str:
     """One line a person can read: how far, and how long, in hours."""
     status = st.get("status", "unknown")
@@ -185,6 +190,10 @@ Transcreve os PDFs da pasta que ainda não foram lidos. Cerca de 20 s por
 página: uma lista de 9 páginas leva uns 3 minutos; os já lidos são pulados.
 A linha de status diz em que documento está e quanto falta. Enquanto lê, o
 computador fica lento.
+
+Parar a leitura
+Para a leitura da pasta; o documento que está sendo lido termina antes,
+e o que já foi lido fica. Clicar em Ligar de novo continua de onde parou.
 
 Desligar
 Para o servidor; fechar a janela ou a aba do navegador faz o mesmo. A aba

@@ -1174,3 +1174,14 @@ def test_a_page_s_prose_is_handed_to_the_page_with_its_geometry(server):
                                    {"n": 2}]})
     _, g = call(f"{base}/api/geometry?hash={h}")
     assert g["texts"] == {"1": "Cidade de Blankenloch, Baden"}
+
+
+def test_the_index_status_carries_what_is_being_read_right_now(server, engine):
+    """The folder count moves once a document; the page within each of
+    the four documents being read is what moves in between."""
+    base, folder = server
+    docs(folder, 1)
+    _, s = call(f"{base}/api/index?dir=", method="POST")
+    assert "reading" in s and isinstance(s["reading"], list)
+    s = wait_done(base)
+    assert s["reading"] == []

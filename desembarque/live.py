@@ -22,11 +22,13 @@ _lock = threading.Lock()
 _docs: dict[str, dict] = {}
 
 
-def watch(name: str) -> None:
-    """This thread is about to read `name`; events from it belong to it."""
+def watch(name: str, pages: int = 0) -> None:
+    """This thread is about to read `name`, `pages` long; events from it
+    belong to it."""
     _local.name = name
     with _lock:
-        _docs[name] = {"file": name, "page": 0, "bands": [], "columns": None,
+        _docs[name] = {"file": name, "page": 0, "pages": int(pages or 0),
+                       "bands": [], "columns": None,
                        "rows": [], "done": 0, "total": 0, "at": None,
                        "updated": time.time()}
 
@@ -52,7 +54,13 @@ def emit(event: dict) -> None:
         if d is None:
             return
         kind = event.get("event")
-        if kind == "bands":
+        if kind == "page":
+            # a new page, before anything is cut from it: a page with no
+            # table never reports bands, and the page number is the only
+            # sign of progress inside a document (Allan, 2026-10-16)
+            d.update(page=int(event.get("page") or 0), bands=[], columns=None,
+                     rows=[], done=0, total=0, at=None)
+        elif kind == "bands":
             bands = [list(b) for b in event.get("bands") or []]
             d.update(page=int(event.get("page") or 0), bands=bands,
                      columns=event.get("columns"),
@@ -77,3 +85,13 @@ def get(name: str) -> dict | None:
 def names() -> list[str]:
     with _lock:
         return sorted(_docs)
+
+
+def summary() -> list[dict]:
+    """Every document being read, and where the engine is in it: the page
+    of how many, the names read of how many on that page. What the folder
+    index status carries so one poll says everything."""
+    with _lock:
+        return [{"file": d["file"], "page": d["page"], "pages": d["pages"],
+                 "done": d["done"], "total": d["total"]}
+                for _, d in sorted(_docs.items())]

@@ -48,12 +48,12 @@ class Window:
         self.events: queue.Queue = queue.Queue()
         self._installing = False
         self._stopping = False
+        self._last_status: dict | None = None
         self._help: Toplevel | None = None
         self._build()
         self._refresh()
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<F1>", lambda _e: self.help())
-        self._last_status: dict | None = None
         threading.Thread(target=self._status_worker, daemon=True).start()
         root.after(POLL_MS, self._poll)
 
@@ -91,8 +91,9 @@ class Window:
         row.pack(fill=X, pady=(0, 8))
         self.b_install = ttk.Button(row, text="Instalar (uma vez)", command=self.install)
         self.b_start = ttk.Button(row, text="Ligar", command=self.start, style="Accent.TButton")
+        self.b_stopidx = ttk.Button(row, text="Parar a leitura", command=self.stop_index)
         self.b_stop = ttk.Button(row, text="Desligar", command=self.stop)
-        for b in (self.b_install, self.b_start, self.b_stop):
+        for b in (self.b_install, self.b_start, self.b_stopidx, self.b_stop):
             b.pack(side=LEFT, padx=(0, 6))
         ttk.Checkbutton(self.root, text="Ler os PDFs da pasta ao ligar (os já lidos são pulados)",
                         variable=self.index_on_start).pack(anchor=W, pady=(0, 8))
@@ -124,6 +125,8 @@ class Window:
         self.b_start.configure(state=NORMAL if installed and not running
                                and not self._stopping else DISABLED)
         self.b_stop.configure(state=NORMAL if running and not self._stopping else DISABLED)
+        reading = running and (self._last_status or {}).get("status") == "running"
+        self.b_stopidx.configure(state=NORMAL if reading and not self._stopping else DISABLED)
         if not installed and not self._installing:
             self.status.set("Nada instalado ainda: clique em Instalar (uma vez). "
                             "Demora alguns minutos e precisa de internet.")
@@ -192,6 +195,12 @@ class Window:
         self._refresh()
         threading.Thread(target=self._stop_worker, args=(why,), daemon=True).start()
 
+    def stop_index(self) -> None:
+        self._say("Parando a leitura: o documento em leitura termina antes.")
+        self.b_stopidx.configure(state=DISABLED)
+        threading.Thread(target=lambda: self.events.put(
+            ("index-stopped", core.stop_index(self.port))), daemon=True).start()
+
     def _stop_worker(self, why: str) -> None:
         self.server.stop()
         self.events.put(("stopped", why))
@@ -212,8 +221,6 @@ class Window:
         top.configure(padx=8, pady=8)
         foot = ttk.Frame(top)
         foot.pack(side="bottom", fill=X, pady=(8, 0))
-        ttk.Label(foot, text="Esta é só a ajuda; fechar aqui não desliga nada.",
-                  style="Muted.TLabel").pack(side=LEFT)
         ttk.Button(foot, text="Fechar a ajuda", command=top.destroy).pack(side=RIGHT)
         text = Text(top, wrap="word", padx=14, pady=10, relief="flat",
                     background="#fbfbf9", font=nametofont("TkDefaultFont"))
@@ -272,6 +279,7 @@ class Window:
             st = ev[1]
             if st.get("status") != "unknown":
                 self._last_status = st
+                self._refresh()
             if self.server.alive:
                 line = core.describe_index(st)
                 if st.get("status") == "unknown" and self._last_status:
@@ -279,6 +287,8 @@ class Window:
                             + " · sem resposta do servidor neste momento")
                 self.status.set("Ligado em http://127.0.0.1:%d — %s"
                                 % (self.port, line))
+        elif kind == "index-stopped":
+            self._say("Leitura parada: " + core.describe_index(ev[1]))
         elif kind == "gone":
             if self.server.alive and not self._stopping:
                 self._say("A aba do navegador foi fechada: desligando o servidor.")

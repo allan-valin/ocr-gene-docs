@@ -457,7 +457,20 @@ window.addEventListener("load",async()=>{
     say("selftest: uma linha", "ok");
     ok("and a line said lands in it",
        Array.from(document.querySelectorAll("#log div")).some(d=>d.textContent.includes("selftest: uma linha")));
-    ok("the busy bar exists for a request still unanswered", !!document.getElementById("busy"));
+    // progress is a box over the faded panes: folder, documents being read,
+    // the open document's page — not a bar nobody can read a number off
+    if(typeof renderProgress === "function"){
+      const shown = renderProgress({status:"running", total:5, done:1, skipped:0, eta_s:600,
+        reading:[{file:"a.pdf", page:2, pages:9, done:3, total:30},{file:"b.pdf", page:1, pages:4, done:0, total:0}]}, null, null);
+      const pg = document.getElementById("progress");
+      ok("the progress box shows while the folder is read", shown && pg && !pg.hidden);
+      ok("with the folder count and both documents being read",
+         pg.textContent.includes("1 de 5 documentos") && document.querySelectorAll("#pgdocs .row").length===2
+         && pg.textContent.includes("página 2 de 9"));
+      ok("and a Parar button", !document.getElementById("pgstop").hidden);
+      renderProgress({status:"finished", total:5, done:5}, null, null);
+      ok("and goes away when the folder is done", pg.hidden);
+    }
     // read and empty is not unread: the way to read again is Reler, not a
     // button that answers "already done" in silence
     if(typeof renderEmpty === "function" && D){
