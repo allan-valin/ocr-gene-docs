@@ -13,7 +13,7 @@ comparing two pipelines rather than two recognisers.
 Not intended to be kept. If a model wins here it earns a real integration; if
 none does, the answer is that this archive needs its own training data.
 
-    .venv-htr/bin/python scripts/spike_htr.py --model microsoft/trocr-base-handwritten
+    .venv-ocr/bin/python  (the TrOCR venv is gone; needs transformers) scripts/spike_htr.py --model microsoft/trocr-base-handwritten
 """
 from __future__ import annotations
 

@@ -14,7 +14,7 @@ the engine's bands by vertical overlap so `bench_search.py --held-out
   * `line`   -- the whole segmented line that crosses the name column
   * `column` -- that line clipped to the name column by its cuts
 
-    .venv-kraken/bin/python scripts/spike_fullpage.py --out data/fullpage-heldout
+    .venv-ocr/bin/python scripts/spike_fullpage.py --out data/fullpage-heldout
 """
 from __future__ import annotations
 

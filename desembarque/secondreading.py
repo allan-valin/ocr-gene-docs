@@ -36,6 +36,24 @@ HANDS_READ = (hands.CURSIVE, hands.UNKNOWN)
 _MODEL = None
 
 
+def _cuda() -> bool:
+    try:
+        import torch
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+def device_for() -> str:
+    """Where kraken runs: the GPU when torch can see one, else the CPU.
+    Decided by the machine, never by a flag: Allan's laptop has an RTX
+    4050 and read every page on the CPU for a day (2026-10-17); a friend's
+    has none and must not be told to look for one."""
+    # `cuda:0`, not `cuda`: kraken's recogniser splits the device on the
+    # colon and fell over without one (segmentation took either)
+    return "cuda:0" if _cuda() else "cpu"
+
+
 def kraken_installed() -> bool:
     try:
         import kraken  # noqa: F401
@@ -361,7 +379,7 @@ def _lines_of(image: Path, model, device: str) -> list[dict]:
 
 
 def read_record(record: dict, images: dict[int, Path], read=None,
-                model_path: Path = MODEL, device: str = "cpu",
+                model_path: Path = MODEL, device: str | None = None,
                 log=None, rerow: bool = True) -> tuple[dict, int]:
     """The record with every handwritten page read a second time, and how
     many rows got a reading. `images` maps page number to its picture;
@@ -382,6 +400,7 @@ def read_record(record: dict, images: dict[int, Path], read=None,
         if not available(model_path):
             return {**record, "second_reading": {**note, "skipped": status(model_path)["detail"]}}, 0
         model = load_model(model_path)
+        device = device or device_for()
         read = lambda image: _lines_of(image, model, device)   # noqa: E731
     geo = {int(p.get("n") or 0): p.get("geometry") or {}
            for p in record.get("pages") or () if isinstance(p, dict)}

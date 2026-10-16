@@ -1038,3 +1038,22 @@ def test_without_a_watcher_the_recogniser_is_called_once():
     rows_from_bands(geo, (1000, 2000), lambda crops: calls.append(len(crops)) or
                     [("x", 0.5)] * len(crops), crop=lambda i, box: i)
     assert calls == [20]
+
+
+def test_the_engine_uses_the_gpu_when_paddle_was_built_for_one(monkeypatch):
+    """The recogniser, the detector and the page pipeline are all made with
+    the device the install has: `gpu:0` when paddle is a CUDA build and a
+    card is there, `cpu` otherwise. Never asked for by a flag: a friend's
+    laptop has no card and must not be told to look for one."""
+    from desembarque import engine_paddle as ep
+    monkeypatch.setattr(ep, "_gpu_count", lambda: 1)
+    assert ep.device_for() == "gpu:0"
+    monkeypatch.setattr(ep, "_gpu_count", lambda: 0)
+    assert ep.device_for() == "cpu"
+    eng = ep.PaddleEngine()
+    monkeypatch.setattr(ep, "_gpu_count", lambda: 1)
+    assert eng._predictor_kw()["device"] == "gpu:0"
+    assert "cpu_threads" not in eng._predictor_kw() and "enable_mkldnn" not in eng._predictor_kw()
+    monkeypatch.setattr(ep, "_gpu_count", lambda: 0)
+    kw = eng._predictor_kw()
+    assert kw["device"] == "cpu" and kw["enable_mkldnn"] == eng.mkldnn

@@ -9,14 +9,14 @@ segmentation, 0.014 s a line on the GPU. One file a page under `--out-dir`,
 written as it is read, so the pass resumes and never reads a page twice;
 typed pages are the engine's and are not touched.
 
-    .venv-kraken/bin/python scripts/reread_fullpage.py --device cuda:0
-    .venv-kraken/bin/python scripts/reread_fullpage.py --collect
+    .venv-ocr/bin/python scripts/reread_fullpage.py --device cuda:0
+    .venv-ocr/bin/python scripts/reread_fullpage.py --collect
 
 The 1923 window's lines (`read_hospedaria.py`, polygons stored, no cached
 images) are re-read the same way, rendering each page from its PDF, two
 workers on the one GPU:
 
-    .venv-kraken/bin/python scripts/reread_fullpage.py --device cuda:0 --shard 0/2 \\
+    .venv-ocr/bin/python scripts/reread_fullpage.py --device cuda:0 --shard 0/2 \\
         --in-dir data/dossiers-1923/lines --out-dir data/dossiers-1923/lines-ppocrv6
     .venv/bin/python scripts/search_lines.py --dir data/dossiers-1923/lines-ppocrv6 "Kubach August"
     .venv/bin/python scripts/apply_second_opinion.py --write \\

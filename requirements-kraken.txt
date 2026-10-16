@@ -5,12 +5,18 @@
 # installs this into .venv-ocr after a CPU-only torch and fetches the weights
 # to ~/.cache/kraken/ppocrv6-hist/medium.safetensors (61 MB). By hand:
 #
-#   .venv-ocr/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
-#   .venv-ocr/bin/pip install -r requirements-kraken.txt
+#   .venv-ocr/bin/pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+#       torch torchvision -r requirements-kraken.txt
 #   .venv-ocr/bin/python -c "from desembarque.secondreading import fetch_model; fetch_model()"
 #
-# The corpus passes (`scripts/read_fullpage.py`, `scripts/reread_fullpage.py`)
-# ran in a separate .venv-kraken with a CUDA torch; that venv is not needed
-# for the application.
+# One venv, .venv-ocr, for everything: the application and the corpus passes
+# (`scripts/read_fullpage.py`, `scripts/reread_fullpage.py`). On a machine
+# with an NVIDIA card put the CUDA builds in the same venv instead — the code
+# picks the device by what the install can see, never by a flag:
+#   .venv-ocr/bin/pip install --force-reinstall "torch==2.14.0" "torchvision==0.29.1"
+#   .venv-ocr/bin/pip install --index-url https://www.paddlepaddle.org.cn/packages/stable/cu130/ \
+#       --extra-index-url https://pypi.org/simple "paddlepaddle-gpu==3.4.0" "numpy<2.4"
+#   (then uninstall paddlepaddle and force-reinstall paddlepaddle-gpu --no-deps: the two
+#   wheels share the paddle/ directory, done 2026-10-17)
 kraken==7.1.1
 pypdfium2==5.13.0

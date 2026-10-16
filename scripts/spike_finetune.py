@@ -11,7 +11,7 @@ model in `docs/TASKS-reading-quality.md` was scored on, so the number here
 sits beside those. Six rows is a small held-out set and the result is a
 direction, not a measurement.
 
-    .venv-htr/bin/python scripts/spike_finetune.py --trainset data/trainset
+    .venv-ocr/bin/python  (the TrOCR venv is gone; needs transformers) scripts/spike_finetune.py --trainset data/trainset
 """
 from __future__ import annotations
 

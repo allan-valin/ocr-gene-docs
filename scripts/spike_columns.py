@@ -20,7 +20,7 @@ full column width, so a band containing one reports a bounding box as wide as
 the column no matter what is written in it -- which is how a first look at this
 made every row appear to hold a name.
 
-    .venv-htr/bin/python scripts/spike_columns.py --sample 25
+    .venv-ocr/bin/python  (the TrOCR venv is gone; needs transformers) scripts/spike_columns.py --sample 25
 """
 from __future__ import annotations
 

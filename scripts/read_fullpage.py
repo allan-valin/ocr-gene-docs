@@ -18,8 +18,8 @@ Each page lands in its own file under `--out-dir` as it is read, so the pass
 resumes from wherever it was stopped and never reads a page twice. Cursive
 pages go first, because they are the point.
 
-    .venv-kraken/bin/python scripts/read_fullpage.py            # read, resumable
-    .venv-kraken/bin/python scripts/read_fullpage.py --collect  # then build sidecars
+    .venv-ocr/bin/python scripts/read_fullpage.py            # read, resumable
+    .venv-ocr/bin/python scripts/read_fullpage.py --collect  # then build sidecars
 
 The sidecars are applied as second readings, reversibly:
 

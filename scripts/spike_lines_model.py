@@ -9,7 +9,7 @@ hand McFondue cannot. Writes `<out>-column.json`, keyed to the engine's bands
 exactly as the spike's sidecar is, so `bench_search.py --held-out
 --second-opinion` scores it.
 
-    .venv-kraken/bin/python scripts/spike_lines_model.py \\
+    .venv-ocr/bin/python scripts/spike_lines_model.py \\
         --lines data/fullpage-heldout15-lines.json \\
         --model ~/.cache/kraken/german_handwriting.mlmodel \\
         --out data/fullpage-heldout15-german

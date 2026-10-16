@@ -727,10 +727,40 @@ def with_fallback(mask_rows: list[dict], make_alt: Callable[[], list[dict] | Non
     return chosen, chosen is alt
 
 
+def _gpu_count() -> int:
+    try:
+        import paddle
+        if not paddle.device.is_compiled_with_cuda():
+            return 0
+        return int(paddle.device.cuda.device_count())
+    except Exception:
+        return 0
+
+
+def device_for() -> str:
+    """Where the predictors run: `gpu:0` when this paddle is a CUDA build
+    and a card is there, else `cpu`. Decided by the install, never by a
+    flag — Allan's laptop has an RTX 4050 and every page was read on the
+    CPU until 2026-10-17; a friend's has no card."""
+    return "gpu:0" if _gpu_count() > 0 else "cpu"
+
+
 class PaddleEngine:
     """PaddleOCR (Apache-2.0 code, open weights), run locally on CPU."""
 
     name = "paddle"
+
+    def _predictor_kw(self, mkldnn: bool | None = None) -> dict:
+        """What every predictor is made with: the device, and on the CPU the
+        oneDNN switch and the thread count, which mean nothing on a card."""
+        device = device_for()
+        if device != "cpu":
+            return {"device": device}
+        kw = {"device": device,
+              "enable_mkldnn": self.mkldnn if mkldnn is None else mkldnn}
+        if self.threads:
+            kw["cpu_threads"] = self.threads
+        return kw
 
     def __init__(self, rec_model: str = DEFAULT_REC, det_model: str = DEFAULT_DET,
                  mkldnn: bool = True, threads: int | None = DEFAULT_THREADS,
@@ -790,11 +820,8 @@ class PaddleEngine:
 
     def _make_recogniser(self, mkldnn: bool | None = None):
         from paddleocr import TextRecognition
-        kw = {"model_name": self.rec_model,
-              "enable_mkldnn": self.mkldnn if mkldnn is None else mkldnn,
-              "input_shape": REC_INPUT_SHAPE}
-        if self.threads:
-            kw["cpu_threads"] = self.threads
+        kw = {"model_name": self.rec_model, "input_shape": REC_INPUT_SHAPE,
+              **self._predictor_kw(mkldnn)}
         return TextRecognition(**kw)
 
     def _recogniser(self):
@@ -808,11 +835,10 @@ class PaddleEngine:
     def _build_page(self, mkldnn: bool):
         from paddleocr import PaddleOCR
         kw = dict(use_doc_orientation_classify=False, use_doc_unwarping=False,
-                  use_textline_orientation=False, enable_mkldnn=mkldnn,
+                  use_textline_orientation=False,
                   lang="pt", text_detection_model_name=self.det_model,
-                  text_recognition_model_name=self.rec_model)
-        if self.threads:
-            kw["cpu_threads"] = self.threads
+                  text_recognition_model_name=self.rec_model,
+                  **self._predictor_kw(mkldnn))
         return PaddleOCR(**kw)
 
     def _full_page(self):
@@ -1020,12 +1046,10 @@ class PaddleEngine:
         from paddleocr import TextDetection
         # oneDNN refuses this model the same way it refuses the pipeline, and
         # here there is nothing to fall back to, so it is off from the start.
-        kw = {"model_name": self.det_model, "enable_mkldnn": False}
+        kw = {"model_name": self.det_model, **self._predictor_kw(mkldnn=False)}
         if side:
             kw["limit_side_len"] = side
             kw["limit_type"] = "max"
-        if self.threads:
-            kw["cpu_threads"] = self.threads
         return TextDetection(**kw)
 
     def _detector(self, side: int | None = None):

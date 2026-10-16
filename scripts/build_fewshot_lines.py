@@ -17,7 +17,7 @@ saw its own page. `ketos` trains; `spike_lines_model.py` reads with the
 result; `bench_search.py --held-out --second-opinion` scores it.
 
     .venv/bin/python scripts/build_fewshot_lines.py --out data/fewshot
-    .venv-kraken/bin/ketos -d cuda:0 train --arch ppocrv6 \\
+    .venv-ocr/bin/ketos -d cuda:0 train --arch ppocrv6 \\
         -i ~/.cache/kraken/ppocrv6-hist/medium.safetensors --resize union \\
         -f path -t data/fewshot/train-A.txt -o data/fewshot/model-A ...
 """

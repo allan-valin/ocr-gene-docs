@@ -20,7 +20,7 @@ Same reader as the corpus pass (kraken blla + McFondue, polygons kept), one
 JSON per page under --out-dir, resumable, `--shard I/N` for workers.
 `search_lines.py` then asks the files for a name.
 
-    .venv-kraken/bin/python scripts/read_hospedaria.py --device cuda
+    .venv-ocr/bin/python scripts/read_hospedaria.py --device cuda
 """
 from __future__ import annotations
 

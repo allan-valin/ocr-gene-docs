@@ -10,7 +10,7 @@ crop, cut to the row's ink; `--variant strip` is the plain rectangle of the
 band. A historical-hand TrOCR reads the carved crop at CER 0.609 and the strip
 at 0.567, so a second opinion is worth measuring on the strip:
 
-    .venv-htr/bin/python scripts/read_bands.py --bands DIR --out sidecar.json \
+    .venv-ocr/bin/python  (the TrOCR venv is gone; needs transformers) scripts/read_bands.py --bands DIR --out sidecar.json \
         --variant strip --refine 64
 """
 from __future__ import annotations

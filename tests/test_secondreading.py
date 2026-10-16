@@ -289,3 +289,18 @@ def test_the_apesp_page_gives_the_row_with_kubach_on_it():
     at = texts.index(hit[0])
     assert "Helbing" in texts[at - 2] and "Klara" in texts[at - 1]
     assert "Julian" in texts[at + 1]
+
+
+# --- the GPU, when there is one ------------------------------------------------
+
+def test_the_second_reading_runs_on_the_gpu_when_torch_has_one(monkeypatch):
+    """Allan, 2026-10-17: the server read everything on the CPU of a laptop
+    with an RTX 4050. The device is chosen by what torch can see, once;
+    `cpu` on a machine with none, which is every friend's."""
+    monkeypatch.setattr(sr, "_cuda", lambda: True)
+    assert sr.device_for() == "cuda:0", "kraken wants the index; bare `cuda` broke its recogniser"
+    monkeypatch.setattr(sr, "_cuda", lambda: False)
+    assert sr.device_for() == "cpu"
+    import inspect
+    assert inspect.signature(sr.read_record).parameters["device"].default is None, \
+        "read_record picks the device itself unless told"

@@ -16,7 +16,7 @@ Not intended to be kept as it is: at 6.6 s a row this belongs in the offline
 batch, and probably only on the rows the check flags. What is being measured
 here is whether it is worth building that.
 
-    .venv-htr/bin/python scripts/spike_second_opinion.py --out data/second_opinion.json
+    .venv-ocr/bin/python  (the TrOCR venv is gone; needs transformers) scripts/spike_second_opinion.py --out data/second_opinion.json
 """
 from __future__ import annotations
 

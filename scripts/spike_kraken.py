@@ -11,7 +11,7 @@ It reads exactly the labelled crops of `data/trainset-fair`, the same picture
 every other recogniser was handed, and writes the sidecar `score_crops.py`
 scores so the number lands in the same table as CHURRO's and Qwen's:
 
-    .venv-kraken/bin/python scripts/spike_kraken.py \\
+    .venv-ocr/bin/python scripts/spike_kraken.py \\
         --model ~/.cache/kraken/McCATMuS_nfd_nofix_V1.mlmodel
     .venv/bin/python scripts/score_crops.py --sidecar data/kraken-rows.json \\
         --trainset data/trainset-fair

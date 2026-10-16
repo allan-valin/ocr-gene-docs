@@ -6,6 +6,35 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-17, small hours — one venv, on the GPU
+
+Allan: "how the fuck are you able to test everything then if this is
+missing? ... why should I have to waste limited disk space bc you can't
+manage environments?" — right. The machine held five venvs, all mine:
+`.venv` (pytest), `.venv-ocr` (the launcher's server, no kraken),
+`.venv-kraken` (6 GB, CUDA torch, corpus passes), `.venv-htr` (1.2 GB,
+dead TrOCR spike) and a 6.7 GB scratch `venv-all` built to verify the
+rows-from-lines fix. The server read every page on the CPU of a laptop
+with an RTX 4050 while kraken ran on its GPU in another venv.
+
+Now **one venv, `.venv-ocr`** (8.6 GB): engine, kraken, CUDA torch
+2.14.0+cu130 and `paddlepaddle-gpu` 3.4.0 (cu130; numpy pinned <2.4
+for paddlex; cuDNN 9.24 and cuda-toolkit 13.0.3 as torch wants — paddle
+declares 9.20/13.0.2 and runs on the newer). The other four are gone
+(−14 GB; disk 45 → 51 GB free). Every wheel came from pip's cache. The
+code picks the device by what the install can see, never by a flag:
+`engine_paddle.device_for()` → `gpu:0` when paddle is a CUDA build with
+a card, else `cpu`; `secondreading.device_for()` → `cuda:0` (kraken's
+recogniser splits on the colon; bare `cuda` broke it) when torch sees
+one, else `cpu`. A friend's install (CPU wheels from the launcher) never
+looks for a card. Script usage lines point at `.venv-ocr`;
+`requirements-kraken.txt` says how the GPU builds go in.
+
+Checked through the launcher's own venv and server on the APESP page 6
+via `/api/transcribe?page=6`: CPU 96 s → GPU 34 s, 46 rows, the Kubach
+row, second reading on page 6. kraken alone on that page 42 s → 22 s
+(its vectorising is CPU work). Tests: 1057 pass.
+
 ## 2026-10-17 — the launcher checks the install in three tiers
 
 Allan: "why is Completar a instalação even an option for me right now? I
