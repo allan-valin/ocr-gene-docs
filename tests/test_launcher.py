@@ -102,3 +102,49 @@ def test_the_first_document_shows_its_name_and_the_clock_before_any_eta():
 def test_the_server_is_given_three_minutes_to_load_its_models():
     import inspect
     assert inspect.signature(core.Server.start).parameters["wait"].default >= 180
+
+
+def test_the_help_says_what_each_button_does_and_why():
+    """Allan: the buttons do not say what 'Iniciar' starts or what 'Parar'
+    stops. The help is one page a person reaches with F1 or the Ajuda button,
+    and it names every button, what it does, why it exists, and how long
+    things take."""
+    h = core.help_text(port=8765)
+    for word in ("Instalar", "Ligar", "Abrir a página", "Desligar",
+                 "Ler os PDFs", "127.0.0.1:8765", "PDF", "20 s", "fechar a janela"):
+        assert word in h, word
+    assert len(h) < 2500
+
+
+@pytest.mark.skipif(not os.environ.get("DISPLAY"), reason="no display")
+def test_f1_opens_the_help_window():
+    from tkinter import Tk, Toplevel
+    import launcher.desembarque_launcher as dl
+    root = Tk()
+    root.withdraw()
+    try:
+        w = dl.Window(root)
+        assert root.bind("<F1>"), "F1 is bound on the window"
+        w.help()
+        root.update()
+        tops = [c for c in root.winfo_children() if isinstance(c, Toplevel)]
+        assert len(tops) == 1
+        w.help()
+        root.update()
+        tops = [c for c in root.winfo_children() if isinstance(c, Toplevel)]
+        assert len(tops) == 1, "a second F1 does not open a second window"
+        assert w.b_start.cget("text") == "Ligar"
+        assert w.b_stop.cget("text") == "Desligar"
+    finally:
+        root.destroy()
+
+
+def test_a_server_too_busy_to_answer_is_not_reported_as_nothing_to_index():
+    """Measured with the index running: /api/index took 2 to 20 s to answer
+    (four recogniser threads hold the interpreter). The launcher's 2 s poll
+    timed out, got nothing, and printed 'nada a indexar ainda' for minutes
+    while five documents were being read. No answer is 'busy', not 'idle'."""
+    assert "ocupado" in core.describe_index({"status": "unknown"})
+    assert core.describe_index({"status": "idle"}) == "nada a indexar ainda"
+    import inspect
+    assert inspect.signature(core.index_status).parameters["timeout"].default >= 15

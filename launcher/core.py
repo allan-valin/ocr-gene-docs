@@ -66,8 +66,12 @@ def is_up(port: int, timeout: float = 1.0) -> bool:
     return _get(port, "/api/engine", timeout=timeout) is not None
 
 
-def index_status(port: int) -> dict:
-    return _get(port, "/api/index") or {"status": "unknown"}
+def index_status(port: int, timeout: float = 20.0) -> dict:
+    """The index's state. With the recogniser threads busy the server takes
+    seconds to answer this — measured 2 to 20 s on a laptop also running
+    another job — so the wait is long, and the caller must not be the UI
+    thread. No answer is reported as `unknown`, which is not `idle`."""
+    return _get(port, "/api/index", timeout=timeout) or {"status": "unknown"}
 
 
 def start_index(port: int, folder: str = "") -> dict:
@@ -77,8 +81,10 @@ def start_index(port: int, folder: str = "") -> dict:
 def describe_index(st: dict) -> str:
     """One line a person can read: how far, and how long, in hours."""
     status = st.get("status", "unknown")
-    if status in ("idle", "unknown"):
+    if status == "idle":
         return "nada a indexar ainda"
+    if status == "unknown":
+        return "o servidor está ocupado e não respondeu (a ler?)"
     done = int(st.get("done") or 0) + int(st.get("skipped") or 0)
     total = int(st.get("total") or 0)
     failed = int(st.get("failed") or 0)
@@ -106,6 +112,51 @@ def describe_index(st: dict) -> str:
     if failed:
         parts.append(f"{failed} falhou" if failed == 1 else f"{failed} falharam")
     return " · ".join(parts)
+
+
+HELP = """\
+O que isto faz
+O Desembarque lê listas de passageiros em PDF e deixa procurar nomes numa
+página no navegador. Tudo corre no seu computador; nada é enviado para fora.
+
+Pasta com os PDFs
+Onde estão as listas. Só ficheiros .pdf contam; imagens (JPG, PNG) são
+ignoradas. Pode mudar de pasta e voltar a Ligar.
+
+Instalar (uma vez)
+Cria um ambiente Python próprio e descarrega o motor de leitura (cerca de
+1,5 GB, precisa de internet). Só aparece enquanto não estiver instalado.
+
+Ligar
+Arranca o servidor: o programa que lê os PDFs e serve a página. Carregar os
+modelos demora 1 a 2 minutos; a janela avisa quando está pronto e abre o
+navegador. Sem o servidor ligado a página não existe.
+
+Abrir a página
+Abre o navegador em http://127.0.0.1:{port}/. Pode fechar o navegador e
+abrir de novo à vontade; o servidor continua a correr.
+
+Ler os PDFs da pasta ao ligar
+Transcreve os PDFs da pasta que ainda não foram lidos. Cerca de 20 s por
+página: uma lista de 9 páginas leva uns 3 minutos; os já lidos saltam. A
+linha de estado diz em que documento vai e quanto falta. Enquanto lê, o
+computador fica lento.
+
+Desligar
+Pára o servidor; fechar a janela faz o mesmo. O que já foi lido fica
+guardado (pasta data/transcriptions) e não se perde; da próxima vez
+continua de onde ficou.
+
+Se algo correr mal
+"o servidor não respondeu a tempo": o computador estava ocupado; espere e
+carregue em Ligar outra vez. Outras mensagens: copie o texto da caixa de
+baixo e envie-o a quem lhe passou o programa.
+"""
+
+
+def help_text(port: int = DEFAULT_PORT) -> str:
+    """The one page of help: every button, what it does, why, how long."""
+    return HELP.replace("{port}", str(port))
 
 
 class Server:

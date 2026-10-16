@@ -1,8 +1,9 @@
 """The window a person double-clicks.
 
-Three buttons and a folder: *Iniciar* starts the server on the folder of PDFs,
-*Abrir no navegador* opens the page, *Parar* stops the server — and closing
+Three buttons and a folder: *Ligar* starts the server on the folder of PDFs,
+*Abrir a página* opens the page, *Desligar* stops the server — and closing
 the window stops it too, so nothing is left running that nobody can see.
+*Ajuda* (or F1) opens one page that says what each button does and why.
 The first time, with nothing installed, the only button is *Instalar*, which
 makes the virtual environment and installs the recogniser, showing what it is
 doing, because a blank window for ten minutes looks broken.
@@ -16,11 +17,13 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from pathlib import Path
-from tkinter import (BOTH, DISABLED, END, LEFT, NORMAL, RIGHT, W, X, Checkbutton,
-                     BooleanVar, Button, Entry, Frame, Label, StringVar, Text, Tk,
-                     filedialog, messagebox)
+from tkinter import (BOTH, DISABLED, END, LEFT, NORMAL, RIGHT, W, X, Y,
+                     BooleanVar, StringVar, Text, Tk, Toplevel, filedialog,
+                     messagebox, ttk)
+from tkinter.font import nametofont
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -34,7 +37,7 @@ class Window:
     def __init__(self, root: Tk) -> None:
         self.root = root
         root.title(TITLE)
-        root.minsize(560, 360)
+        root.minsize(680, 420)
         self.settings = core.load_settings()
         self.folder = StringVar(value=self.settings.get("folder", ""))
         self.port = int(self.settings.get("port", core.DEFAULT_PORT))
@@ -43,36 +46,69 @@ class Window:
         self.server = core.Server(self._command)
         self.events: queue.Queue = queue.Queue()
         self._installing = False
+        self._help: Toplevel | None = None
         self._build()
         self._refresh()
         root.protocol("WM_DELETE_WINDOW", self.close)
+        root.bind("<F1>", lambda _e: self.help())
+        self._last_status: dict | None = None
+        threading.Thread(target=self._status_worker, daemon=True).start()
         root.after(POLL_MS, self._poll)
 
     # ---- layout ----------------------------------------------------------
     def _build(self) -> None:
-        pad = {"padx": 10, "pady": 4}
-        top = Frame(self.root)
-        top.pack(fill=X, **pad)
-        Label(top, text="Pasta com os PDFs:").pack(side=LEFT)
-        Entry(top, textvariable=self.folder).pack(side=LEFT, fill=X, expand=True, padx=6)
-        Button(top, text="Escolher…", command=self.choose).pack(side=LEFT)
+        """Plain ttk, themed: a title, the folder, one row of buttons, the
+        status line, the log. Only what the standard library ships, since this
+        runs before anything is installed."""
+        style = ttk.Style(self.root)
+        if sys.platform.startswith("linux") and "clam" in style.theme_names():
+            style.theme_use("clam")
+        base = nametofont("TkDefaultFont")
+        base.configure(size=10)
+        self.root.option_add("*Font", base)
+        style.configure("Title.TLabel", font=(base.cget("family"), 15, "bold"))
+        style.configure("Muted.TLabel", foreground="#555")
+        style.configure("Accent.TButton", font=(base.cget("family"), 10, "bold"))
+        style.configure("TButton", padding=(10, 5))
+        self.root.configure(padx=16, pady=12)
 
-        row = Frame(self.root)
-        row.pack(fill=X, **pad)
-        self.b_install = Button(row, text="Instalar (uma vez)", command=self.install)
-        self.b_start = Button(row, text="Iniciar", command=self.start)
-        self.b_open = Button(row, text="Abrir no navegador", command=self.open)
-        self.b_stop = Button(row, text="Parar", command=self.stop)
+        head = ttk.Frame(self.root)
+        head.pack(fill=X)
+        ttk.Label(head, text=TITLE, style="Title.TLabel").pack(side=LEFT)
+        ttk.Label(head, text="listas de passageiros, lidas e pesquisáveis",
+                  style="Muted.TLabel").pack(side=LEFT, padx=(10, 0), pady=(6, 0))
+        self.b_help = ttk.Button(head, text="Ajuda (F1)", command=self.help)
+        self.b_help.pack(side=RIGHT)
+
+        top = ttk.LabelFrame(self.root, text="Pasta com os PDFs", padding=(10, 6))
+        top.pack(fill=X, pady=(12, 8))
+        ttk.Entry(top, textvariable=self.folder).pack(side=LEFT, fill=X, expand=True)
+        ttk.Button(top, text="Escolher…", command=self.choose).pack(side=LEFT, padx=(8, 0))
+
+        row = ttk.Frame(self.root)
+        row.pack(fill=X, pady=(0, 8))
+        self.b_install = ttk.Button(row, text="Instalar (uma vez)", command=self.install)
+        self.b_start = ttk.Button(row, text="Ligar", command=self.start, style="Accent.TButton")
+        self.b_open = ttk.Button(row, text="Abrir a página", command=self.open)
+        self.b_stop = ttk.Button(row, text="Desligar", command=self.stop)
         for b in (self.b_install, self.b_start, self.b_open, self.b_stop):
-            b.pack(side=LEFT, padx=3)
-        Checkbutton(row, text="Indexar a pasta ao iniciar",
-                    variable=self.index_on_start).pack(side=RIGHT)
+            b.pack(side=LEFT, padx=(0, 6))
+        ttk.Checkbutton(self.root, text="Ler os PDFs da pasta ao ligar (os já lidos saltam)",
+                        variable=self.index_on_start).pack(anchor=W, pady=(0, 8))
 
-        Label(self.root, textvariable=self.status, anchor=W, justify=LEFT,
-              wraplength=540).pack(fill=X, **pad)
-        self.log = Text(self.root, height=12, state=DISABLED, wrap="word")
-        self.log.pack(fill=BOTH, expand=True, **pad)
-        self._say("Escolha a pasta com os PDFs e carregue em Iniciar.")
+        ttk.Label(self.root, textvariable=self.status, anchor=W, justify=LEFT,
+                  wraplength=600, style="Muted.TLabel").pack(fill=X, pady=(0, 6))
+
+        box = ttk.Frame(self.root)
+        box.pack(fill=BOTH, expand=True)
+        self.log = Text(box, height=12, state=DISABLED, wrap="word", relief="flat",
+                        padx=8, pady=6, background="#f7f7f5", font=base)
+        bar = ttk.Scrollbar(box, command=self.log.yview)
+        self.log.configure(yscrollcommand=bar.set)
+        self.log.pack(side=LEFT, fill=BOTH, expand=True)
+        bar.pack(side=RIGHT, fill=Y)
+        self._say("Escolha a pasta com os PDFs e carregue em Ligar. "
+                  "Ajuda (F1) explica cada botão.")
 
     def _say(self, line: str) -> None:
         self.log.configure(state=NORMAL)
@@ -149,11 +185,49 @@ class Window:
         self._say("Servidor parado.")
         self._refresh()
 
+    def help(self) -> None:
+        """One window, reused: F1 twice does not open two."""
+        if self._help is not None and self._help.winfo_exists():
+            self._help.lift()
+            return
+        top = Toplevel(self.root)
+        top.title(TITLE + " — Ajuda")
+        top.minsize(560, 480)
+        top.configure(padx=8, pady=8)
+        text = Text(top, wrap="word", padx=14, pady=10, relief="flat",
+                    background="#fbfbf9", font=nametofont("TkDefaultFont"))
+        bold = nametofont("TkDefaultFont").copy()
+        bold.configure(weight="bold", size=11)
+        text.tag_configure("h", font=bold, spacing1=10, spacing3=2)
+        for para in core.help_text(self.port).split("\n\n"):
+            head, _, body = para.partition("\n")
+            text.insert(END, head + "\n", "h")
+            text.insert(END, body.replace("\n", " ").strip() + "\n")
+        text.configure(state=DISABLED)
+        bar = ttk.Scrollbar(top, command=text.yview)
+        text.configure(yscrollcommand=bar.set)
+        text.pack(side=LEFT, fill=BOTH, expand=True)
+        bar.pack(side=RIGHT, fill=Y)
+        top.bind("<Escape>", lambda _e: top.destroy())
+        self._help = top
+
     def close(self) -> None:
         self.server.stop()
         self.root.destroy()
 
     # ---- the clock -------------------------------------------------------
+    def _status_worker(self) -> None:
+        """Asks the server how the index is going, off the UI thread: with
+        the recogniser busy an answer takes seconds, and a window that waits
+        for it freezes, which is what a person reads as broken."""
+        while True:
+            if self.server.alive:
+                st = core.index_status(self.port)
+                if st.get("status") == "unknown" and self._last_status:
+                    st = {**self._last_status, "status": "unknown"}
+                self.events.put(("status", st))
+            time.sleep(POLL_MS / 1000)
+
     def _poll(self) -> None:
         try:
             while True:
@@ -161,11 +235,8 @@ class Window:
                 self._handle(ev)
         except queue.Empty:
             pass
-        if self.server.alive:
-            st = core.index_status(self.port)
-            self.status.set("A correr em http://127.0.0.1:%d — %s"
-                            % (self.port, core.describe_index(st)))
-        elif self.server.proc is None and self.b_stop["state"] == NORMAL:
+        if not self.server.alive and self.server.proc is None \
+                and str(self.b_stop["state"]) == NORMAL:
             self._refresh()
         self.root.after(POLL_MS, self._poll)
 
@@ -173,6 +244,17 @@ class Window:
         kind = ev[0]
         if kind == "log":
             self._say(ev[1])
+        elif kind == "status":
+            st = ev[1]
+            if st.get("status") != "unknown":
+                self._last_status = st
+            if self.server.alive:
+                line = core.describe_index(st)
+                if st.get("status") == "unknown" and self._last_status:
+                    line = (core.describe_index(self._last_status)
+                            + " · sem resposta do servidor neste momento")
+                self.status.set("Ligado em http://127.0.0.1:%d — %s"
+                                % (self.port, line))
         elif kind == "installed":
             self._installing = False
             self._say("Instalação concluída." if ev[1]
@@ -185,7 +267,7 @@ class Window:
                 self.status.set("Não arrancou.")
                 self._refresh()
                 return
-            self._say(f"Servidor a correr sobre {folder}")
+            self._say(f"Servidor ligado sobre {folder}")
             self._refresh()
             self.open()
             if self.index_on_start.get():
