@@ -114,7 +114,23 @@ then *Ligar* on a folder of PDFs — it opens the browser — and *Desligar*;
 closing the window or the browser tab stops the server too. Transcriptions are written to a `transcriptions` folder inside the
 folder of PDFs (the repository's own `data/scans` keeps `data/transcriptions`;
 `--store` overrides). It needs only a Python from python.org.
-`launcher/README.md` says this in Portuguese, step by step.
+`launcher/README.md` says this in Portuguese, step by step, with a section per
+system:
+
+* **Windows** — python.org 3.12 with *Add python.exe to PATH*, then
+  `Desembarque.bat`. The PDFs must be on a drive Windows can read (a Linux
+  partition is not). CPU wheels by default. Not yet tried on Windows.
+* **macOS** — python.org 3.12 (its Tk is what the window needs), then
+  `Desembarque.command`; the first run needs right-click → Open past
+  Gatekeeper. Not yet tried on a Mac.
+* **Linux** — `python3`, `python3-venv`, `python3-tk` from the distribution,
+  then `Desembarque.sh` (or `sh Desembarque.sh`). With an NVIDIA card the
+  CUDA builds go into the same `.venv-ocr` (commands in
+  `requirements-kraken.txt`); the code picks the device by what the install
+  can see. Tried here.
+
+Each system needs its own copy of the folder and its own `.venv-ocr`; a
+venv made on one does not run on another.
 
 Install once:
 
