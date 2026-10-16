@@ -162,7 +162,22 @@ def clients_state(now: float | None = None) -> dict:
 # Documents are indexed in parallel: one page is ~4 s, and a real folder is
 # thousands of them. Four workers rather than one per core — each loads its own
 # recogniser, and this has to leave a laptop usable while it runs.
-INDEX_WORKERS = int(os.environ.get("DESEMBARQUE_WORKERS", "4"))
+def index_workers() -> int:
+    """How many documents are read at once: four on the CPU, two on a
+    card — four paddle pipelines and kraken on a 6 GB card is more than it
+    holds, and two on the GPU read faster than four on the CPU anyway.
+    `DESEMBARQUE_WORKERS` overrides either."""
+    raw = os.environ.get("DESEMBARQUE_WORKERS")
+    if raw:
+        return int(raw)
+    try:
+        from desembarque.engine_paddle import device_for
+        return 2 if device_for() != "cpu" else 4
+    except Exception:
+        return 4
+
+
+INDEX_WORKERS = 4   # kept for anything that imports it; `index_workers()` decides
 
 
 def columns_wanted(env: dict | None = None) -> tuple[str, ...]:
@@ -692,7 +707,7 @@ def index_folder(folder: Path):
         return not data.get("partial")
 
     return BATCH.start(folder, pdfs, is_cached, transcribe,
-                       workers=INDEX_WORKERS)
+                       workers=index_workers())
 
 
 class Handler(BaseHTTPRequestHandler):

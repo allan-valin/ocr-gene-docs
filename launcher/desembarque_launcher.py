@@ -255,7 +255,12 @@ class Window:
     def stop(self, why: str = "") -> None:
         """Off the UI thread: the server is told first and the page given a
         few seconds to hear, which is too long for a window to freeze."""
-        if self._stopping or not self.server.alive:
+        if self._stopping:
+            return
+        if not self.server.alive:
+            gone = self.server.reap()
+            self._say(gone or "Servidor já estava parado.")
+            self._refresh()
             return
         self._stopping = True
         self._refresh()
@@ -268,8 +273,10 @@ class Window:
             ("index-stopped", core.stop_index(self.port))), daemon=True).start()
 
     def _stop_worker(self, why: str) -> None:
-        self.server.stop()
-        self.events.put(("stopped", why))
+        try:
+            self.server.stop()
+        finally:
+            self.events.put(("stopped", why))
 
     def help(self) -> None:
         """One window, reused: F1 twice does not open two."""
@@ -332,7 +339,14 @@ class Window:
                 self._handle(ev)
         except queue.Empty:
             pass
-        if not self.server.alive and self.server.proc is None \
+        # a server that went away on its own: say so, forget it, and let
+        # Ligar work again — the window used to notice only on Desligar
+        gone = self.server.reap()
+        if gone:
+            self._say(gone)
+            self._stopping = False
+            self._refresh()
+        elif not self.server.alive and self.server.proc is None \
                 and str(self.b_stop["state"]) == NORMAL:
             self._refresh()
         self.root.after(POLL_MS, self._poll)
@@ -362,6 +376,9 @@ class Window:
         elif kind == "stopped":
             self._stopping = False
             self._say("Servidor parado." + (" " + ev[1] if ev[1] else ""))
+            tail = self.server.tail(6)
+            if "Traceback" in tail or "Error" in tail:
+                self._say(tail)
             self._refresh()
         elif kind == "installed":
             self._installing = False

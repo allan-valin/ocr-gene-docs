@@ -272,3 +272,39 @@ def test_each_tier_says_what_it_is_for_and_what_it_costs():
         assert name and what and ("MB" in size or "GB" in size)
     h = core.help_text()
     assert "Verificar a instalação" in h and "Completar" not in h.split("Verificar a instalação")[0]
+
+
+def test_a_chatty_server_does_not_hang_on_its_own_output(tmp_path):
+    """The launcher piped the server's stdout and never read it: after
+    64 KB of paddle warnings and kraken INFO lines (a few pages) the
+    server blocked on a print, stopped answering, and the window sat on
+    "Desligando…" (Allan, 2026-10-17). The output is drained as it comes
+    and its tail kept for the window."""
+    port = free_port()
+    srv = core.Server(lambda folder, p: [sys.executable, str(STUB), str(p), "--chatty"])
+    try:
+        assert srv.start(tmp_path, port, wait=15) is True
+        assert core.is_up(port)
+        assert any("line 3999" in ln for ln in srv.log), "the tail of what it said is kept"
+        assert len(srv.log) <= 400
+    finally:
+        srv.stop(pause=0)
+
+
+def test_a_server_that_dies_on_its_own_is_noticed_and_the_window_can_start_again(tmp_path):
+    """The server went away (a crash, a kill from outside) and the window
+    kept Ligar disabled and Desligar doing nothing for minutes: it only
+    looked at the process when it was asked to stop. `reap` says the
+    process is gone, with its exit code and last lines, and clears it."""
+    port = free_port()
+    srv = core.Server(lambda folder, p: [sys.executable, str(STUB), str(p), "--die-after", "0.5"])
+    assert srv.start(tmp_path, port, wait=15) is True
+    assert srv.reap() is None, "alive: nothing to reap"
+    deadline = time.time() + 6
+    while srv.alive and time.time() < deadline:
+        time.sleep(0.1)
+    assert not srv.alive
+    note = srv.reap()
+    assert note and "7" in note
+    assert srv.proc is None
+    assert srv.reap() is None

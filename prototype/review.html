@@ -705,8 +705,10 @@ function splitDitto(word){
   return m ? [m[1], m[2]] : ["", String(word||"")];
 }
 function nameCell(r){
-  // a line read whole, the grid distrusted: name, age, trade in one string
-  if(r.whole_line) return `<span class="whole" title="a grade da tabela não foi encontrada: linha lida da página inteira, colunas atribuídas pelo conteúdo (número, idade, sexo, nacionalidade, profissão) — confira no original. Linha lida: ${(r.line||"").replace(/"/g,"”")}">${displayName(nameText(r))}</span>`;
+  // a row from a distrusted grid goes through the same words-with-menus
+  // path as any other: the alternate readings and the archive's guesses
+  // are what a mangled cursive name needs most (Allan, 2026-10-17: "it
+  // read link but is luigi"). How the row was made is said on the cell.
   const text = nameText(r);
   if(EDIT) return text;
   // Every word opens its readings, not only the words the engine happened to
@@ -812,7 +814,7 @@ function render(){
   $("#rows").innerHTML = rows.map((r,i)=>`
     <tr data-i="${i}" class="${r.verified?"verified":""}">
       <td class="num">${r.n}</td>
-      <td class="name ${r.handwritten?'hw':''}"><span contenteditable="${EDIT}" data-f="name"
+      <td class="name ${r.handwritten?'hw':''}" title="${r.whole_line?`a grade da tabela não foi encontrada: linha lida da página inteira, colunas atribuídas pelo conteúdo — confira no original. Linha lida: ${(r.line||"").replace(/"/g,"”")}`:""}"><span contenteditable="${EDIT}" data-f="name"
           title="${r.handwritten?'entrada manuscrita':''}">${nameCell(r)}</span>${nameScoreKey(r)?dot(r,nameScoreKey(r)):''}</td>
       ${cell(r,"nationality",r.nationality)}
       ${cell(r,"age",r.age)}

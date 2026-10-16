@@ -33,4 +33,15 @@ class H(BaseHTTPRequestHandler):
         return self._send({})
 
 
+if "--chatty" in sys.argv:
+    # a server that talks a lot before it answers: paddle's warnings and
+    # kraken's INFO lines fill a pipe nobody reads in a few pages
+    for i in range(4000):
+        print(f"line {i} " + "x" * 60, flush=True)
+if "--die-after" in sys.argv:
+    import threading
+    delay = float(sys.argv[sys.argv.index("--die-after") + 1])
+    threading.Timer(delay, lambda: sys.exit(7)).start()
+    import os
+    threading.Timer(delay + 0.5, lambda: os._exit(7)).start()
 HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()

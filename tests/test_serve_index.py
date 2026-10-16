@@ -1297,3 +1297,17 @@ def test_the_engine_status_says_whether_the_handwriting_reader_is_there(server, 
                         lambda *a, **k: {"available": False, "detail": "kraken is not installed"})
     _, e = call(f"{base}/api/engine")
     assert e["second_reading"] == {"available": False, "detail": "kraken is not installed"}
+
+
+def test_fewer_index_workers_on_a_card(monkeypatch):
+    """Four workers each with a paddle pipeline on a 6 GB card is more
+    than the card holds; two on the GPU read faster than four on the CPU
+    anyway. The environment still overrides."""
+    from desembarque import engine_paddle as ep
+    monkeypatch.delenv("DESEMBARQUE_WORKERS", raising=False)
+    monkeypatch.setattr(ep, "_gpu_count", lambda: 1)
+    assert serve.index_workers() == 2
+    monkeypatch.setattr(ep, "_gpu_count", lambda: 0)
+    assert serve.index_workers() == 4
+    monkeypatch.setenv("DESEMBARQUE_WORKERS", "3")
+    assert serve.index_workers() == 3

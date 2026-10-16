@@ -488,6 +488,8 @@ window.addEventListener("load",async()=>{
       ok("and shows the prose the page carried", txt.includes("Cidade de Blankenloch"));
       D = keepD; rows = keepRows; pageIdx = keepIdx; renderEmpty();
     }
+    ok("a row from a distrusted grid still offers other readings for each word",
+       nameCell({name_raw: "Ling pilt", whole_line: true, line: "Ling · pilt 13 M."}).includes("altword"));
     ok("a row cut from a written line shows that line, not the band it came from",
        nameText({name_raw: "Carlos Cook", read_by: "lines", second_read: {model: "paddle-band", text: "Taurte"}}) === "Carlos Cook");
     ok("a row with no verbatim reading still shows a name",

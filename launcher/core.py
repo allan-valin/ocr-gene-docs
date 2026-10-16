@@ -9,9 +9,11 @@ test can start a stand-in server and stop it without a screen.
 """
 from __future__ import annotations
 
+import collections
 import json
 import os
 import subprocess
+import threading
 import sys
 import time
 import urllib.error
@@ -287,7 +289,11 @@ class Server:
         self.proc: subprocess.Popen | None = None
         self.port = DEFAULT_PORT
         self.last_error = ""
-        self.log: list[str] = []
+        # the tail of what the server printed, drained as it comes: a pipe
+        # nobody reads is full after 64 KB (paddle's warnings, kraken's
+        # INFO lines — a few pages), and the server then blocks on a print
+        # and stops answering (Allan, 2026-10-17)
+        self.log: collections.deque = collections.deque(maxlen=400)
 
     @property
     def alive(self) -> bool:
@@ -305,15 +311,17 @@ class Server:
         kw = {}
         if os.name == "nt":
             kw["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        self.log.clear()
         self.proc = subprocess.Popen(self._command(folder, port),
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                     cwd=str(ROOT), text=True, **kw)
+                                     cwd=str(ROOT), text=True, errors="replace", **kw)
+        threading.Thread(target=self._drain, args=(self.proc,), daemon=True).start()
         deadline = time.time() + wait
         while time.time() < deadline:
             if self.proc.poll() is not None:
-                out = (self.proc.stdout.read() if self.proc.stdout else "") or ""
+                time.sleep(0.2)          # let the drain catch the last lines
                 self.last_error = (f"o servidor parou ao iniciar (código "
-                                   f"{self.proc.returncode})\n{out[-2000:]}")
+                                   f"{self.proc.returncode})\n" + self.tail())
                 self.proc = None
                 return False
             if is_up(port, timeout=0.5):
@@ -322,6 +330,31 @@ class Server:
         self.last_error = "o servidor não respondeu a tempo"
         self.stop()
         return False
+
+    def _drain(self, proc: subprocess.Popen) -> None:
+        try:
+            for line in proc.stdout:
+                self.log.append(line.rstrip("\n"))
+        except (OSError, ValueError):
+            pass
+
+    def tail(self, n: int = 12) -> str:
+        return "\n".join(list(self.log)[-n:])
+
+    def reap(self) -> str | None:
+        """When the process has gone on its own — a crash, a kill from
+        outside — a note saying so with its exit code and last lines, and
+        the process forgotten so the window can start again. None while it
+        runs or when there is nothing to reap. The window asks on every
+        tick: it used to look at the process only when told to stop, and
+        a server that had died left Ligar disabled for good."""
+        p = self.proc
+        if p is None or p.poll() is None:
+            return None
+        time.sleep(0.2)
+        self.proc = None
+        return (f"o servidor parou sozinho (código {p.returncode})"
+                + ("\n" + self.tail() if self.log else ""))
 
     def stop(self, wait: float = 10.0, pause: float = 4.5) -> None:
         """Stop the server. First it is told (`/api/shutdown`), and the page

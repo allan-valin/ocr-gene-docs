@@ -6,6 +6,40 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-17, later still — the launcher reads what the server says, and notices when it dies
+
+Allan closed the tab; minutes later Ligar was still disabled and Desligar
+did nothing. Two bugs, both the launcher's, both since the first day:
+
+* **The server's stdout was a pipe nobody read.** After 64 KB (paddle's
+  warnings, kraken's INFO lines: a few pages) the server blocks on a
+  print and stops answering everything. Now `core.Server` drains the
+  pipe on a thread into a 400-line tail; a start that fails shows it, a
+  stop that found a traceback in it shows it. Test: a stub that prints
+  4,000 lines before binding comes up.
+* **A server that died on its own was never noticed.** The window looked
+  at the process only when told to stop; `stop()` on a dead one returned
+  without a word. Now `Server.reap()` runs every tick: a process that
+  has gone is reported with its exit code and last lines, forgotten,
+  and Ligar works again; Desligar on a dead one says "já estava parado".
+  Checked by driving the real window (root withdrawn) against a stub
+  that exits after a second: noticed in one tick.
+* **Two workers on a card, four on the CPU** (`index_workers()`): four
+  paddle pipelines plus kraken is more than 6 GB of VRAM; two on the GPU
+  are faster than four on the CPU anyway. `DESEMBARQUE_WORKERS` still
+  overrides.
+* **Alternate readings on distrusted-grid rows**: my `whole_line` branch
+  in `nameCell` had bypassed the per-word menu, so "Ling" could not be
+  questioned into "Luigi". Same path as every row now; how the row was
+  made is on the cell's hover. The engine's band reading (`second_read`)
+  is not attached on these pages: the bands were wrong (5 for 33 lines),
+  so a band's name would be the wrong neighbour's.
+
+Note to self, in memory: a `Window` captures `_command` at construction;
+patch `w.server._command`, and stub `_save`, or a "test" launches the
+real server and rewrites settings.json (did both; killed two stray
+servers by PID, port put back). Tests: 1061 pass.
+
 ## 2026-10-17, later — on a distrusted grid the cells go to their columns
 
 Allan: "everything is being put under Nome, cell information not
