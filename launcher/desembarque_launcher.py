@@ -5,9 +5,12 @@ opens the page in the browser, *Desligar* stops the server — and closing the
 window, or the browser tab, stops it too, so nothing is left running that
 nobody can see.
 *Ajuda* (or F1) opens one page that says what each button does and why.
-The first time, with nothing installed, the only button is *Instalar*, which
-makes the virtual environment and installs the recogniser, showing what it is
-doing, because a blank window for ten minutes looks broken.
+At start the window checks what is installed, in three tiers (reading, the
+engine, the handwriting reader), and when something is missing a check window
+says which, what it is for, and offers to install only that — or to go on with
+what there is, which with the first tier alone is a pendrive of PDFs already
+transcribed. The install shows what it is doing, because a blank window for
+ten minutes looks broken.
 
 Only the standard library: this has to run on whatever Python the person
 installed, before anything else is installed.
@@ -50,10 +53,15 @@ class Window:
         self._stopping = False
         self._last_status: dict | None = None
         self._help: Toplevel | None = None
+        self._check: Toplevel | None = None
+        self._tiers: list[str] = []
         self._build()
         self._refresh()
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<F1>", lambda _e: self.help())
+        # something missing: the check window first, by itself
+        if core.missing(core.readiness()):
+            root.after(150, self.check)
         threading.Thread(target=self._status_worker, daemon=True).start()
         root.after(POLL_MS, self._poll)
 
@@ -81,6 +89,8 @@ class Window:
                   style="Muted.TLabel").pack(side=LEFT, padx=(10, 0), pady=(6, 0))
         self.b_help = ttk.Button(head, text="Ajuda (F1)", command=self.help)
         self.b_help.pack(side=RIGHT)
+        self.b_check = ttk.Button(head, text="Verificar a instalação", command=self.check)
+        self.b_check.pack(side=RIGHT, padx=(0, 6))
 
         top = ttk.LabelFrame(self.root, text="Pasta com os PDFs", padding=(10, 6))
         top.pack(fill=X, pady=(12, 8))
@@ -89,11 +99,10 @@ class Window:
 
         row = ttk.Frame(self.root)
         row.pack(fill=X, pady=(0, 8))
-        self.b_install = ttk.Button(row, text="Instalar (uma vez)", command=self.install)
         self.b_start = ttk.Button(row, text="Ligar", command=self.start, style="Accent.TButton")
         self.b_stopidx = ttk.Button(row, text="Parar ao fim da página", command=self.stop_index)
         self.b_stop = ttk.Button(row, text="Desligar", command=self.stop)
-        for b in (self.b_install, self.b_start, self.b_stopidx, self.b_stop):
+        for b in (self.b_start, self.b_stopidx, self.b_stop):
             b.pack(side=LEFT, padx=(0, 6))
         ttk.Checkbutton(self.root, text="Ler os PDFs da pasta ao ligar (os já lidos são pulados)",
                         variable=self.index_on_start).pack(anchor=W, pady=(0, 8))
@@ -110,7 +119,7 @@ class Window:
         self.log.pack(side=LEFT, fill=BOTH, expand=True)
         bar.pack(side=RIGHT, fill=Y)
         self._say("Escolha a pasta com os PDFs e clique em Ligar. "
-                  "Ajuda (F1) explica cada botão.")
+                  "Ajuda (F1) explica cada botão; Verificar a instalação diz o que há.")
 
     def _say(self, line: str) -> None:
         self.log.configure(state=NORMAL)
@@ -119,25 +128,21 @@ class Window:
         self.log.configure(state=DISABLED)
 
     def _refresh(self) -> None:
-        installed = core.venv_python() is not None
-        complete = installed and core.second_reading_installed()
+        ready = core.readiness()
+        installed = ready["viewer"]
+        lacking = core.missing(ready)
         running = self.server.alive
-        self.b_install.configure(
-            text="Instalar (uma vez)" if not installed
-                 else "Completar a instalação (leitor de manuscritos)",
-            state=NORMAL if not complete and not self._installing and not running else DISABLED)
+        self.b_check.configure(state=DISABLED if self._installing else NORMAL)
         self.b_start.configure(state=NORMAL if installed and not running
-                               and not self._stopping else DISABLED)
+                               and not self._stopping and not self._installing else DISABLED)
         self.b_stop.configure(state=NORMAL if running and not self._stopping else DISABLED)
         reading = running and (self._last_status or {}).get("status") == "running"
         self.b_stopidx.configure(state=NORMAL if reading and not self._stopping else DISABLED)
         if not installed and not self._installing:
-            self.status.set("Nada instalado ainda: clique em Instalar (uma vez). "
-                            "Demora alguns minutos e precisa de internet.")
-        elif not complete and not self._installing and not running:
-            self.status.set("Falta o leitor de letra manuscrita: sem ele os nomes à mão "
-                            "saem na leitura fraca do motor. Clique em Completar a "
-                            "instalação (baixa uns 2 GB; precisa de internet).")
+            self.status.set("Nada instalado ainda: clique em Verificar a instalação.")
+        elif lacking and not self._installing and not running:
+            self.status.set("Falta: " + ", ".join(core.TIERS[t][0].lower() for t in lacking)
+                            + ". Funciona com o que há; Verificar a instalação diz o que muda.")
         elif self._stopping:
             self.status.set("Desligando…")
         elif not running and not self._installing:
@@ -159,15 +164,67 @@ class Window:
                                            "port": self.port,
                                            "index": bool(self.index_on_start.get())})
 
-    def install(self) -> None:
+    def check(self) -> None:
+        """The check window: what is installed, by tier, what each is for
+        and costs, and what to do — install what is missing, or go on with
+        what there is. Shown by itself at start when something is missing
+        (Allan, 2026-10-17); nothing when all three are there."""
+        if self._check is not None and self._check.winfo_exists():
+            self._check.lift()
+            return
+        ready = core.readiness()
+        lacking = core.missing(ready)
+        top = Toplevel(self.root)
+        top.title("Verificação da instalação — " + TITLE)
+        top.geometry("560x420+%d+%d" % (self.root.winfo_rootx() + 50,
+                                         self.root.winfo_rooty() + 50))
+        top.configure(padx=16, pady=12)
+        ttk.Label(top, text="O que está instalado", style="Title.TLabel").pack(anchor=W)
+        for tier in core.TIER_ORDER:
+            name, what, size = core.TIERS[tier]
+            ok = ready[tier]
+            row = ttk.Frame(top)
+            row.pack(fill=X, pady=(8, 0))
+            ttk.Label(row, text="✓" if ok else "✗", width=2,
+                      foreground="#2a7" if ok else "#c33").pack(side=LEFT, anchor="n")
+            ttk.Label(row, text=f"{name} — {'instalado' if ok else 'falta'} ({size})",
+                      font=(nametofont("TkDefaultFont").cget("family"), 10, "bold")).pack(anchor=W)
+            ttk.Label(row, text=what, style="Muted.TLabel", wraplength=480).pack(anchor=W, padx=(22, 0))
+        note = ("Tudo instalado." if not lacking else
+                "Dá para continuar com o que há: só a Leitura basta para abrir PDFs já "
+                "transcritos (de um pendrive, por exemplo). Sem o motor nada novo é lido; "
+                "sem o leitor de manuscritos os nomes à mão saem na leitura fraca do motor. "
+                "A instalação baixa só o que falta e precisa de internet.")
+        ttk.Label(top, text=note, wraplength=520, justify=LEFT).pack(anchor=W, pady=(14, 0))
+        foot = ttk.Frame(top)
+        foot.pack(side="bottom", fill=X, pady=(10, 0))
+        if lacking:
+            ttk.Button(foot, text="Instalar o que falta", style="Accent.TButton",
+                       command=lambda: (top.destroy(), self.install(lacking))).pack(side=LEFT)
+            if "viewer" in lacking and len(lacking) > 1:
+                ttk.Button(foot, text="Instalar só a Leitura",
+                           command=lambda: (top.destroy(), self.install(["viewer"]))).pack(side=LEFT, padx=(6, 0))
+            b = ttk.Button(foot, text="Continuar assim", command=top.destroy)
+            b.pack(side=RIGHT)
+            if "viewer" in lacking:
+                b.configure(state=DISABLED)   # nothing to go on with
+        else:
+            ttk.Button(foot, text="Fechar", command=top.destroy).pack(side=RIGHT)
+        top.bind("<Escape>", lambda _e: top.destroy())
+        self._check = top
+
+    def install(self, tiers=None) -> None:
+        self._tiers = list(tiers or core.missing(core.readiness()))
+        if not self._tiers:
+            return
         self._installing = True
         self._refresh()
-        self.status.set("Instalando… isto leva alguns minutos.")
+        self.status.set("Instalando: " + ", ".join(core.TIERS[t][0].lower() for t in self._tiers)
+                        + "… leva alguns minutos.")
         threading.Thread(target=self._install_worker, daemon=True).start()
 
     def _install_worker(self) -> None:
-        complete = core.venv_python() is not None
-        for cmd in core.install_command(complete=complete):
+        for cmd in core.install_command(tiers=self._tiers):
             self.events.put(("log", "$ " + " ".join(cmd)))
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  text=True, cwd=str(core.ROOT))
@@ -308,8 +365,10 @@ class Window:
             self._refresh()
         elif kind == "installed":
             self._installing = False
-            self._say("Instalação concluída." if ev[1]
-                      else "A instalação falhou — veja as linhas acima.")
+            still = core.missing(core.readiness())
+            self._say(("Instalação concluída." if not still else
+                       "Instalado; ainda falta " + ", ".join(core.TIERS[t][0].lower() for t in still) + ".")
+                      if ev[1] else "A instalação falhou — veja as linhas acima.")
             self._refresh()
         elif kind == "started":
             ok, folder = ev[1], ev[2]

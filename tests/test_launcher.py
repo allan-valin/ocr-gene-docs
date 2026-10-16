@@ -110,7 +110,7 @@ def test_the_help_says_what_each_button_does_and_why():
     and it names every button, what it does, why it exists, and how long
     things take."""
     h = core.help_text(port=8765)
-    for word in ("Instalar", "Ligar", "Desligar",
+    for word in ("Verificar a instalação", "Ligar", "Desligar",
                  "Ler os PDFs", "127.0.0.1:8765", "PDF", "20 s", "fechar a janela"):
         assert word in h, word
     assert len(h) < 2500
@@ -227,21 +227,48 @@ def test_the_reading_can_be_stopped_from_the_launcher():
     assert "Parar ao fim da página" in src
 
 
-def test_an_install_missing_the_handwriting_reader_can_be_completed(tmp_path):
-    """A venv made before kraken shipped with the launcher reads cursive
-    with the engine alone, silently. The launcher sees the venv without
-    kraken in it and offers to complete the install: the kraken steps
-    only, not the whole thing again."""
+def test_readiness_is_three_tiers_and_the_install_does_only_what_is_missing(tmp_path):
+    """Allan, 2026-10-17: "why is Completar a instalação even an option for
+    me? I supposedly already have everything" — his engine venv had no
+    kraken, and nothing on screen said what was there. The launcher checks
+    three tiers and says each: reading (open, see, search what is already
+    transcribed: the server needs pypdfium2, numpy, Pillow), the engine,
+    the handwriting reader. A pendrive with PDFs and their transcriptions
+    on a new PC needs the first tier only. The install does the missing
+    tiers, never the whole thing again."""
+    model = tmp_path / "medium.safetensors"
+    r = core.readiness(tmp_path, model=model)
+    assert r == {"python": False, "viewer": False, "engine": False, "handwriting": False}
+    assert core.missing(r) == ["viewer", "engine", "handwriting"]
     venv = tmp_path / ".venv-ocr"
     site = venv / "lib" / "python3.12" / "site-packages"
     site.mkdir(parents=True)
     (venv / "bin").mkdir()
     (venv / "bin" / "python").write_text("")
-    assert core.venv_python(tmp_path) is not None
-    assert not core.second_reading_installed(tmp_path)
+    for pkg in ("pypdfium2", "numpy", "PIL"):
+        (site / pkg).mkdir()
+    r = core.readiness(tmp_path, model=model)
+    assert r["python"] and r["viewer"] and not r["engine"] and not r["handwriting"]
+    assert core.missing(r) == ["engine", "handwriting"]
+    (site / "paddleocr").mkdir()
     (site / "kraken").mkdir()
-    assert core.second_reading_installed(tmp_path)
-    cmds = core.install_command(tmp_path, complete=True)
-    assert len(cmds) == 2
-    assert "requirements-kraken.txt" in " ".join(cmds[0])
-    assert "fetch_model" in " ".join(cmds[1])
+    assert core.missing(core.readiness(tmp_path, model=model)) == ["handwriting"], "no model file yet"
+    model.write_bytes(b"x")
+    assert core.missing(core.readiness(tmp_path, model=model)) == []
+
+    cmds = [" ".join(c) for c in core.install_command(tmp_path, tiers=["viewer"])]
+    assert any("venv" in c for c in cmds) and any("requirements.txt" in c for c in cmds)
+    assert not any("requirements-ocr" in c or "kraken" in c for c in cmds)
+    cmds = [" ".join(c) for c in core.install_command(tmp_path, tiers=["handwriting"])]
+    assert len(cmds) == 2 and "requirements-kraken.txt" in cmds[0] and "fetch_model" in cmds[1]
+    assert not any("venv " in c for c in cmds), "a venv that exists is not made again"
+    cmds = [" ".join(c) for c in core.install_command(tmp_path, tiers=["engine", "handwriting"])]
+    assert "requirements-ocr.txt" in cmds[0] and "requirements-kraken.txt" in cmds[1]
+
+
+def test_each_tier_says_what_it_is_for_and_what_it_costs():
+    for tier in ("viewer", "engine", "handwriting"):
+        name, what, size = core.TIERS[tier]
+        assert name and what and ("MB" in size or "GB" in size)
+    h = core.help_text()
+    assert "Verificar a instalação" in h and "Completar" not in h.split("Verificar a instalação")[0]

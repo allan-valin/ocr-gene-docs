@@ -32,15 +32,49 @@ def venv_python(root: Path = ROOT) -> Path | None:
     return exe if exe.exists() else None
 
 
-def second_reading_installed(root: Path = ROOT) -> bool:
-    """Whether kraken is in the engine venv. A venv made before the
-    handwriting reader shipped with the launcher (2026-10-16) reads cursive
-    pages with the engine alone, and the record says so where nobody
-    looks; the launcher looks here and offers to complete the install."""
+# What an install is made of, in three tiers, each with what it is for and
+# what it costs. A pendrive with PDFs and their transcriptions on a new PC
+# needs the first alone: the server is standard library plus these three
+# packages, and the engine is optional by design.
+TIERS = {
+    "viewer": ("Leitura", "abrir os PDFs, ver e buscar o que já foi transcrito",
+               "uns 100 MB"),
+    "engine": ("Motor de transcrição",
+               "ler páginas datilografadas e cortar as linhas das tabelas",
+               "uns 1,5 GB"),
+    "handwriting": ("Leitor de letra manuscrita",
+                    "os nomes escritos à mão; sem ele saem na leitura fraca do motor",
+                    "uns 1 GB"),
+}
+TIER_ORDER = ("viewer", "engine", "handwriting")
+# where kraken keeps the handwriting model; the same path as
+# desembarque.secondreading.MODEL, written here because the launcher runs on
+# a bare Python before anything is installed and imports nothing of the app
+MODEL = Path.home() / ".cache" / "kraken" / "ppocrv6-hist" / "medium.safetensors"
+
+
+def _site_has(root: Path, pkg: str) -> bool:
     venv = root / ".venv-ocr"
     if os.name == "nt":
-        return (venv / "Lib" / "site-packages" / "kraken").is_dir()
-    return any(p.is_dir() for p in venv.glob("lib/python*/site-packages/kraken"))
+        return (venv / "Lib" / "site-packages" / pkg).is_dir()
+    return any(p.is_dir() for p in venv.glob(f"lib/python*/site-packages/{pkg}"))
+
+
+def readiness(root: Path = ROOT, model: Path = MODEL) -> dict:
+    """What is installed, by tier, read off the venv's site-packages: no
+    interpreter is started, so the check is instant on every launch
+    (Allan, 2026-10-17: "it's probably better to enforce/verify")."""
+    py = venv_python(root) is not None
+    return {
+        "python": py,
+        "viewer": py and all(_site_has(root, p) for p in ("pypdfium2", "numpy", "PIL")),
+        "engine": py and _site_has(root, "paddleocr"),
+        "handwriting": py and _site_has(root, "kraken") and model.exists(),
+    }
+
+
+def missing(ready: dict) -> list[str]:
+    return [t for t in TIER_ORDER if not ready.get(t)]
 
 
 def serve_command(python: Path, root: Path, folder: Path, port: int) -> list[str]:
@@ -50,31 +84,34 @@ def serve_command(python: Path, root: Path, folder: Path, port: int) -> list[str
             "--root", str(folder), "--port", str(port), "--no-open"]
 
 
-def install_command(root: Path = ROOT, complete: bool = False) -> list[list[str]]:
-    """Make the venv and install into it, in order. `sys.executable` is the
-    Python the launcher itself runs under, which is the one the person has.
-    With `complete`, only the handwriting reader's steps, into a venv that
-    exists already."""
+def install_command(root: Path = ROOT, tiers=TIER_ORDER) -> list[list[str]]:
+    """The commands that install these tiers, in order. `sys.executable` is
+    the Python the launcher itself runs under, which is the one the person
+    has. The venv is made only when it is not there: an install never does
+    again what is done, and never downloads what pip has in its cache."""
     py = (root / ".venv-ocr" / "Scripts" / "python.exe" if os.name == "nt"
           else root / ".venv-ocr" / "bin" / "python")
-    steps = [
-        [sys.executable, "-m", "venv", str(root / ".venv-ocr")],
-        [str(py), "-m", "pip", "install", "--upgrade", "pip"],
-        [str(py), "-m", "pip", "install", "-r", str(root / "requirements.txt"),
-         "-r", str(root / "requirements-ocr.txt")],
+    steps: list[list[str]] = []
+    if not py.exists():
+        steps.append([sys.executable, "-m", "venv", str(root / ".venv-ocr")])
+        steps.append([str(py), "-m", "pip", "install", "--upgrade", "pip"])
+    if "viewer" in tiers:
+        steps.append([str(py), "-m", "pip", "install", "-r", str(root / "requirements.txt")])
+    if "engine" in tiers:
+        steps.append([str(py), "-m", "pip", "install", "-r", str(root / "requirements-ocr.txt")])
+    if "handwriting" in tiers:
         # the second reading of handwritten pages: kraken on a CPU-only torch
         # (the default torch pulls CUDA, five gigabytes nobody here needs), and
         # its PP-OCRv6 weights from Zenodo into ~/.cache/kraken
         # one command, with the CPU wheels as an extra index: installed in two
         # (CPU torch first, then kraken) pip resolved torch again from PyPI
         # and the CUDA build came back, 2026-10-16
-        [str(py), "-m", "pip", "install", "--extra-index-url",
-         "https://download.pytorch.org/whl/cpu", "torch", "torchvision",
-         "-r", str(root / "requirements-kraken.txt")],
-        [str(py), "-c", "from desembarque.secondreading import fetch_model; "
-                        "print(fetch_model())"],
-    ]
-    return steps[-2:] if complete else steps
+        steps.append([str(py), "-m", "pip", "install", "--extra-index-url",
+                      "https://download.pytorch.org/whl/cpu", "torch", "torchvision",
+                      "-r", str(root / "requirements-kraken.txt")])
+        steps.append([str(py), "-c", "from desembarque.secondreading import fetch_model; "
+                                     "print(fetch_model())"])
+    return steps
 
 
 def _get(port: int, path: str, timeout: float = 2.0, post: bool = False) -> dict | None:
@@ -188,12 +225,16 @@ Pasta com os PDFs
 Onde estão as listas. Só arquivos .pdf contam; imagens (JPG, PNG) são
 ignoradas. Pode trocar de pasta e clicar em Ligar de novo.
 
-Instalar (uma vez)
-Cria um ambiente Python próprio e baixa os dois leitores: o motor que
-corta a página em linhas e o que lê a letra manuscrita (cerca de 3 GB,
-precisa de internet). Só aparece enquanto não estiver instalado. Se o
-botão disser "Completar a instalação", falta só o leitor de manuscritos:
-sem ele, os nomes à mão saem na leitura fraca do motor.
+Verificar a instalação
+Ao abrir, a janela confere o que está instalado, em três partes: Leitura
+(abrir, ver e buscar o que já foi transcrito; uns 100 MB), Motor de
+transcrição (páginas datilografadas e as linhas das tabelas; uns 1,5 GB)
+e Leitor de letra manuscrita (nomes à mão; uns 1 GB). Se faltar alguma,
+aparece uma janela dizendo qual, com Instalar o que falta e Continuar
+assim. Só a Leitura basta para usar PDFs e transcrições já prontos (num
+pendrive, por exemplo); sem o motor nada é lido; sem o leitor de
+manuscritos os nomes à mão saem na leitura fraca do motor. A instalação
+só baixa o que falta e precisa de internet.
 
 Ligar
 Inicia o servidor (o programa que lê os PDFs) e abre a página no navegador,

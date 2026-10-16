@@ -108,10 +108,10 @@ Honest about the limits:
 
 **Without a terminal:** double-click `Desembarque.bat` (Windows),
 `Desembarque.command` (Mac) or `Desembarque.sh` (Linux). The window that opens
-has *Instalar (uma vez)*, which makes the virtual environment and installs the
-recogniser, then *Ligar* on a folder of PDFs — it opens the browser and starts
-indexing — and *Desligar*; closing the window or the browser tab stops the
-server too. Transcriptions are written to a `transcriptions` folder inside the
+checks what is installed in three tiers (reading, the engine, the handwriting
+reader) and offers to install what is missing or to go on with what there is,
+then *Ligar* on a folder of PDFs — it opens the browser — and *Desligar*;
+closing the window or the browser tab stops the server too. Transcriptions are written to a `transcriptions` folder inside the
 folder of PDFs (the repository's own `data/scans` keeps `data/transcriptions`;
 `--store` overrides). It needs only a Python from python.org.
 `launcher/README.md` says this in Portuguese, step by step.

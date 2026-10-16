@@ -6,6 +6,33 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-17 — the launcher checks the install in three tiers
+
+Allan: "why is Completar a instalação even an option for me right now? I
+supposedly already have everything" — he has kraken in `.venv-kraken`,
+not in `.venv-ocr`, which is the venv the launcher's server runs in; and
+nothing on screen said what was where. Replaced the install button with
+a check (`core.readiness`, read off site-packages, instant): three tiers,
+each with what it is for and what it costs — **Leitura** (pypdfium2,
+numpy, Pillow: open, see, search what is transcribed; the server is
+standard library otherwise), **Motor de transcrição** (paddleocr),
+**Leitor de letra manuscrita** (kraken + the model file). Something
+missing → a check window opens first, by itself, with ✓/✗ per tier,
+*Instalar o que falta* (only the missing tiers: `install_command(tiers=…)`
+never remakes the venv or redoes a tier) and *Continuar assim* (disabled
+when not even Leitura is there), the limits said in words. All there →
+the main window alone; *Verificar a instalação* in its corner reopens
+the check. The pendrive case is the first tier alone.
+
+On this machine: the CPU torch wheel is in pip's cache (196 MB, "Using
+cached") and the model file is in ~/.cache/kraken, so *Instalar o que
+falta* here downloads kraken's small dependencies and little else; it
+puts about 1 GB into `.venv-ocr`. Not clicked for Allan.
+
+Checked by instantiating the window on the real repo (root withdrawn):
+the check window opened with the three rows as above and both buttons.
+Tests: 1055 pass.
+
 ## 2026-10-16, last — the APESP page: a distrusted grid, and no kraken in the server venv
 
 Allan read page 6 of the APESP list alone (the Kubach page): "from about
