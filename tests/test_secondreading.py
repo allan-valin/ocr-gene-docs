@@ -246,11 +246,18 @@ def test_a_grid_that_found_a_fraction_of_the_writing_is_not_trusted():
            "rows": [[0.27, 0.35], [0.35, 0.42], [0.42, 0.50], [0.50, 0.57], [0.57, 0.65]]}
     bands = [{"page": 6, "n": i, "name_raw": "K" if i == 3 else "", "conf": {"name": 0.0}}
              for i in range(1, 6)]
-    lines = [line(0.05 + i * 0.027, 0.07 + i * 0.027, f"Name {i} 18 m", x0=0.18, x1=0.6)
-             for i in range(30)]
+    # the segmenter finds a line per cell: number, name, age, and a tick
+    lines = []
+    for i in range(30):
+        y = 0.05 + i * 0.027
+        lines += [line(y, y + 0.02, f"Name {i}", x0=0.18, x1=0.35),
+                  line(y + 0.002, y + 0.021, f"{18 + i} m", x0=0.40, x1=0.45),
+                  line(y - 0.001, y + 0.019, str(166 + i), x0=0.12, x1=0.16),
+                  line(y, y + 0.02, "-", x0=0.5, x1=0.52)]
     rows, extents = sr.rows_from_lines(bands, lines, geo)
-    assert len(rows) == 30
-    assert rows[0]["name_raw"] == "Name 0 18 m" and rows[29]["name_raw"] == "Name 29 18 m"
+    assert len(rows) == 30, "one row per written row, not per cell"
+    assert rows[0]["name_raw"] == "166 · Name 0 · 18 m"
+    assert rows[29]["name_raw"] == "195 · Name 29 · 47 m"
     assert all(r["whole_line"] for r in rows)
     assert all("band" not in r for r in rows)
-    assert extents[0] == [0.05, 0.07]
+    assert extents[0] == [0.049, 0.071]

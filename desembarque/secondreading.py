@@ -197,6 +197,38 @@ def _table_extent(bands: list[tuple[float, float]]) -> tuple[float, float]:
     return min(a for a, _ in bands) - slack, max(b for _, b in bands) + slack
 
 
+def _written_rows(lines: list[dict]) -> list[dict]:
+    """The lines of a page grouped into the written rows they belong to.
+
+    The segmenter finds a line per cell — the number, the name, the age,
+    the trade — so a page of 33 written rows gave 201 lines (APESP p6).
+    A line whose centre falls within the span of the row's first line is
+    on that row, read left to right with a separator between cells; the
+    first line alone decides, since a row that grew with each cell it took
+    swallowed the next row (page 6, rows of two and three names). A line
+    with fewer than two letters or digits (a tick, a dash, a rule) is not
+    writing.
+    """
+    def letters(t: str) -> int:
+        return sum(ch.isalnum() for ch in t)
+    centre = lambda ln: (ln["y0"] + ln["y1"]) / 2   # noqa: E731
+    kept = sorted((ln for ln in lines if letters(ln.get("text") or "") >= 2), key=centre)
+    groups: list[list[dict]] = []
+    for ln in kept:
+        if groups and groups[-1][0]["y0"] <= centre(ln) <= groups[-1][0]["y1"]:
+            groups[-1].append(ln)
+            continue
+        groups.append([ln])
+    out = []
+    for g in groups:
+        g.sort(key=lambda m: m["x0"])
+        out.append({"x0": min(m["x0"] for m in g), "x1": max(m["x1"] for m in g),
+                    "y0": min(m["y0"] for m in g), "y1": max(m["y1"] for m in g),
+                    "text": " · ".join((m.get("text") or "").strip() for m in g),
+                    "cuts": []})
+    return out
+
+
 def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
                     ) -> tuple[list[dict], list[list[float]]]:
     """One row per written line in the name column, and the band of each.
@@ -239,6 +271,7 @@ def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
     drawn = bands            # where the engine's bands were, for a person's row
     if weak:
         x0, x1, top, bottom, bands, heading = 0.0, 1.0, 0.0, 1.0, [], set()
+        lines = _written_rows(lines)
     placed: dict[int | None, list[dict]] = {}
     inside = []
     for line in lines:

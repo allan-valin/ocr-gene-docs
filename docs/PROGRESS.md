@@ -36,8 +36,13 @@ both found on disk:
   that is the JPX layer; the JBIG2 mask is 2577×2307 and the page is
   legible at 120 dpi (looked at it).
 
-Verification on the real page with `.venv-kraken` (one page, capped
-scope): see the line under this when it lands. Tests: 1053 pass.
+Verified on the real page with `.venv-kraken` (one page, 42 s, capped
+scope): kraken finds 201 lines — one per *cell* (number, name, age,
+trade), so the first cut gave 150 rows; grouping lines whose centre
+falls in the first line's span (`_written_rows`; the row's union span
+swallowed the next row) gives 46 rows for 33 written ones plus the
+heading, e.g. row 39 `NR. E · 92 · Kuboch August · 18 m · fota.` On this
+machine it runs only once kraken is in `.venv-ocr`. Tests: 1053 pass.
 
 ## 2026-10-16, latest — stop at the end of the page, one page alone, zoom on the scan
 
