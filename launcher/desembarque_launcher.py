@@ -42,7 +42,7 @@ class Window:
         self.settings = core.load_settings()
         self.folder = StringVar(value=self.settings.get("folder", ""))
         self.port = int(self.settings.get("port", core.DEFAULT_PORT))
-        self.index_on_start = BooleanVar(value=self.settings.get("index", True))
+        self.index_on_start = BooleanVar(value=self.settings.get("index", False))
         self.status = StringVar(value="")
         self.server = core.Server(self._command)
         self.events: queue.Queue = queue.Queue()
@@ -91,7 +91,7 @@ class Window:
         row.pack(fill=X, pady=(0, 8))
         self.b_install = ttk.Button(row, text="Instalar (uma vez)", command=self.install)
         self.b_start = ttk.Button(row, text="Ligar", command=self.start, style="Accent.TButton")
-        self.b_stopidx = ttk.Button(row, text="Parar a leitura", command=self.stop_index)
+        self.b_stopidx = ttk.Button(row, text="Parar ao fim da página", command=self.stop_index)
         self.b_stop = ttk.Button(row, text="Desligar", command=self.stop)
         for b in (self.b_install, self.b_start, self.b_stopidx, self.b_stop):
             b.pack(side=LEFT, padx=(0, 6))
@@ -196,7 +196,7 @@ class Window:
         threading.Thread(target=self._stop_worker, args=(why,), daemon=True).start()
 
     def stop_index(self) -> None:
-        self._say("Parando a leitura: o documento em leitura termina antes.")
+        self._say("Parando: a página em leitura termina, o que já foi lido fica; Ligar de novo continua da seguinte.")
         self.b_stopidx.configure(state=DISABLED)
         threading.Thread(target=lambda: self.events.put(
             ("index-stopped", core.stop_index(self.port))), daemon=True).start()

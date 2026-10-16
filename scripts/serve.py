@@ -47,7 +47,7 @@ from desembarque.serve_shapes import (ui_geometry, ui_meta,  # noqa: E402
                                       ui_transcription)
 from desembarque.export import (csv_filename, hits_to_csv,  # noqa: E402
                                 rows_to_csv, search_filename)
-from desembarque.voyage import (is_complete, merge_voyages,  # noqa: E402
+from desembarque.voyage import (Voyage, is_complete, merge_voyages,  # noqa: E402
                                 parse_voyage)
 from desembarque import search as searchlib          # noqa: E402
 from desembarque.gazetteer import (Names, fold, menu_for,   # noqa: E402
@@ -336,6 +336,11 @@ def corpus(folder: Path, limit: int = 0) -> dict:
             "transcribed_page": (cached or {}).get("transcribed_page") or (2 if is_sample else None),
             "transcribed": bool(cached) or is_sample,
             "transcribed_by": transcribed_by(cached) or ("pessoa" if is_sample else None),
+            # which pages the engine has been over, and whether some are
+            # still to read (a stop at the end of a page, one page alone)
+            "partial": bool((cached or {}).get("partial")),
+            "read_pages": sorted({int(p["n"]) for p in (cached or {}).get("pages") or ()
+                                  if isinstance(p, dict) and p.get("n") and not p.get("error")}),
         })
         if limit and len(docs) >= limit:
             break
@@ -489,11 +494,44 @@ def transcribe_document(pdf: Path, job) -> dict:
         live.unwatch(pdf.name)
 
 
+def _pages_kept(existing: dict, eng_name: str, only: list[int] | None) -> dict[int, dict]:
+    """The pages of the record on disk that this reading leaves as they are.
+
+    One page asked for alone leaves every other page. A reading this engine
+    stopped at the end of a page (`partial`) carries on from the pages it
+    had: the stop costs the page being read, not the document (Allan,
+    2026-10-16). A partial record from an older engine is read afresh.
+    """
+    pages = {int(p["n"]): p for p in existing.get("pages") or ()
+             if isinstance(p, dict) and p.get("n") and not p.get("error")}
+    if only:
+        return {n: p for n, p in pages.items() if n not in only}
+    if (existing.get("partial") and existing.get("engine") == eng_name
+            and existing.get("read_schema") == searchlib.SCHEMA):
+        return pages
+    return {}
+
+
 def _transcribe_document(pdf: Path, job, eng) -> dict:
     ident = identify(pdf)
-    pages, rows, cover_text, voyage = [], [], "", None
+    only = [int(n) for n in (getattr(job, "pages", None) or ())] or None
+    should_stop = getattr(job, "should_stop", None) or (lambda: False)
+    existing = JOBS.cached(ident.doc_hash) or {}
+    kept = _pages_kept(existing, eng.name, only)
+    wanted = only or [n for n in range(1, job.total + 1) if n not in kept]
+    pages = list(kept.values())
+    rows = [r for r in existing.get("rows") or ()
+            if isinstance(r, dict) and r.get("page") in kept]
+    cover_text = ""
+    voyage = Voyage(**existing["voyage"]) if kept and existing.get("voyage") else None
+    have_notation = bool(ident.notation) or bool(kept and existing.get("notation"))
     images: dict[int, Path] = {}
-    for n in range(1, job.total + 1):
+    stopped = False
+    for n in wanted:
+        # a stop lands at the end of the page being read, never in it
+        if n != wanted[0] and should_stop():
+            stopped = True
+            break
         job.page = n
         live.emit({"event": "page", "page": n})
         img = page_image(pdf, n, CACHE) or render_page(pdf, n, dpi=200)
@@ -501,7 +539,7 @@ def _transcribe_document(pdf: Path, job, eng) -> dict:
             pages.append({"n": n, "error": "render failed"})
             continue
         images[n] = img
-        want = text_wanted(n, bool(ident.notation) or bool(cover_text),
+        want = text_wanted(n, have_notation or bool(cover_text),
                            is_complete(voyage))
         res = eng.transcribe_page(img, classify(n), source=pdf, page=n,
                                   text=want)
@@ -534,6 +572,10 @@ def _transcribe_document(pdf: Path, job, eng) -> dict:
             r["page"] = n
             rows.append(r)
 
+    pages.sort(key=lambda p: int(p.get("n") or 0))
+    rows.sort(key=lambda r: int(r.get("page") or 0))
+    read = {int(p.get("n") or 0) for p in pages}
+    partial = stopped or any(n not in read for n in range(1, job.total + 1))
     ident = identify(pdf, cover_text=cover_text or None)
     record = {
         "schema": searchlib.SCHEMA,
@@ -548,6 +590,9 @@ def _transcribe_document(pdf: Path, job, eng) -> dict:
         "pages": pages,
         "rows": rows,
         **({"voyage": voyage.as_dict()} if voyage else {}),
+        # pages still to read: a stop at the end of a page, or one page
+        # read alone. The next folder index carries on from here.
+        **({"partial": True} if partial else {}),
     }
     # The handwritten pages read a second time, by lines, when kraken and
     # its model are installed. Without them the document is indexed by the
@@ -611,11 +656,13 @@ class _BatchJob:
     """What transcribe_document needs from a job, without the UI job machinery.
 
     A folder index reports progress per document, not per page, so there is
-    nothing for a per-document job record to be polled for."""
+    nothing for a per-document job record to be polled for. `should_stop`
+    is the folder index's stop, asked at the end of every page."""
 
-    def __init__(self, total: int) -> None:
+    def __init__(self, total: int, should_stop=None) -> None:
         self.total = total
         self.page = 0
+        self.should_stop = should_stop or (lambda: False)
 
 
 def index_folder(folder: Path):
@@ -635,11 +682,14 @@ def index_folder(folder: Path):
         return is_indexed(JOBS.cached(identify(pdf).doc_hash),
                           schema=searchlib.SCHEMA)
 
-    def transcribe(pdf: Path) -> None:
-        data = transcribe_document(pdf, _BatchJob(pdf_pages(pdf)))
+    def transcribe(pdf: Path) -> bool:
+        data = transcribe_document(pdf, _BatchJob(pdf_pages(pdf), BATCH.stopping))
         if data.get("unavailable"):
             raise RuntimeError(data.get("message", "motor indisponível"))
+        if data.get("partial") and BATCH.aborting():
+            return False        # an abort throws the document in hand away
         JOBS.store(data["hash"], preserve_human_work(JOBS.cached(data["hash"]), data))
+        return not data.get("partial")
 
     return BATCH.start(folder, pdfs, is_cached, transcribe,
                        workers=INDEX_WORKERS)
@@ -949,25 +999,43 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, clients_state())
 
         if u.path == "/api/index/stop":
-            BATCH.stop()
+            # at the end of the page each worker is on; `abort` throws away
+            # what those workers had read of their documents
+            BATCH.stop(abort=q.get("abort", "") not in ("", "0"))
             st = BATCH.state
-            return self._send(200, st.as_dict() if st else {"status": "idle"})
+            return self._send(200, {**(st.as_dict() if st else {"status": "idle"}),
+                                    "reading": live.summary()})
+
+        if u.path == "/api/job/stop":
+            job = JOBS.get(q.get("id", ""))
+            if not job:
+                return self._send(404, {"error": "no such job"})
+            job.stop = True
+            job.abort = q.get("abort", "") not in ("", "0")
+            return self._send(200, job.as_dict())
 
         if u.path == "/api/transcribe":
             pdf = safe(str(Path(q.get("dir", "")) / q.get("pdf", "")), STATE["root"])
             if not pdf or not pdf.exists():
                 return self._send(404, {"error": "no such pdf"})
             ident = identify(pdf)
+            # one page alone, always read even when the record has it: it
+            # is what somebody checking a reading asks for
+            page = int(q.get("page") or 0)
             # Asking again is cheap by default: a page costs half a minute and
             # most requests are somebody reopening a document. But `force`
             # exists because without it an engine improvement could never reach
             # a dossier already in the cache — the same silent staleness the
-            # schema stamp guards against, from the other end.
-            if JOBS.cached(ident.doc_hash) and q.get("force", "") in ("", "0"):
+            # schema stamp guards against, from the other end. A partial
+            # record is not a reason to refuse: the reading carries on.
+            cached = JOBS.cached(ident.doc_hash)
+            if (cached and not cached.get("partial") and not page
+                    and q.get("force", "") in ("", "0")):
                 return self._send(200, {"status": "done", "cached": True,
                                         "hash": ident.doc_hash})
             job = JOBS.submit(ident.doc_hash, pdf.name, pdf_pages(pdf),
-                              lambda j: transcribe_document(pdf, j))
+                              lambda j: transcribe_document(pdf, j),
+                              pages=[page] if page else None)
             return self._send(202, job.as_dict())
         return self._send(404, {"error": "not found"})
 

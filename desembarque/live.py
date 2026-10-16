@@ -59,7 +59,7 @@ def emit(event: dict) -> None:
             # table never reports bands, and the page number is the only
             # sign of progress inside a document (Allan, 2026-10-16)
             d.update(page=int(event.get("page") or 0), bands=[], columns=None,
-                     rows=[], done=0, total=0, at=None)
+                     rows=[], done=0, total=0, at=None, page_at=time.time())
         elif kind == "bands":
             bands = [list(b) for b in event.get("bands") or []]
             d.update(page=int(event.get("page") or 0), bands=bands,
@@ -78,8 +78,10 @@ def emit(event: dict) -> None:
 def get(name: str) -> dict | None:
     with _lock:
         d = _docs.get(name)
-        return None if d is None else {**d, "rows": [dict(r) for r in d["rows"]],
-                                       "bands": [list(b) for b in d["bands"]]}
+        return None if d is None else {
+            **d, "rows": [dict(r) for r in d["rows"]],
+            "bands": [list(b) for b in d["bands"]],
+            "page_s": round(time.time() - d["page_at"], 1) if d.get("page_at") else None}
 
 
 def names() -> list[str]:
@@ -92,6 +94,10 @@ def summary() -> list[dict]:
     of how many, the names read of how many on that page. What the folder
     index status carries so one poll says everything."""
     with _lock:
+        now = time.time()
         return [{"file": d["file"], "page": d["page"], "pages": d["pages"],
-                 "done": d["done"], "total": d["total"]}
+                 "done": d["done"], "total": d["total"],
+                 # how long this page has been read for: on a page with no
+                 # table nothing else moves, and twenty seconds is the norm
+                 "page_s": round(now - d["page_at"], 1) if d.get("page_at") else None}
                 for _, d in sorted(_docs.items())]

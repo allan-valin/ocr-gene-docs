@@ -61,8 +61,10 @@ def test_a_document_reports_which_page_it_is_on_and_how_many_there_are():
         live.emit({"event": "page", "page": 4})
         got = live.get("x.pdf")
         assert got["page"] == 4 and got["rows"] == [] and got["done"] == 0
-        assert live.summary() == [{"file": "x.pdf", "page": 4, "pages": 9,
-                                   "done": 0, "total": 0}]
+        [s] = live.summary()
+        assert s["page_s"] is not None and s["page_s"] < 5
+        assert {k: v for k, v in s.items() if k != "page_s"} == {
+            "file": "x.pdf", "page": 4, "pages": 9, "done": 0, "total": 0}
     finally:
         live.unwatch("x.pdf")
     assert live.summary() == []

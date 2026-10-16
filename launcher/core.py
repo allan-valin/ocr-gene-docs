@@ -186,14 +186,18 @@ janela avisa quando está pronto. Fechar a aba do navegador desliga o
 servidor; para voltar, clique em Ligar de novo.
 
 Ler os PDFs da pasta ao ligar
-Transcreve os PDFs da pasta que ainda não foram lidos. Cerca de 20 s por
+Desligado por padrão: na página, cada documento tem o botão Transcrever
+(ou só uma página). Ligado, transcreve os PDFs da pasta que ainda não
+foram lidos. Cerca de 20 s por
 página: uma lista de 9 páginas leva uns 3 minutos; os já lidos são pulados.
 A linha de status diz em que documento está e quanto falta. Enquanto lê, o
 computador fica lento.
 
-Parar a leitura
-Para a leitura da pasta; o documento que está sendo lido termina antes,
-e o que já foi lido fica. Clicar em Ligar de novo continua de onde parou.
+Parar ao fim da página
+Para a leitura da pasta assim que a página em leitura termina (uns 20 s).
+O que já foi lido fica, página por página; Ligar de novo continua da
+página seguinte. Para abortar e descartar o documento em andamento, use o
+botão Abortar na caixa de progresso da página.
 
 Desligar
 Para o servidor; fechar a janela ou a aba do navegador faz o mesmo. A aba

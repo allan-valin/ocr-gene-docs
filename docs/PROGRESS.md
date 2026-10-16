@@ -6,6 +6,47 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-16, latest — stop at the end of the page, one page alone, zoom on the scan
+
+Allan's third round. What he asked and what is on disk:
+
+* **Stop means stop.** Parar waited for the whole document (minutes).
+  Now `_transcribe_document` asks `should_stop()` before every page and
+  breaks at the end of the one it is on; the record is stored with
+  `partial: true` and the pages it has, `is_indexed` says it is not done,
+  and the next reading (folder index, or *Continuar a leitura* on the
+  page) carries on from the pages on disk (`_pages_kept`; voyage and
+  notation come back from the record). **Abortar** (with a confirm)
+  throws away the document in hand instead; pages and documents already
+  saved stay. Both for the folder (`/api/index/stop?abort=`) and for one
+  document (`/api/job/stop?id=&abort=`); both in the progress box, and
+  *Parar ao fim da página* on the launcher.
+* **One page alone**: `/api/transcribe?pdf=&page=N` reads that page and
+  leaves the rest; the record says the rest is still to read; the page
+  strip dims unread pages; the doc list says "parcial". Header buttons
+  are contextual: *Transcrever* / *Continuar a leitura* / *Transcrever
+  de novo*, and *Só esta página* beside them, so the way to read is
+  always on screen (it vanished behind the empty grid before).
+* **The box shows at the click**, before the request is answered.
+  Where no names are cut on the page, the page bar is a clock against
+  the usual twenty seconds (`page_s` from `live`), not an endless bar.
+* **Zoom on the scan**: Ctrl + wheel over the scan (and − / + / 100%)
+  zooms the scan alone, anchored at the pointer; past 1.7× the image is
+  fetched at 240 dpi. Bands follow, being fractions of the image.
+* Launcher: *Ler os PDFs da pasta ao ligar* off by default.
+
+**Not done, said plainly.** Certidão de casamento 2 reads as gibberish:
+the engine's prose reading is PaddleOCR on cursive, which is what it is.
+The kraken PP-OCRv6-hist model that beats it on cursive names runs only
+on pages with a table (lines onto bands, or rows from lines). Running it
+on prose pages, with columns and a double page kept apart, is the
+document-types work (docs/FUTURE-document-types.md), not an evening.
+Certidão 1 is a table without rules (nome do marido, nome da mulher,
+ano, livro, folhas; two pages per scan): same bucket — rows from kraken
+lines with columns clustered by x would be the path.
+
+Tests: 1050 pass. Headless load clean. Not seen by Allan yet.
+
 ## 2026-10-16, later — a progress box with numbers; the index polled all the time
 
 Allan's second round on his folder (22:39–22:45): five minutes with no

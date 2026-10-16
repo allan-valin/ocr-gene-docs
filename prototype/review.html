@@ -128,6 +128,7 @@
   #pagestrip{display:flex;gap:4px;padding:6px;border-bottom:1px solid var(--line);
     background:var(--panel);position:sticky;top:0;z-index:3;flex-wrap:wrap}
   #pagestrip button{padding:3px 9px;font-size:11px}
+  #pagestrip button.unread{opacity:.55}
   .empty{padding:26px 18px;color:var(--muted);font-size:12.5px;line-height:1.6}
   .empty b{color:var(--ink)}
   .empty button{margin-top:12px;padding:7px 13px;font-size:12.5px}
@@ -140,7 +141,7 @@
   .warnstate{color:var(--warn)}
   .pane{overflow:auto;position:relative;min-height:0}
   #scanPane{background:#0e0d0c;border-right:1px solid var(--line)}
-  #scanInner{position:relative;width:100%}
+  #scanInner{position:relative;width:100%}  /* width set by the zoom */
   #scan{display:block;width:100%;height:auto}
   /* Reading the faint pages with your own eyes. The recogniser is at its
      ceiling on a hundred-year-old hand and a person is not: on the pages where
@@ -290,7 +291,10 @@
   <div id="pgdocs"></div>
   <div class="row" id="pgpage"><b><span>Página</span><span></span></b><div class="bar"><i></i></div></div>
   <div class="hint" id="pghint"></div>
-  <div class="acts"><button id="pgstop" type="button">Parar a leitura</button>
+  <div class="acts"><button id="pgstop" type="button"
+      title="Termina a página que está sendo lida, guarda o que já leu e para. Transcrever de novo (ou Ligar) continua da página seguinte.">Parar ao fim desta página</button>
+    <button id="pgabort" type="button"
+      title="Para já e descarta o que foi lido do documento em andamento. Documentos e páginas já salvos ficam.">Abortar</button>
     <button id="pghide" type="button">Esconder</button></div>
 </div></div>
 <header>
@@ -333,7 +337,9 @@
   <button id="editmode" aria-pressed="false"
     title="Permitir corrigir as células. Desligado, a página é só de leitura.">✎ Corrigir</button>
   <button id="reread"
-    title="Ler este documento de novo com o motor atual. Correções já salvas são mantidas.">↻ Reler</button>
+    title="Ler este documento com o motor. Correções já salvas são mantidas.">Transcrever</button>
+  <button id="readpage"
+    title="Ler só a página aberta com o motor — rápido para conferir uma página. As outras ficam como estão.">Só esta página</button>
   <a id="exportcsv" class="btn" download
     title="Baixar as linhas deste documento em CSV, com a origem de cada uma">⭳ Exportar</a>
 </header>
@@ -384,6 +390,10 @@ Um ano ou o nome do navio na busca não competem com o nome: eles reordenam o qu
       <button id="enh-realce" data-enhance="realce" aria-pressed="false">Realce</button>
       <button id="enh-forte" data-enhance="forte" aria-pressed="false">Alto contraste</button>
       <button id="enh-negativo" data-enhance="negativo" aria-pressed="false">Negativo</button>
+      <span style="margin-left:10px">Zoom</span>
+      <button id="zoomout" type="button" title="Diminuir (Ctrl + roda do mouse sobre a página)">−</button>
+      <button id="zoomin" type="button" title="Aumentar (Ctrl + roda do mouse sobre a página)">+</button>
+      <button id="zoomreset" type="button" title="Largura da coluna">100%</button>
     </div>
     <div id="scanInner">
       <img id="scan" alt="Digitalização original da relação de passageiros">
@@ -824,7 +834,8 @@ function stat(){
 function pageURL(doc,page){
   if(!SERVED) return page.file;
   const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
-  return `/api/page?pdf=${encodeURIComponent(doc.file)}&n=${page.n}${dir}`;
+  const dpi = (typeof scanDpi==="function" && scanDpi()!==120) ? `&dpi=${scanDpi()}` : "";
+  return `/api/page?pdf=${encodeURIComponent(doc.file)}&n=${page.n}${dir}${dpi}`;
 }
 
 // ---- documents ----
@@ -847,7 +858,7 @@ function renderDocList(){
     <div class="doc ${i===docIdx?"on":""}" data-d="${i}">
       <b>${d.ship}</b>
       <span>${docYear(d)}${d.notation} · ${d.total_pages} p.</span>
-      ${d.transcribed||d.rows?'<span class="badge">transcrito</span>':""}
+      ${d.partial?'<span class="badge">parcial</span>':d.transcribed||d.rows?'<span class="badge">transcrito</span>':""}
     </div>`).join("");
 }
 function renderPageStrip(){
@@ -862,9 +873,12 @@ function renderPageStrip(){
   $("#pagestrip").innerHTML = D.pages.map(p=>{
     const isT = rowsForPage(D,p.n).length>0;
     const how = HOW[(D.measuredBy||{})[p.n]] || ["",""];
-    return `<button data-p="${p.n}" aria-pressed="${p.n===D.pages[pageIdx].n}"
-      title="${[isT?'página transcrita':'', how[1]].filter(Boolean).join(" · ")}"
-      >p.${p.n}${isT?" ✓":""}${how[0]}</button>`;
+    // a page the engine has not been over yet, in a document it has: a
+    // stop at the end of a page, or one page read alone
+    const unread = D.transcribed && D.read_pages && !D.read_pages.includes(p.n);
+    return `<button data-p="${p.n}" aria-pressed="${p.n===D.pages[pageIdx].n}" class="${unread?'unread':''}"
+      title="${[isT?'página transcrita':'', unread?'ainda não lida':'', how[1]].filter(Boolean).join(" · ")}"
+      >p.${p.n}${isT?" ✓":""}${unread?" ·":""}${how[0]}</button>`;
   }).join("") + (D.total_pages>D.pages.length
     ? `<span style="align-self:center;color:var(--muted);font-size:11px">
         de ${D.total_pages} (as demais não foram renderizadas)</span>` : "");
@@ -926,6 +940,12 @@ function openDoc(i,page){
     note.hidden = false;
   } else { note.hidden = true; note.textContent = ""; }
   renderDocList(); renderPageStrip(); render(); paintBand(0); refreshExport();
+  // what the read button does here: read, carry on, or read again
+  $("#reread").textContent = !D.transcribed ? "Transcrever"
+    : D.partial ? "Continuar a leitura" : "Transcrever de novo";
+  $("#reread").title = !D.transcribed ? "Ler este documento com o motor."
+    : D.partial ? "Ler as páginas que faltam (a leitura parou ao fim de uma página, ou só uma página foi lida)."
+    : "Ler este documento de novo com o motor atual. Correções já salvas são mantidas.";
   $("#stat").textContent = showRows ? "" : "sem transcrição";
   say(`${D.file} · página ${D.pages[pageIdx].n} · `
       + (showRows ? `${rows.length} linhas` : D.transcribed ? "lido, sem linhas de tabela nesta página"
@@ -1008,6 +1028,13 @@ function renderEmpty(msg){
   // that answered "already done" in silence was the first thing Allan hit
   // on his own folder (2026-10-16). The reading on disk is said, the prose
   // the page carries is shown, and the button to read again is ↻ Reler.
+  if(D.transcribed && D.read_pages && !D.read_pages.includes(n)){
+    e.innerHTML = `<b>Página ${n}: ainda não lida.</b><br>
+      A leitura deste documento parou antes desta página, ou só outra página foi lida.
+      ${SERVED ? `<br><button id="dotranscribe">Continuar a leitura</button>
+       <button id="dopage">Só esta página</button>` : ""}`;
+    return;
+  }
   if(D.transcribed){
     e.innerHTML = `<b>Página ${n}: ${text ? "texto lido pelo motor — não há tabela nesta página."
                                            : "lida pelo motor, sem linhas de tabela."}</b><br>
@@ -1024,6 +1051,7 @@ function renderEmpty(msg){
       : `<span class="warnstate">${(ENGINE&&ENGINE.detail)||"Motor de transcrição indisponível."}</span>
          <br>Nada é inventado: nenhuma linha aparece sem transcrição real.`}
     ${SERVED ? `<br><button id="dotranscribe" ${engineOK?"":"disabled"}>Transcrever documento</button>
+       <button id="dopage" ${engineOK?"":"disabled"} title="Ler só a página aberta — rápido para conferir">Só esta página</button>
        <button id="dogrid" title="Detecta a grade da tabela sem modelo: linhas vazias para preencher à mão">Gerar tabela vazia</button>` : ""}`;
 }
 let ENGINE=null, poll=null;
@@ -1031,31 +1059,39 @@ let ENGINE=null, poll=null;
 // is already in the cache. Without it the only way was to delete the file by
 // hand, so the tool got better and the documents somebody was looking at did
 // not.
-function startTranscription(force){
+function startTranscription(force, page){
   if(!SERVED||!D) return;
   clearInterval(poll);
   const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
   const file=D.file;
-  say(`${force?"lendo de novo":"pedindo a leitura de"} ${file} · ${D.total_pages} páginas · cerca de 20 s por página`);
+  say(page ? `pedindo a leitura da página ${page} de ${file} · cerca de 20 s`
+           : `${force?"lendo de novo":"pedindo a leitura de"} ${file} · ${D.total_pages} páginas · cerca de 20 s por página`);
   $("#tbl").hidden=true; $("#empty").hidden=false;
   renderEmpty(`<b><span class="spin"></span>Transcrevendo…</b><br>
-     ${D.ship||D.notation} · ${D.total_pages} páginas
+     ${D.ship||D.notation} · ${page?`página ${page}`:`${D.total_pages} páginas`}
      <div class="bar"><i style="width:2%"></i></div>
      <span id="prog">iniciando</span>`);
   jobPage=0;
-  fetch(`/api/transcribe?pdf=${encodeURIComponent(D.file)}${dir}${force?"&force=1":""}`,
+  // the box at once: the request itself waits seconds on a busy machine,
+  // and seconds with nothing on screen is what a click that did nothing looks like
+  jobLast={status:"queued", label:file, page:page||0, total:page?1:D.total_pages};
+  renderProgress(idxState, jobLast, null);
+  fetch(`/api/transcribe?pdf=${encodeURIComponent(D.file)}${dir}${force?"&force=1":""}${page?`&page=${page}`:""}`,
         {method:"POST"})
     .then(r=>r.json()).then(j=>{
       if(j.cached||j.status==="done"){
-        say(`${file} já tinha sido lido antes: nada a fazer. Para ler de novo, ↻ Reler.`);
+        say(`${file} já tinha sido lido antes: nada a fazer. Para ler de novo, Transcrever de novo.`);
         return finishTranscription("leitura já existente");
       }
-      if(j.status==="unavailable"){ say("transcrição indisponível: "+(j.message||""), "err");
+      if(j.status==="unavailable"){ jobLast=null; renderProgress(idxState,null,null);
+        say("transcrição indisponível: "+(j.message||""), "err");
         return renderEmpty(
         `<b>Transcrição indisponível.</b><br><span class="warnstate">${j.message||""}</span>`); }
       say(`leitura em andamento: ${file}`);
+      jobLast=j; renderProgress(idxState, j, null);
       poll=setInterval(()=>pollJob(j.id),600);
-    }).catch(e=>{ say("a leitura não começou: "+e, "err"); renderEmpty(`<b>Falhou.</b><br>${e}`); });
+    }).catch(e=>{ jobLast=null; renderProgress(idxState,null,null);
+      say("a leitura não começou: "+e, "err"); renderEmpty(`<b>Falhou.</b><br>${e}`); });
 }
 let jobPage=0;
 // ---- the progress box ---------------------------------------------------
@@ -1101,11 +1137,18 @@ function renderProgress(st, job, lv){
   const pg=$("#pgpage"); pg.hidden=!mine;
   if(mine){
     if(mine.total) setBar(pg, mine.done||0, mine.total, `página ${mine.page}: ${mine.done||0} de ${mine.total} nomes`);
-    else setBar(pg, 0, 0, `página ${mine.page||0}: cortando as linhas…`);
+    else if(mine.page_s!=null)
+      // no names cut yet, or none to cut: the clock against the usual
+      // twenty seconds is the only thing that moves on such a page
+      setBar(pg, Math.min(mine.page_s, 19), 20, `página ${mine.page||0}: lendo há ${Math.round(mine.page_s)} s (uma página leva uns 20 s)`);
+    else setBar(pg, 0, 0, `página ${mine.page||0}: começando…`);
   }
   $("#pgtitle").textContent = idx ? "Lendo a pasta…" : `Lendo ${job&&job.label?job.label:"o documento"}…`;
-  $("#pgstop").hidden=!idx;
+  // a stop is possible for the folder and for a running document alike
+  const stoppable = idx || (job && job.id);
+  $("#pgstop").hidden=!stoppable; $("#pgabort").hidden=!stoppable;
   $("#pghint").textContent = "Cerca de 20 s por página; o computador fica lento enquanto lê. "
+    + "Parar termina a página atual e guarda o que já leu; Abortar descarta o documento em andamento. "
     + "Esconder guarda esta caixa num canto e deixa navegar; cada documento aparece quando termina.";
   const liveHere = lv && D && lv.file===D.file && lv.page && (lv.bands||[]).length;
   const mini = PG.user==="mini" || (PG.user!=="full" && liveHere);
@@ -1116,9 +1159,22 @@ function renderProgress(st, job, lv){
 document.addEventListener("click",e=>{
   if(e.target.id==="pghide"){ PG.user = $("#progress").classList.contains("mini") ? "full" : "mini";
     renderProgress(idxState, jobLast, liveLast); }
-  if(e.target.id==="pgstop"){ say("parando a leitura (o documento em leitura termina antes)…");
-    fetch("/api/index/stop",{method:"POST"}).then(r=>r.json()).then(st=>{ renderIndexBar(st); }); }
+  if(e.target.id==="pgstop"||e.target.id==="pgabort"){
+    const abort = e.target.id==="pgabort";
+    if(abort && !confirm("Abortar para já e descarta o que foi lido do documento em andamento. "
+                         +"Documentos e páginas já salvos ficam. Abortar?")) return;
+    stopReading(abort);
+  }
 });
+function stopReading(abort){
+  const q = abort ? "?abort=1" : "";
+  say(abort ? "abortando: a página em leitura termina, o resto do documento é descartado…"
+            : "parando ao fim desta página: o que já foi lido fica, e Continuar a leitura retoma da seguinte…");
+  if(idxState && idxState.status==="running")
+    fetch(`/api/index/stop${q}`,{method:"POST"}).then(r=>r.json()).then(st=>{ renderIndexBar(st); renderProgress(st, jobLast, liveLast); });
+  if(jobLast && jobLast.id)
+    fetch(`/api/job/stop?id=${jobLast.id}${abort?"&abort=1":""}`,{method:"POST"}).catch(()=>{});
+}
 let jobLast=null;
 // ---- watching the engine read ----
 // The rows appear as they are read and the band being read is outlined on
@@ -1167,6 +1223,7 @@ function pollJob(id){
     }
     clearInterval(poll); jobLast=null; renderProgress(idxState, null, liveLast);
     if(j.status==="done") return finishTranscription(`leitura concluída em ${Math.round(j.elapsed)} s`);
+    if(j.status==="stopped"){ say(j.message||"leitura abortada", "err"); return finishTranscription("leitura abortada"); }
     say((j.status==="unavailable"?"transcrição indisponível: ":"erro na transcrição: ")+(j.message||""), "err");
     renderEmpty(`<b>${j.status==="unavailable"?"Transcrição indisponível.":"Erro na transcrição."}</b>
       <br><span class="warnstate">${j.message||""}</span>`);
@@ -1187,6 +1244,7 @@ function finishTranscription(why){
 }
 document.addEventListener("click",e=>{
   if(e.target.id==="dotranscribe") startTranscription();
+  if(e.target.id==="dopage") startTranscription(false, D && D.pages[pageIdx].n);
   if(e.target.id==="dogrid") buildGrid();
 });
 
@@ -1323,7 +1381,7 @@ function renderIndexBar(st){
       só aparece depois de recarregar a página. Pode parar e continuar depois —
       nada do que já foi lido se perde.</span>
       <span class="hint">${st.current||""}</span>
-      <button id="stopindex">Parar</button>`;
+      <button id="stopindex" title="Termina a página em leitura, guarda o que já leu e para">Parar ao fim da página</button>`;
     return;
   }
   const word = st.status==="stopped" ? "Parado" : "Pasta indexada";
@@ -1394,8 +1452,7 @@ function startIndexing(){
 }
 document.addEventListener("click",e=>{
   if(e.target.id==="doindex") startIndexing();
-  if(e.target.id==="stopindex"){ say("parando a leitura (o documento em leitura termina antes)…");
-    fetch("/api/index/stop",{method:"POST"}).then(r=>r.json()).then(renderIndexBar); }
+  if(e.target.id==="stopindex") stopReading(false);
   if(e.target.id==="reloadpage") location.reload();
 });
 
@@ -1781,7 +1838,8 @@ function chooseReading(i, w, word){
   r.verified = true;
   render(); select(i,false); scheduleSave();
 }
-$("#reread").onclick=()=>startTranscription(true);
+$("#reread").onclick=()=>startTranscription(!!(D && D.transcribed && !D.partial));
+$("#readpage").onclick=()=>startTranscription(false, D && D.pages[pageIdx].n);
 addEventListener("resize",()=>paintBand(sel));
 
 // ---- boot ----
@@ -1833,6 +1891,42 @@ document.addEventListener("keydown",e=>{
   e.preventDefault();
 });
 try{ setEnhance(localStorage.getItem(ENHANCE_KEY)||""); }catch(e){ setEnhance(""); }
+
+// ---- zoom on the scan -----------------------------------------------------
+// Ctrl + wheel zoomed the whole browser page and the scan stayed the same
+// size in it (Allan, 2026-10-16). The scan zooms on its own: its box gets
+// wider, the pane scrolls, the bands follow since they are fractions of
+// the image. Past 1.7× the image is asked for again at a higher dpi,
+// since the 120 dpi one is only what a column-wide view needs.
+let ZOOM=1;
+function scanDpi(){ return ZOOM>=1.7 ? 240 : 120; }
+function setZoom(z, anchor){
+  const pane=$("#scanPane"), inner=$("#scanInner"), img=$("#scan");
+  z=Math.max(0.5, Math.min(6, z));
+  const ratio=z/ZOOM;
+  const was=scanDpi();
+  ZOOM=z;
+  inner.style.width=(ZOOM*100)+"%";
+  if(anchor){
+    const r=pane.getBoundingClientRect();
+    const mx=anchor.x-r.left+pane.scrollLeft, my=anchor.y-r.top+pane.scrollTop;
+    pane.scrollLeft=mx*ratio-(anchor.x-r.left);
+    pane.scrollTop=my*ratio-(anchor.y-r.top);
+  }
+  $("#zoomreset").textContent=Math.round(ZOOM*100)+"%";
+  if(D && scanDpi()!==was) img.src=pageURL(D,D.pages[pageIdx]);
+  paintBand(sel);
+}
+$("#scanPane").addEventListener("wheel",e=>{
+  if(!e.ctrlKey) return;
+  e.preventDefault();
+  setZoom(ZOOM*(e.deltaY<0?1.15:1/1.15), {x:e.clientX, y:e.clientY});
+},{passive:false});
+document.addEventListener("click",e=>{
+  if(e.target.id==="zoomin") setZoom(ZOOM*1.25);
+  if(e.target.id==="zoomout") setZoom(ZOOM/1.25);
+  if(e.target.id==="zoomreset") setZoom(1);
+});
 
 // ---- hello, goodbye -----------------------------------------------------
 // The launcher stops the server when the last page is gone (Allan, 2026-10-16:

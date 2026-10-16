@@ -43,6 +43,10 @@ def is_indexed(data: dict | None, schema: int) -> bool:
     """
     if not data:
         return False
+    # stopped at the end of a page, or one page read alone: the rest is
+    # still to read, and the next run carries on from the pages on disk
+    if data.get("partial"):
+        return False
     if data.get("engine"):
         # `schema` says how the record was *parsed* and `read_schema` how it was
         # *read*, and only the second answers this question. Re-parsing lifts the
@@ -350,13 +354,26 @@ class BatchIndexer:
     def __init__(self) -> None:
         self.state: BatchState | None = None
         self._stop = threading.Event()
+        self._abort = threading.Event()
         self._lock = threading.Lock()
 
     def running(self) -> bool:
         return bool(self.state and self.state.status == "running")
 
-    def stop(self) -> None:
+    def stop(self, abort: bool = False) -> None:
+        """Stop after the page each worker is on. With `abort`, what those
+        workers had read of their documents is thrown away rather than
+        kept for the next run (Allan, 2026-10-16: "I expected an
+        abortion")."""
+        if abort:
+            self._abort.set()
         self._stop.set()
+
+    def stopping(self) -> bool:
+        return self._stop.is_set()
+
+    def aborting(self) -> bool:
+        return self._abort.is_set()
 
     def start(self, folder: Path, pdfs: list[Path],
               is_cached: Callable[[Path], bool],
@@ -377,6 +394,7 @@ class BatchIndexer:
             if self.running():
                 return self.state
             self._stop.clear()
+            self._abort.clear()
             state = BatchState(folder=str(folder), total=len(pdfs), status="running")
             self.state = state
 
@@ -399,9 +417,11 @@ class BatchIndexer:
                         with self._lock:
                             state.skipped += 1      # resume: nothing to re-do
                         continue
-                    transcribe(pdf)
-                    with self._lock:
-                        state.done += 1
+                    # False: stopped before the end of the document, which
+                    # is neither done nor failed
+                    if transcribe(pdf) is not False:
+                        with self._lock:
+                            state.done += 1
                 except Exception as e:
                     # one bad document must not end an unattended run, and a
                     # silently skipped document is worse than a loud failure

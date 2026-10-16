@@ -33,6 +33,15 @@ class Job:
     started: float = field(default_factory=time.time)
     finished: float | None = None
     result_path: str | None = None
+    # only these pages, when one page is asked for alone
+    pages: list[int] | None = None
+    # asked to stop at the end of the page it is on; `abort` throws away
+    # what it had read of the document instead of keeping it
+    stop: bool = False
+    abort: bool = False
+
+    def should_stop(self) -> bool:
+        return self.stop
 
     def as_dict(self) -> dict:
         d = asdict(self)
@@ -75,13 +84,14 @@ class JobRunner:
         return self._jobs.get(jid) if jid else None
 
     def submit(self, doc_hash: str, label: str, total: int,
-               work: Callable[[Job], dict]) -> Job:
+               work: Callable[[Job], dict], pages: list[int] | None = None) -> Job:
         """Start a job, or return the one already running for this document."""
         with self._lock:
             existing = self.for_hash(doc_hash)
             if existing and existing.status in ("queued", "running"):
                 return existing
-            job = Job(id=uuid.uuid4().hex[:12], doc_hash=doc_hash, label=label, total=total)
+            job = Job(id=uuid.uuid4().hex[:12], doc_hash=doc_hash, label=label,
+                      total=total, pages=pages)
             self._jobs[job.id] = job
             self._by_hash[doc_hash] = job.id
 
@@ -92,6 +102,9 @@ class JobRunner:
                 if data.get("unavailable"):
                     job.status = "unavailable"
                     job.message = data.get("message", "")
+                elif data.get("partial") and job.abort:
+                    job.status = "stopped"
+                    job.message = "leitura abortada: o que tinha sido lido foi descartado"
                 else:
                     # reading a document again must not discard the reading a
                     # person typed over the last one

@@ -224,4 +224,4 @@ def test_the_reading_can_be_stopped_from_the_launcher():
     import launcher.desembarque_launcher as dl
     assert callable(core.stop_index)
     src = inspect.getsource(dl.Window._build)
-    assert "Parar a leitura" in src
+    assert "Parar ao fim da página" in src

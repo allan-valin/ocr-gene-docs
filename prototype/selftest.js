@@ -467,7 +467,12 @@ window.addEventListener("load",async()=>{
       ok("with the folder count and both documents being read",
          pg.textContent.includes("1 de 5 documentos") && document.querySelectorAll("#pgdocs .row").length===2
          && pg.textContent.includes("página 2 de 9"));
-      ok("and a Parar button", !document.getElementById("pgstop").hidden);
+      ok("and a Parar button, with an Abortar beside it", !document.getElementById("pgstop").hidden
+         && !document.getElementById("pgabort").hidden);
+      ok("the read button is contextual and one page can be read alone",
+         !!document.getElementById("reread") && !!document.getElementById("readpage"));
+      ok("the scan zooms on its own", typeof setZoom==="function" && (setZoom(2), ZOOM===2)
+         && document.getElementById("scanInner").style.width==="200%" && (setZoom(1), ZOOM===1));
       renderProgress({status:"finished", total:5, done:5}, null, null);
       ok("and goes away when the folder is done", pg.hidden);
     }

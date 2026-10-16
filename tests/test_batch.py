@@ -564,3 +564,24 @@ def test_a_row_with_no_edits_is_left_alone():
 
     assert tidy_edits([]) == []
     assert tidy_edits(None) == []
+
+
+def test_a_document_stopped_midway_is_not_counted_as_done(tmp_path):
+    """`transcribe` says False when it stopped before the end of the
+    document (a stop at the end of a page); that document is neither done
+    nor failed, and the next run picks it up where it was."""
+    b = BatchIndexer()
+    st = b.start(tmp_path, files(tmp_path, 3), lambda p: False,
+                 lambda p: False if p.name.endswith("1.pdf") else None)
+    assert wait(st) == "finished"
+    assert st.done == 2 and st.failed == []
+
+
+def test_abort_is_a_stop_that_says_so(tmp_path):
+    b = BatchIndexer()
+    st = b.start(tmp_path, files(tmp_path, 20), lambda p: False,
+                 lambda p: time.sleep(0.05))
+    assert not b.aborting()
+    b.stop(abort=True)
+    assert b.stopping() and b.aborting()
+    assert wait(st) == "stopped"

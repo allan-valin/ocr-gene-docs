@@ -1185,3 +1185,104 @@ def test_the_index_status_carries_what_is_being_read_right_now(server, engine):
     assert "reading" in s and isinstance(s["reading"], list)
     s = wait_done(base)
     assert s["reading"] == []
+
+
+# ---- stopping at the end of a page, resuming at the next ----------------
+class PagedEngine:
+    """An engine that remembers which pages it was asked for."""
+    name = "fake"
+
+    def __init__(self):
+        self.pages = []
+
+    def available(self):
+        return True
+
+    def transcribe_page(self, image, kind="unknown", source=None, page=None,
+                        text=True):
+        self.pages.append(page)
+        return engines.PageResult(kind=kind, engine=self.name,
+                                  rows=[{"name": f"P{page}"}])
+
+
+def _paged(server, monkeypatch, pages=6):
+    base, folder = server
+    eng = PagedEngine()
+    monkeypatch.setattr(engines, "_ACTIVE", eng)
+    monkeypatch.setattr(serve, "page_image", lambda *a, **k: None)
+    monkeypatch.setattr(serve, "render_page", lambda *a, **k: Path("x.png"))
+    monkeypatch.setattr(serve, "pdf_pages", lambda p: pages)
+    docs(folder, 1)
+    return base, folder / "doc0.pdf", eng
+
+
+def test_a_reading_stops_at_the_end_of_the_page_and_says_it_is_partial(server, monkeypatch):
+    """Allan, 2026-10-16: "clicking a button to stop and having to wait 5
+    minutes makes little sense; stop when the current page is finished and
+    resume at the next page later"."""
+    base, pdf, eng = _paged(server, monkeypatch)
+
+    class Job:
+        total = 6
+        page = 0
+        def should_stop(self):
+            return self.page >= 2
+    data = serve.transcribe_document(pdf, Job())
+    assert data["partial"] is True
+    assert [p["n"] for p in data["pages"]] == [1, 2]
+    assert [r["page"] for r in data["rows"]] == [1, 2]
+    from desembarque.batch import is_indexed
+    assert not is_indexed(data, schema=searchlib.SCHEMA), "a partial record is not done"
+
+
+def test_a_partial_record_is_resumed_at_the_next_page(server, monkeypatch):
+    base, pdf, eng = _paged(server, monkeypatch)
+    from desembarque.identity import identify
+    h = identify(pdf).doc_hash
+    serve.JOBS.store(h, {"hash": h, "file": pdf.name, "engine": "fake", "partial": True,
+                         "schema": searchlib.SCHEMA, "read_schema": searchlib.SCHEMA,
+                         "pages": [{"n": 1, "kind": "cover"}, {"n": 2, "kind": "list"}],
+                         "rows": [{"name": "OLD1", "page": 1}, {"name": "OLD2", "page": 2}]})
+
+    class Job:
+        total = 6
+        page = 0
+    data = serve.transcribe_document(pdf, Job())
+    assert eng.pages == [3, 4, 5, 6], "the pages already read are not read again"
+    assert "partial" not in data
+    assert [p["n"] for p in data["pages"]] == [1, 2, 3, 4, 5, 6]
+    assert [r["name"] for r in data["rows"]][:2] == ["OLD1", "OLD2"]
+
+
+def test_one_page_alone_can_be_read(server, monkeypatch):
+    """Allan: "transcribe just the currently selected page — it would help
+    with debugging". The record holds that page and says the rest is
+    missing; a later folder index reads the rest."""
+    base, pdf, eng = _paged(server, monkeypatch)
+
+    class Job:
+        total = 6
+        page = 0
+        pages = [4]
+    data = serve.transcribe_document(pdf, Job())
+    assert eng.pages == [4]
+    assert data["partial"] is True
+    assert [p["n"] for p in data["pages"]] == [4]
+    assert [r["page"] for r in data["rows"]] == [4]
+
+
+def test_the_page_endpoint_reads_one_page_and_can_be_stopped(server, monkeypatch):
+    base, pdf, eng = _paged(server, monkeypatch)
+    code, j = call(f"{base}/api/transcribe?pdf=doc0.pdf&page=4", method="POST")
+    assert code == 202
+    for _ in range(100):
+        _, j = call(f"{base}/api/job?id={j['id']}")
+        if j["status"] == "done":
+            break
+        time.sleep(0.02)
+    assert j["status"] == "done" and eng.pages == [4]
+    # the stop endpoints answer for a job and for the folder
+    code, s = call(f"{base}/api/job/stop?id={j['id']}", method="POST")
+    assert code == 200 and s["stop"] is True
+    code, s = call(f"{base}/api/index/stop?abort=1", method="POST")
+    assert code == 200
