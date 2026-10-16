@@ -6,6 +6,69 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-16 — the name column reached into the nationality; the menu composes; a launcher to double-click
+
+**Allan looked at the first dossiers in the browser and saw names carrying
+the start of the nationality — on typed pages, with a finger of blank paper
+between the two — and `Yosé`/`Yosi` with no *José* among the guesses.**
+
+**The bleed, found and fixed.** `tablegrid.columns` ended the name column
+at the left edge of the heading printed beside it. That heading is narrower
+than its column and printed in the middle of it, while the values are typed
+from its left rule: on BS.ENT.013981 p2 `Nação` starts at 0.453 of the sheet
+and *Brazileiro* at 0.421, so every row read `Enzo SantoniBra`, `José dos
+SantosPor`. On OL.PRJ.16548 p2 (cursive) the old edge at 0.475 sat in the
+*middle* of the nationality column — `Reidar Birkeland. hor` is *Noruego*
+cut in two. Two faults: `Nação` was not in the heading vocabulary (the column
+was folded into *Profissão*), and the right edge was never measured from the
+writing the way the left edge has been since OL.PRJ.18109. Now
+`_right_from_writing`: the rows under the next heading, those starting
+nearer that heading than the name's (one detector box merging name and
+nationality must not move it), 0.1-quantile, less 0.006 of air — not more,
+because on 013947 p4 the nationality is written from the printed rule at
+0.355 and *Fernando* ends at 0.35. Fixtures `frags-013981-2`, `-013994-2`,
+`-013947-4`; `bench_pages.py` moved 013981 p2 0.452 → 0.419 and 013947 p4
+0.363 → 0.348, both intended, baseline re-recorded. A first survey of four
+dossiers: all four move, by 0.03–0.06 of the sheet.
+
+**What is on disk was read with the old edge**, and the app shows what is on
+disk. `scripts/remeasure_edges.py survey data/edges-survey.json` measures
+every list page again with the detector only (no recognition, a few seconds
+a page, 3 workers in a `systemd-run --scope -p MemoryMax=8G`) and lists the
+pages whose edge moves by more than 0.004; `… apply data/edges-survey.json`
+reads those pages again in page order per dossier (so a continuation page
+inherits the heading page's columns), through `retry.with_page_remeasured`,
+which keeps every row a person typed and — new today — each row's kraken
+`second_read`, which on a typed page was the clean reading. Both passes
+resume. Results go below when they are in.
+
+**The menu.** `Yosi A. Olnerra` (BS.ENT.013990 p2) is *José*. The archive's
+spelling neighbours of `YOSI` are *Yoshiko*, *Yoshino*, *Rossi*; the
+ascender rule reads `Y` as `J` and gives `JOSI`, which nobody has read, so it
+sat at the tail among `BOSI`, `DOSI`, `FOSI`. `gazetteer._composed`: a stroke
+reading that spells nothing but is itself ≥ 0.74 similar to an archive name
+offers that name, as `traço≈arquivo`, at most two per menu, after the
+stroke readings the archive has read. `bench_menu.py` shipped: 88 → 91 of
+220 badly-read words found, @1 0.168 = 0.168, @3 0.359 → 0.368, @5 0.391 =
+0.391, @10 0.400 → 0.414. (For `Yosé` itself the menu already had *JOSE* at
+rank two; the complaint was most likely the `Yosi` row.)
+
+**The launcher.** `launcher/core.py` (tested without a window, against
+`tests/stub_server.py`): finds the venv's Python per platform, builds the
+serve command with `--no-open`, starts the server and waits for the port,
+reports a process that dies at once with its output, stops it, starts the
+index and says how far it is in hours. `launcher/desembarque_launcher.py` is
+the Tk window — *Instalar (uma vez)* makes the venv and pip-installs both
+requirements files with the log on screen; *Iniciar* starts on the chosen
+folder, opens the browser and (checkbox, default on) starts indexing;
+*Abrir no navegador*; *Parar*; closing the window stops the server.
+`Desembarque.bat` / `.command` / `.sh` at the root are what gets
+double-clicked; `launcher/README.md` is the page for the friend, in
+Portuguese. Standard library only, so it runs on the Python a person
+installs from python.org before anything else exists. Not yet tried on
+Windows: paddlepaddle 3.3.1 and paddleocr 3.7.0 publish Windows wheels, and
+the `.bat` prefers `pyw`/`pythonw` so no console window stays open.
+
 ## 2026-10-12, 19:00 — few-shot on the clerks' hands: +1%, closed; the held-out sheet for OL_PRJ_19266 p4 drifted
 
 **Few-shot adaptation of PP-OCRv6 medium (step 3), measured, not worth

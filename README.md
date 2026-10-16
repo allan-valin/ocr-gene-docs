@@ -106,6 +106,14 @@ Honest about the limits:
 
 ## Running it
 
+**Without a terminal:** double-click `Desembarque.bat` (Windows),
+`Desembarque.command` (Mac) or `Desembarque.sh` (Linux). The window that opens
+has *Instalar (uma vez)*, which makes the virtual environment and installs the
+recogniser, then *Iniciar* on a folder of PDFs — it opens the browser and starts
+indexing — *Abrir no navegador*, and *Parar*; closing the window stops the
+server. It needs only a Python from python.org. `launcher/README.md` says this
+in Portuguese, step by step.
+
 Install once:
 
 ```sh
