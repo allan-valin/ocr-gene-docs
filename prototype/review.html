@@ -557,7 +557,9 @@ function docmetaLine(){
 // Joseph Brooks) and the line reading is the one worth a person's eyes. The
 // engine's own reading stays on the row and in the search.
 function nameText(r){
-  if(r.second_read && r.second_read.text) return r.second_read.text;
+  // a row cut from a written line (`read_by`) already carries the line
+  // reading as name_raw; its second reading is the old band's noise
+  if(!r.read_by && r.second_read && r.second_read.text) return r.second_read.text;
   if(r.name_raw) return r.name_raw;
   return [r.given, r.surname].filter(Boolean).join(" ");
 }

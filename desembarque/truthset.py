@@ -102,6 +102,12 @@ def pairs(truth: dict, rows: list[dict]) -> list[dict]:
                   if c.kind == READ and not is_heading(c.text)]
         wanted = with_ditto_resolved(wanted)
         sure = {c.n: c.certain for c in cells}
+        if any(r.get("band") for r in on_page):
+            # the page was re-rowed from its written lines (2026-10-16,
+            # `secondreading.rows_from_lines`) and the sheet's numbers are the
+            # engine's old bands: each name goes to the row of that band
+            # that reads most like it -- a band that held two lines has two
+            wanted, sure = _onto_rerowed(wanted, sure, on_page)
     else:
         sure = {}
         placed = aligned([r.get("name_raw") or "" for r in on_page],
@@ -119,6 +125,25 @@ def pairs(truth: dict, rows: list[dict]) -> list[dict]:
                     "pdf": truth.get("pdf"), "page": truth.get("page"),
                     "certain": sure.get(n, True)})
     return out
+
+
+def _onto_rerowed(wanted: list[tuple[int, str]], sure: dict[int, bool],
+                  on_page: list[dict]) -> tuple[list[tuple[int, str]], dict[int, bool]]:
+    """The sheet's band numbers as the row numbers they became."""
+    by_band: dict[int, list[dict]] = {}
+    for r in on_page:
+        if r.get("band"):
+            by_band.setdefault(int(r["band"]), []).append(r)
+    out, certain = [], {}
+    for band, name in wanted:
+        rows = by_band.get(band)
+        if not rows:
+            continue
+        best = max(rows, key=lambda r: difflib.SequenceMatcher(
+            None, fold(r.get("name_raw") or ""), fold(name)).ratio())
+        out.append((best.get("n"), name))
+        certain[best.get("n")] = sure.get(band, True)
+    return out, certain
 
 
 def aligned(readings: list[str], names: list[str]) -> dict[int, str]:

@@ -448,6 +448,8 @@ window.addEventListener("load",async()=>{
     ok("the name cell shows the reading verbatim", nameText(row) === "Nayomgo Cassaudii");
     ok("a handwritten row shows its line reading before the band reading",
        nameText({name_raw: "Taurte", second_read: {model: "x", text: "Joseph Brooks"}}) === "Joseph Brooks");
+    ok("a row cut from a written line shows that line, not the band it came from",
+       nameText({name_raw: "Carlos Cook", read_by: "lines", second_read: {model: "paddle-band", text: "Taurte"}}) === "Carlos Cook");
     ok("a row with no verbatim reading still shows a name",
        nameText({surname:"SILVA", given:"JOSE"}).indexOf("SILVA") >= 0);
     // T6: the split is gone from both sides. A person correcting a name used

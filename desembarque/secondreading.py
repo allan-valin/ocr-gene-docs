@@ -171,6 +171,100 @@ def onto_bands(lines: list[dict], geo: dict) -> tuple[dict, dict]:
     return by_line, by_col
 
 
+# ---- one row per written line -------------------------------------------------
+
+BAND_TAG = "paddle-band"
+
+
+def _band_of(line: dict, bands: list[tuple[float, float]]) -> int | None:
+    """The band (1-based) the line's centre falls in, the widest overlap when
+    two touch it; None for a line between bands or outside them."""
+    yc = (line["y0"] + line["y1"]) / 2
+    best, best_ov = None, 0.0
+    for n, (a, b) in enumerate(bands, start=1):
+        ov = min(b, line["y1"]) - max(a, line["y0"])
+        if ov > best_ov and a <= yc <= b:
+            best, best_ov = n, ov
+    return best
+
+
+def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
+                    ) -> tuple[list[dict], list[list[float]]]:
+    """One row per written line in the name column, and the band of each.
+
+    The engine's bands are cut by rule and on a cursive page a band often
+    holds two or three written lines (7,530 of 58,915 bands on the corpus's
+    cursive pages hold two or more; 1,339 lines fall on no band), so names
+    vanished as rows of their own. kraken's segmenter finds the lines; this
+    makes each one a row, in page order, numbered afresh.
+
+    What each row carries: `name_raw` is the line's text clipped to the name
+    column, `read_by` says which model; the band the line sat in gives its
+    reading as `second_read` and, when it held this one line only, its other
+    fields (confidence, ditto marks, cells) — a band shared by two lines
+    cannot say which of them its nationality belongs to. A row a person
+    typed stands for the first line of its band, unchanged. The printed
+    heading's band keeps its row and its lines are not names. The returned
+    bands are each row's own vertical extent, in row order, which is what
+    the review page paints from.
+    """
+    from .batch import typed_by_a_person
+    cols = geo.get("columns") or []
+    x0, x1 = (cols[0], cols[1]) if len(cols) >= 2 else (0.05, 0.35)
+    bands = [tuple(b) for b in geo.get("rows") or [] if b and len(b) == 2]
+    by_band = {r.get("n"): r for r in rows}
+    heading = {n for n, r in by_band.items() if r.get("header")}
+    placed: dict[int | None, list[dict]] = {}
+    inside = []
+    for line in lines:
+        if line["x1"] < x0 or line["x0"] > x1:
+            continue
+        b = _band_of(line, bands)
+        if b in heading:
+            continue
+        inside.append((line, b))
+        placed.setdefault(b, []).append(line)
+    inside.sort(key=lambda lb: lb[0]["y0"])
+    out, extents = [], []
+    seen_band: set[int] = set()
+    for line, b in inside:
+        band = by_band.get(b) if b is not None else None
+        alone = b is not None and len(placed.get(b, ())) == 1
+        if band is not None and b not in seen_band and typed_by_a_person(band):
+            row = {k: v for k, v in band.items() if k != "n"}
+        else:
+            row = {"name_raw": clip(line, x0, x1).strip(), "read_by": MODEL_TAG}
+            if band is not None:
+                said = (band.get("name_raw") or "").strip()
+                if said:
+                    row["second_read"] = {"model": BAND_TAG, "text": said}
+                if alone:
+                    for k, v in band.items():
+                        if k not in ("n", "name_raw", "second_read", "read_by",
+                                     "given", "surname", "name_alts", "indent"):
+                            row[k] = v
+                elif band.get("conf") is not None:
+                    row["conf"] = band["conf"]
+        if b is not None:
+            row["band"] = b
+            seen_band.add(b)
+        out.append(row)
+        extents.append([round(line["y0"], 4), round(line["y1"], 4)])
+    # a heading row, and a person's row whose band no line fell in, are kept
+    # where their band is
+    for n, r in sorted(by_band.items(), key=lambda kv: kv[0] or 0):
+        if n in seen_band or n is None:
+            continue
+        if r.get("header") or typed_by_a_person(r):
+            a, b_ = bands[n - 1] if 0 < n <= len(bands) else (0.0, 0.0)
+            out.append({k: v for k, v in r.items() if k != "n"} | {"band": n})
+            extents.append([a, b_])
+    order = sorted(range(len(out)), key=lambda i: extents[i][0])
+    out = [dict(out[i], n=k) for k, i in enumerate(order, start=1)]
+    extents = [extents[i] for i in order]
+    return out, extents
+
+
 # ---- one document ----------------------------------------------------------
 
 def pages_to_read(record: dict) -> list[int]:
@@ -195,10 +289,13 @@ def _lines_of(image: Path, model, device: str) -> list[dict]:
 
 def read_record(record: dict, images: dict[int, Path], read=None,
                 model_path: Path = MODEL, device: str = "cpu",
-                log=None) -> tuple[dict, int]:
+                log=None, rerow: bool = True) -> tuple[dict, int]:
     """The record with every handwritten page read a second time, and how
     many rows got a reading. `images` maps page number to its picture;
-    `read` stands in for kraken in tests (page image -> lines).
+    `read` stands in for kraken in tests (page image -> lines). With `rerow`
+    each handwritten page becomes one row per written line
+    (`rows_from_lines`); without it the lines are read onto the engine's
+    bands as `second_read`, as the corpus passes did.
 
     Never raises: a page kraken cannot read keeps the engine's rows, and the
     record notes under `second_reading` what happened, since a document
@@ -216,6 +313,7 @@ def read_record(record: dict, images: dict[int, Path], read=None,
     geo = {int(p.get("n") or 0): p.get("geometry") or {}
            for p in record.get("pages") or () if isinstance(p, dict)}
     said: dict[int, dict[int, str]] = {}
+    rerowed: dict[int, tuple[list[dict], list[list[float]]]] = {}
     for n in wanted:
         try:
             lines = read(images[n])
@@ -224,8 +322,43 @@ def read_record(record: dict, images: dict[int, Path], read=None,
             if log:
                 log(f"second reading of page {n} failed: {e}")
             continue
+        if rerow:
+            on_page = [r for r in record.get("rows") or () if r.get("page") == n]
+            rows, extents = rows_from_lines(on_page, lines, geo.get(n, {}))
+            if rows:
+                rerowed[n] = (rows, extents)
+                note["pages"].append(n)
+                continue
+            # no line in the column: the engine's bands stay, read onto
         _by_line, by_col = onto_bands(lines, geo.get(n, {}))
         said[n] = {int(k): v for k, v in by_col.items()}
         note["pages"].append(n)
     out, landed = with_second_readings(record, said, MODEL_TAG)
+    if rerowed:
+        out = _with_pages_rerowed(out, rerowed)
+        landed += sum(len(rows) for rows, _ in rerowed.values())
+        note["rerowed"] = sorted(rerowed)
     return {**out, "second_reading": note}, landed
+
+
+def _with_pages_rerowed(record: dict, rerowed: dict) -> dict:
+    """The record with each re-rowed page's rows and bands replaced, the
+    other pages untouched and in their order."""
+    rows = []
+    for r in record.get("rows") or ():
+        pg = r.get("page")
+        if pg in rerowed:
+            continue
+        rows.append(r)
+    for pg, (new_rows, _ext) in rerowed.items():
+        rows.extend(dict(r, page=pg) for r in new_rows)
+    rows.sort(key=lambda r: (int(r.get("page") or 0), int(r.get("n") or 0)))
+    pages = []
+    for p in record.get("pages") or ():
+        if isinstance(p, dict) and p.get("n") in rerowed:
+            geo = dict(p.get("geometry") or {})
+            geo["rows"] = rerowed[p["n"]][1]
+            geo["rows_from"] = "lines"
+            p = {**p, "geometry": geo}
+        pages.append(p)
+    return {**record, "rows": rows, "pages": pages}
