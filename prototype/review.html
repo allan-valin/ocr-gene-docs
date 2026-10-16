@@ -237,11 +237,34 @@
     font-size:11px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
   kbd{font:inherit;font-size:10px;border:1px solid var(--line);border-bottom-width:2px;
     border-radius:4px;padding:0 4px;background:var(--bg)}
+  /* the thin bar across the top while any request is still unanswered */
+  #busy{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;background:var(--line);
+    display:none;overflow:hidden}
+  #busy i{display:block;height:100%;width:30%;background:var(--accent);animation:busy 1.1s linear infinite}
+  @keyframes busy{from{transform:translateX(-100%)}to{transform:translateX(340%)}}
+  body.busy #busy{display:block}
+  /* what is happening: one line per action, newest at the bottom */
+  #loghead{display:flex;align-items:center;gap:8px;padding:3px 14px 0;font-size:10.5px;
+    color:var(--muted);border-top:1px solid var(--line);background:var(--panel)}
+  #loghead button{padding:0 7px;font-size:10.5px;margin-left:auto}
+  #log{background:var(--panel);font:11.5px/1.45 ui-monospace,Menlo,Consolas,monospace;
+    max-height:4.6em;overflow:auto;padding:3px 14px 5px;color:var(--muted)}
+  #log.tall{max-height:18em}
+  #log div{display:flex;gap:10px}
+  #log time{flex:none;opacity:.7}
+  #log .err{color:var(--warn)}
+  #log .ok{color:var(--ok)}
+  #log .last{color:var(--ink)}
+  #empty .prose{margin:8px 0;padding:8px 12px;border-left:3px solid var(--line);
+    white-space:pre-wrap;font-size:12px;color:var(--ink)}
+  #gone{position:fixed;inset:0;z-index:70;background:var(--bg);color:var(--ink);display:flex;
+    align-items:center;justify-content:center;text-align:center;font-size:15px;line-height:1.7;padding:40px}
   .warnbar{background:var(--accent-soft);color:var(--accent);padding:5px 14px;font-size:11.5px;
     border-bottom:1px solid var(--line)}
 </style>
 </head>
 <body>
+<div id="busy"><i></i></div>
 <div class="warnbar" id="warn"></div>
 <header>
   <h1>Desembarque</h1>
@@ -353,6 +376,12 @@ Um ano ou o nome do navio na busca não competem com o nome: eles reordenam o qu
     </table>
   </div>
 </main>
+<!-- Allan, 2026-10-16: "after clicking there's no feedback, and you think
+     nothing happened and you start piling actions ... maybe a pseudoterminal
+     at the bottom of the page". One line per action and its outcome. -->
+<div id="loghead"><span>O que está acontecendo</span>
+  <button id="logmore" type="button" title="Mostrar mais linhas">mais</button></div>
+<div id="log" aria-live="polite"></div>
 <footer>
   <span><kbd>Ctrl</kbd>+<kbd>F</kbd> buscar</span>
   <span><kbd>Enter</kbd>/<kbd>Shift</kbd>+<kbd>Enter</kbd> próximo/anterior</span>
@@ -372,6 +401,50 @@ let DB=null, D=null, docIdx=0, pageIdx=0, rows=[], sel=0, hits=[], hitAt=-1, syn
 // is worse than one more click before correcting anything.
 let EDIT=false;
 const STATE={dir:""};
+
+// ---- what is happening -------------------------------------------------
+// Allan, 2026-10-16: "after clicking there's no feedback, and you think
+// nothing happened and you start piling actions". Two answers. A line under
+// the panes for every action, with its outcome when it comes — the launcher
+// window does the same. And a bar across the top while any request is still
+// unanswered: with the engine reading, a click can take ten seconds to be
+// answered, and ten seconds of nothing reads as nothing having happened.
+const LOG=[];
+function say(msg, kind){
+  const el=$("#log"); if(!el) return;
+  const t=new Date(), at=[t.getHours(),t.getMinutes(),t.getSeconds()]
+    .map(x=>String(x).padStart(2,"0")).join(":");
+  LOG.push({at, msg, kind:kind||""});
+  if(LOG.length>400) LOG.shift();
+  const old=el.querySelector(".last"); if(old) old.classList.remove("last");
+  const d=document.createElement("div"); d.className=(kind||"")+" last";
+  d.innerHTML=`<time>${at}</time><span></span>`;
+  d.lastChild.textContent=msg;
+  el.appendChild(d);
+  while(el.children.length>400) el.removeChild(el.firstChild);
+  el.scrollTop=el.scrollHeight;
+}
+let PENDING=0, busyTimer=null, slowSaid=0;
+const _fetch=window.fetch.bind(window);
+window.fetch=function(url, opts){
+  PENDING++;
+  clearTimeout(busyTimer);
+  busyTimer=setTimeout(()=>{ if(PENDING>0) document.body.classList.add("busy"); },250);
+  const slow=setTimeout(()=>{
+    if(Date.now()-slowSaid>30000){ slowSaid=Date.now();
+      say("o servidor demora a responder: a máquina está ocupada (lendo?) — a resposta vem", ""); }
+  },4000);
+  const done=()=>{ clearTimeout(slow); PENDING=Math.max(0,PENDING-1);
+    if(!PENDING){ clearTimeout(busyTimer); document.body.classList.remove("busy"); } };
+  return _fetch(url, opts).then(r=>{ done(); return r; }, e=>{ done(); throw e; });
+};
+window.addEventListener("unhandledrejection",e=>{
+  say("falhou: "+((e.reason&&e.reason.message)||e.reason||"erro"), "err");
+});
+document.addEventListener("click",e=>{
+  if(e.target.id==="logmore"){ const l=$("#log"); l.classList.toggle("tall");
+    e.target.textContent=l.classList.contains("tall")?"menos":"mais"; l.scrollTop=l.scrollHeight; }
+});
 
 // ---- fuzzy matching, standing in for the pg_trgm + phonetic + variant search ----
 const fold = s => (s||"").toString().normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
@@ -792,6 +865,7 @@ function loadGeometry(){
   return fetch(`/api/geometry?hash=${encodeURIComponent(D.hash||"")}`)
     .then(r=>r.json()).then(g=>{
       D.pageGeometry=g.pages||{}; D.measuredBy=g.measured_by||{};
+      D.pageTexts=g.texts||{};   // what a page without a table said as prose
       renderPageStrip();
     })
     .catch(()=>{ D.pageGeometry={}; });
@@ -826,8 +900,12 @@ function openDoc(i,page){
   } else { note.hidden = true; note.textContent = ""; }
   renderDocList(); renderPageStrip(); render(); paintBand(0); refreshExport();
   $("#stat").textContent = showRows ? "" : "sem transcrição";
+  say(`${D.file} · página ${D.pages[pageIdx].n} · `
+      + (showRows ? `${rows.length} linhas` : D.transcribed ? "lido, sem linhas de tabela nesta página"
+                                                          : "ainda não lido"));
   // and again once this dossier's own measurements arrive
-  loadGeometry().then(()=>{ applyGeometry(); paintBand(sel); });
+  loadGeometry().then(()=>{ applyGeometry(); paintBand(sel);
+                           if(!$("#empty").hidden) renderEmpty(); });
   markDoubtful();
 }
 $("#doclist").addEventListener("click",e=>{
@@ -899,6 +977,22 @@ function renderEmpty(msg){
     return;
   }
   const engineOK = ENGINE && ENGINE.available;
+  const n=D.pages[pageIdx].n, text=(D.pageTexts||{})[n]||"";
+  // Read and empty is not unread. A certidão, a cover, a page the engine
+  // found no table on: "Documento não transcrito" with a Transcrever button
+  // that answered "already done" in silence was the first thing Allan hit
+  // on his own folder (2026-10-16). The reading on disk is said, the prose
+  // the page carries is shown, and the button to read again is ↻ Reler.
+  if(D.transcribed){
+    e.innerHTML = `<b>Página ${n}: lida pelo motor, sem linhas de tabela.</b><br>
+      ${text ? `O que o motor leu nesta página como texto corrido:
+        <blockquote class="prose"></blockquote>` : "O motor não leu nada nesta página.<br>"}
+      Para ler o documento de novo com o motor atual, use <b>↻ Reler</b> acima.
+      <b>Gerar tabela vazia</b> mede as réguas da página e dá uma grade para preencher à mão.
+      ${SERVED ? `<br><button id="dogrid" title="Detecta a grade da tabela sem modelo: linhas vazias para preencher à mão">Gerar tabela vazia</button>` : ""}`;
+    if(text) e.querySelector(".prose").textContent=text;
+    return;
+  }
   e.innerHTML = `<b>Documento não transcrito.</b><br>
     ${engineOK
       ? "Clique abaixo para transcrever. O original fica ao lado para conferência."
@@ -916,19 +1010,29 @@ function startTranscription(force){
   if(!SERVED||!D) return;
   clearInterval(poll);
   const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
+  const file=D.file;
+  say(`${force?"lendo de novo":"pedindo a leitura de"} ${file} · ${D.total_pages} páginas · cerca de 20 s por página`);
+  $("#tbl").hidden=true; $("#empty").hidden=false;
   renderEmpty(`<b><span class="spin"></span>Transcrevendo…</b><br>
      ${D.ship||D.notation} · ${D.total_pages} páginas
      <div class="bar"><i style="width:2%"></i></div>
      <span id="prog">iniciando</span>`);
+  jobPage=0;
   fetch(`/api/transcribe?pdf=${encodeURIComponent(D.file)}${dir}${force?"&force=1":""}`,
         {method:"POST"})
     .then(r=>r.json()).then(j=>{
-      if(j.cached||j.status==="done") return finishTranscription();
-      if(j.status==="unavailable") return renderEmpty(
-        `<b>Transcrição indisponível.</b><br><span class="warnstate">${j.message||""}</span>`);
+      if(j.cached||j.status==="done"){
+        say(`${file} já tinha sido lido antes: nada a fazer. Para ler de novo, ↻ Reler.`);
+        return finishTranscription("leitura já existente");
+      }
+      if(j.status==="unavailable"){ say("transcrição indisponível: "+(j.message||""), "err");
+        return renderEmpty(
+        `<b>Transcrição indisponível.</b><br><span class="warnstate">${j.message||""}</span>`); }
+      say(`leitura em andamento: ${file}`);
       poll=setInterval(()=>pollJob(j.id),600);
-    }).catch(e=>renderEmpty(`<b>Falhou.</b><br>${e}`));
+    }).catch(e=>{ say("a leitura não começou: "+e, "err"); renderEmpty(`<b>Falhou.</b><br>${e}`); });
 }
+let jobPage=0;
 // ---- watching the engine read ----
 // The rows appear as they are read and the band being read is outlined on
 // the scan (Allan, 2026-10-16: "you see the lines being populated and the
@@ -945,6 +1049,7 @@ function showLive(l){
     pageIdx=at; liveShown=l.page;
     $("#scan").src=pageURL(D,D.pages[pageIdx]);
     renderPageStrip();
+    say(`página ${l.page}: ${(l.bands||[]).length} linhas cortadas, lendo os nomes…`);
   }
   D.geometry={rows:l.bands, columns:l.columns||[], bands_source:"live"};
   rows=(l.rows||[]).map(r=>({...r,verified:false}));
@@ -965,20 +1070,30 @@ function pollJob(id){
       const bar=document.querySelector(".bar i"), pr=$("#prog");
       if(bar) bar.style.width=pct+"%";
       if(pr) pr.textContent=`página ${j.page||0} de ${j.total} · ${j.elapsed}s`;
+      if(j.page && j.page!==jobPage){ jobPage=j.page;
+        say(`${j.label||""}: lendo a página ${j.page} de ${j.total} · ${Math.round(j.elapsed)} s`); }
       pollLive();
       return;
     }
     clearInterval(poll);
-    if(j.status==="done") return finishTranscription();
+    if(j.status==="done") return finishTranscription(`leitura concluída em ${Math.round(j.elapsed)} s`);
+    say((j.status==="unavailable"?"transcrição indisponível: ":"erro na transcrição: ")+(j.message||""), "err");
     renderEmpty(`<b>${j.status==="unavailable"?"Transcrição indisponível.":"Erro na transcrição."}</b>
       <br><span class="warnstate">${j.message||""}</span>`);
   });
 }
-function finishTranscription(){
+function finishTranscription(why){
   liveShown=null;
+  // what was on screen, so the line below can say it was replaced: a grid
+  // somebody was filling in vanished under a finished reading, unexplained
+  const hadGrid=!!(D && D.geometry && D.geometry.bands_source==="detected" && rows.length);
   fetch(`/api/corpus?path=${encodeURIComponent(STATE.dir||"")}`).then(r=>r.json()).then(d=>{
     DB=d; openDoc(docIdx);
-  });
+    const n=rows.length, all=(D.rows||[]).length;
+    say(`${why||"leitura concluída"}: ${D.file} · ${all} linhas no documento, ${n} nesta página`, n?"ok":"");
+    if(hadGrid) say("a tabela vazia saiu da tela: a página mostra agora o que está salvo "
+                    +"(o que foi digitado nela foi salvo junto)");
+  }).catch(e=>say("não consegui recarregar a pasta: "+e, "err"));
 }
 document.addEventListener("click",e=>{
   if(e.target.id==="dotranscribe") startTranscription();
@@ -1129,22 +1244,31 @@ function renderIndexBar(st){
     <button id="reloadpage">Recarregar</button>
     <button id="doindex">${st.status==="stopped"?"Continuar":"Indexar de novo"}</button>`;
 }
+let idxSaid="";
 function pollIndex(){
   fetch("/api/index").then(r=>r.json()).then(st=>{
     renderIndexBar(st);
+    const seen=(st.done||0)+(st.skipped||0);
+    const line=st.status==="running"
+      ? `indexação: ${seen} de ${st.total}${st.current?` · lendo ${st.current}`:""}`
+      : `indexação ${st.status==="stopped"?"parada":"terminada"}: ${seen} de ${st.total} documentos`
+        + ((st.failed||[]).length?`, ${st.failed.length} com erro`:"");
+    if(line!==idxSaid){ idxSaid=line; say(line, st.status==="running"?"":"ok"); }
     // the open document is the one being read: watch it come in
     if(st.status==="running" && D && st.current===D.file) pollLive();
     if(st.status!=="running"){
       clearInterval(idxPoll); idxPoll=null;
-      if(st.status==="finished"||st.status==="stopped") finishTranscription();
+      if(st.status==="finished"||st.status==="stopped") finishTranscription("pasta recarregada");
     }
   }).catch(()=>{ clearInterval(idxPoll); idxPoll=null; });
 }
 function startIndexing(){
   if(!SERVED) return;
   const dir=STATE.dir?`?dir=${encodeURIComponent(STATE.dir)}`:"?dir=";
+  say("pedindo a indexação da pasta…");
   fetch(`/api/index${dir}`,{method:"POST"}).then(r=>r.json()).then(st=>{
-    if(st.error){ renderIndexBar(null); $("#indexbar").innerHTML=
+    if(st.error){ say("a indexação não começou: "+st.error, "err");
+      renderIndexBar(null); $("#indexbar").innerHTML=
       `<span class="warnstate">${st.error}</span>`; return; }
     renderIndexBar(st);
     clearInterval(idxPoll); idxPoll=setInterval(pollIndex,1200);
@@ -1152,8 +1276,8 @@ function startIndexing(){
 }
 document.addEventListener("click",e=>{
   if(e.target.id==="doindex") startIndexing();
-  if(e.target.id==="stopindex")
-    fetch("/api/index/stop",{method:"POST"}).then(r=>r.json()).then(renderIndexBar);
+  if(e.target.id==="stopindex"){ say("parando a indexação (o documento em leitura termina antes)…");
+    fetch("/api/index/stop",{method:"POST"}).then(r=>r.json()).then(renderIndexBar); }
   if(e.target.id==="reloadpage") location.reload();
 });
 
@@ -1163,19 +1287,22 @@ document.addEventListener("click",e=>{
 function buildGrid(){
   if(!SERVED||!D) return;
   const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
+  say(`medindo as réguas da página ${D.pages[pageIdx].n} para uma tabela vazia…`);
   renderEmpty(`<b><span class="spin"></span>Detectando a grade…</b>`);
   fetch(`/api/grid?pdf=${encodeURIComponent(D.file)}&n=${D.pages[pageIdx].n}${dir}`)
     .then(r=>r.json()).then(g=>{
-      if(!g.detected) return renderEmpty(
+      if(!g.detected){ say("nenhuma tabela com réguas nesta página: "+(g.reason||""), "err");
+        return renderEmpty(
         `<b>Não foi possível detectar uma tabela.</b><br>${g.reason||""}<br>
-         Páginas manuscritas ou sem réguas não têm grade para medir.`);
+         Páginas manuscritas ou sem réguas não têm grade para preencher.`); }
+      say(`tabela vazia com ${g.rows.length} linhas; ligue ✎ Corrigir para preencher`, "ok");
       D.geometry=g.geometry; D.rows=g.rows; D.transcribed_page=D.pages[pageIdx].n;
       rows=g.rows.map(r=>({...r,verified:false}));
       $("#tbl").hidden=false; $("#empty").hidden=true;
       $("#warn").textContent="Grade detectada geometricamente. Células vazias — "
         +"preencha conferindo com o original ao lado.";
       render(); select(0);
-    }).catch(e=>renderEmpty(`<b>Falhou.</b><br>${e}`));
+    }).catch(e=>{ say("a grade não veio: "+e, "err"); renderEmpty(`<b>Falhou.</b><br>${e}`); });
 }
 
 // ---- geometry: band for row i ----
@@ -1373,7 +1500,8 @@ function scheduleSave(){
                            source:(D.geometry&&D.geometry.bands_source==="detected")?"manual":"manual"})
     }).then(r=>r.json()).then(j=>{
       markSaved(j.saved?`salvo (${j.rows} linhas)`:"falha ao salvar");
-    }).catch(()=>markSaved("falha ao salvar"));
+      if(!j.saved) say("falha ao salvar: "+(j.error||""), "err");
+    }).catch(e=>{ markSaved("falha ao salvar"); say("falha ao salvar: "+e, "err"); });
   },900);
 }
 $("#rows").addEventListener("input",e=>{
@@ -1588,16 +1716,49 @@ document.addEventListener("keydown",e=>{
 });
 try{ setEnhance(localStorage.getItem(ENHANCE_KEY)||""); }catch(e){ setEnhance(""); }
 
+// ---- hello, goodbye -----------------------------------------------------
+// The launcher stops the server when the last page is gone (Allan, 2026-10-16:
+// "if the tab is closed, server shuts down"): the page says hello every 4 s
+// and goodbye when its tab closes. A hello answered with `closing` is the
+// launcher's Desligar — a browser lets no program close a tab it did not
+// open, so the page says the server is gone rather than freezing.
+let GONE=false, pinging=false, pingFails=0;
+function gone(msg){
+  if(GONE) return; GONE=true;
+  clearInterval(poll); clearInterval(idxPoll);
+  say(msg, "err");
+  const g=document.createElement("div"); g.id="gone";
+  g.innerHTML=`<div><b></b><br>Pode fechar esta aba. Para voltar, clique em <b>Ligar</b> na janela do Desembarque.</div>`;
+  g.querySelector("b").textContent=msg;
+  document.body.appendChild(g);
+  try{ window.close(); }catch(e){}
+}
+function ping(){
+  if(!SERVED||GONE||pinging) return;
+  pinging=true;
+  _fetch("/api/ping",{method:"POST",keepalive:true}).then(r=>r.json()).then(c=>{
+    pinging=false; pingFails=0;
+    if(c.closing) gone("O servidor foi desligado.");
+  }).catch(()=>{ pinging=false; if(++pingFails>=2) gone("O servidor não responde mais."); });
+}
+if(SERVED){
+  setInterval(ping,4000); ping();
+  window.addEventListener("pagehide",()=>{ if(!GONE) navigator.sendBeacon("/api/bye"); });
+}
+
 bootIndexBar();
-if(SERVED) $("#warn").textContent="Carregando a pasta…";
+if(SERVED){ $("#warn").textContent="Carregando a pasta…"; say("carregando a pasta…"); }
 loadData().then(d=>{
   DB=d;
   $("#scan").onload=()=>paintBand(sel);
   if(SERVED) fetch("/api/engine").then(r=>r.json()).then(x=>{ENGINE=x; renderIndexBar(idxState); if(D&&!rows.length) renderEmpty();}).catch(()=>{});
   const g=(d.documents.find(x=>x.geometry)||{}).geometry;
   $("#warn").textContent="Protótipo. "+(g?g.note:"");
+  const t=d.documents.filter(x=>x.transcribed||x.rows).length;
+  say(`pasta carregada: ${d.documents.length} documentos, ${t} já lidos`, "ok");
   openDoc(d.active||0);
 }).catch(e=>{
+  say("a pasta não pôde ser carregada: "+e, "err");
   $("#warn").textContent = (idxState && idxState.status==="running")
     ? "A pasta não pôde ser lida enquanto a indexação ocupa a máquina. Espere terminar e recarregue."
     : "Sem dados. Gere com: python3 scripts/make_prototype.py   ("+e+")";

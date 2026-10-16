@@ -451,6 +451,25 @@ window.addEventListener("load",async()=>{
     ok("watching the engine read is a function that declines what it cannot paint",
        typeof showLive === "function" && showLive(null) === false
        && showLive({page: 0, bands: []}) === false);
+    // Allan, 2026-10-16: "after clicking there's no feedback". Every action
+    // writes a line under the panes; a request still unanswered shows a bar.
+    ok("there is a log of what is happening", !!document.getElementById("log") && typeof say === "function");
+    say("selftest: uma linha", "ok");
+    ok("and a line said lands in it",
+       Array.from(document.querySelectorAll("#log div")).some(d=>d.textContent.includes("selftest: uma linha")));
+    ok("the busy bar exists for a request still unanswered", !!document.getElementById("busy"));
+    // read and empty is not unread: the way to read again is Reler, not a
+    // button that answers "already done" in silence
+    if(typeof renderEmpty === "function" && D){
+      const keepD = D, keepRows = rows, keepIdx = pageIdx;
+      D = {file:"x.pdf", transcribed:true, pages:[{n:1}], pageTexts:{1:"Cidade de Blankenloch"}};
+      pageIdx = 0; renderEmpty();
+      const txt = document.getElementById("empty").textContent;
+      ok("a page the engine read and found no table on says so and points at Reler",
+         txt.includes("sem linhas de tabela") && txt.includes("Reler") && !document.getElementById("dotranscribe"));
+      ok("and shows the prose the page carried", txt.includes("Cidade de Blankenloch"));
+      D = keepD; rows = keepRows; pageIdx = keepIdx; renderEmpty();
+    }
     ok("a row cut from a written line shows that line, not the band it came from",
        nameText({name_raw: "Carlos Cook", read_by: "lines", second_read: {model: "paddle-band", text: "Taurte"}}) === "Carlos Cook");
     ok("a row with no verbatim reading still shows a name",

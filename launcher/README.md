@@ -12,9 +12,12 @@
 6. **Ligar**. Inicia o programa que lê os PDFs (1 a 2 minutos carregando), o
    navegador abre sozinho na página do Desembarque e a pasta começa a ser
    lida; a janela diz em que documento está, quantos faltam e quanto tempo.
-   Pode fechar o navegador e abrir de novo com **Abrir a página**.
-7. Quando terminar, **Desligar** — ou feche a janela, que desliga também. O
-   que já foi lido fica salvo; da próxima vez continua de onde parou.
+   Na página, a faixa de baixo ("O que está acontecendo") diz o que cada
+   clique fez e o que o programa está fazendo agora.
+7. Quando terminar, **Desligar** — ou feche a janela, ou a aba do navegador:
+   qualquer um dos três desliga. O que já foi lido fica salvo na subpasta
+   `transcriptions`, dentro da pasta dos PDFs; da próxima vez continua de
+   onde parou.
 
 **Ajuda (F1)** na janela explica cada botão, o que faz e por quê.
 

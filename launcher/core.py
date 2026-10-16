@@ -89,6 +89,41 @@ def start_index(port: int, folder: str = "") -> dict:
     return _get(port, f"/api/index?dir={folder}", post=True) or {"status": "unknown"}
 
 
+def clients(port: int, timeout: float = 20.0) -> dict | None:
+    """Whether a browser page is there, as the server counts it: seconds
+    since the last hello and since the last goodbye. None when the server
+    did not answer, which says nothing about the browser."""
+    return _get(port, "/api/clients", timeout=timeout)
+
+
+def shutdown(port: int) -> dict | None:
+    """Tell the server a stop is coming, so the page can say so."""
+    return _get(port, "/api/shutdown", post=True, timeout=2.0)
+
+
+def browser_gone(c: dict | None, grace: float = 15.0, silence: float = 180.0) -> bool:
+    """Whether the last browser page has gone, so the server can stop with it
+    (Allan, 2026-10-16: "if the tab is closed, server shuts down").
+
+    The page says hello every few seconds while open and goodbye when its
+    tab closes. Gone is a goodbye with no hello after it, once `grace` has
+    passed — a reload is a goodbye followed by a hello a second later — or
+    no hello at all for `silence`, when the browser died without a word.
+    Three minutes, because a browser throttles a tab in the background to a
+    beat a minute. Never gone before a hello was ever heard: the browser
+    takes a while to open, and a server nobody has reached is not one
+    somebody has left.
+    """
+    if not c:
+        return False
+    seen, left = c.get("seen_s"), c.get("left_s")
+    if seen is None:
+        return False
+    if left is not None and left >= grace and seen >= left:
+        return True
+    return seen >= silence
+
+
 def describe_index(st: dict) -> str:
     """One line a person can read: how far, and how long, in hours."""
     status = st.get("status", "unknown")
@@ -140,13 +175,10 @@ corta a página em linhas e o que lê a letra manuscrita (cerca de 3 GB,
 precisa de internet). Só aparece enquanto não estiver instalado.
 
 Ligar
-Inicia o servidor: o programa que lê os PDFs e serve a página. Carregar os
-modelos leva 1 a 2 minutos; a janela avisa quando está pronto e abre o
-navegador. Sem o servidor ligado a página não existe.
-
-Abrir a página
-Abre o navegador em http://127.0.0.1:{port}/. Pode fechar o navegador e
-abrir de novo à vontade; o servidor continua rodando.
+Inicia o servidor (o programa que lê os PDFs) e abre a página no navegador,
+em http://127.0.0.1:{port}/. Carregar os modelos leva 1 a 2 minutos; a
+janela avisa quando está pronto. Fechar a aba do navegador desliga o
+servidor; para voltar, clique em Ligar de novo.
 
 Ler os PDFs da pasta ao ligar
 Transcreve os PDFs da pasta que ainda não foram lidos. Cerca de 20 s por
@@ -155,9 +187,11 @@ A linha de status diz em que documento está e quanto falta. Enquanto lê, o
 computador fica lento.
 
 Desligar
-Para o servidor; fechar a janela faz o mesmo. O que já foi lido fica
-salvo (pasta data/transcriptions) e não se perde; da próxima vez
-continua de onde parou.
+Para o servidor; fechar a janela ou a aba do navegador faz o mesmo. A aba
+avisa que o servidor foi desligado (o navegador não deixa um programa
+fechá-la). O que já foi lido fica salvo na subpasta "transcriptions",
+dentro da pasta dos PDFs, e não se perde; da próxima vez continua de onde
+parou.
 
 Se algo der errado
 "o servidor não respondeu a tempo": o computador estava ocupado; espere e
@@ -219,11 +253,18 @@ class Server:
         self.stop()
         return False
 
-    def stop(self, wait: float = 10.0) -> None:
+    def stop(self, wait: float = 10.0, pause: float = 4.5) -> None:
+        """Stop the server. First it is told (`/api/shutdown`), and the page
+        hears on its next hello and says the server is gone — a browser lets
+        no program close a tab it did not open, so the page saying so is the
+        most Desligar can do about the tab. `pause` is how long the page is
+        given to hear; it beats every 4 s."""
         p = self.proc
         if p is None:
             return
         if p.poll() is None:
+            if pause > 0 and shutdown(self.port) is not None:
+                time.sleep(pause)
             p.terminate()
             try:
                 p.wait(timeout=wait)

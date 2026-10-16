@@ -110,7 +110,7 @@ def test_the_help_says_what_each_button_does_and_why():
     and it names every button, what it does, why it exists, and how long
     things take."""
     h = core.help_text(port=8765)
-    for word in ("Instalar", "Ligar", "Abrir a página", "Desligar",
+    for word in ("Instalar", "Ligar", "Desligar",
                  "Ler os PDFs", "127.0.0.1:8765", "PDF", "20 s", "fechar a janela"):
         assert word in h, word
     assert len(h) < 2500
@@ -162,3 +162,56 @@ def test_the_install_brings_the_second_reading_with_it():
         "torch and kraken in one resolution, or pip brings the CUDA torch back"
     assert any("fetch_model" in c for c in cmds)
     assert cmds.index(next(c for c in cmds if "fetch_model" in c)) == len(cmds) - 1
+
+
+def test_the_help_window_has_its_own_close_button_and_is_not_the_main_window():
+    """Allan, 2026-10-16: the help opened as a window the same size as the
+    main one, and closing it looked like closing the program. The help is
+    smaller, offset, and carries a *Fechar a ajuda* button of its own."""
+    import inspect
+    import launcher.desembarque_launcher as dl
+    src = inspect.getsource(dl.Window.help)
+    assert "Fechar a ajuda" in src
+    assert "geometry(" in src
+
+
+def test_one_button_starts_the_server_and_opens_the_page():
+    """Allan: Ligar opened the browser, then Abrir a página opened a second
+    one. One button: Ligar starts and opens; there is no Abrir a página."""
+    import inspect
+    import launcher.desembarque_launcher as dl
+    src = inspect.getsource(dl.Window._build)
+    assert "Abrir a página" not in src
+    h = core.help_text()
+    assert "Abrir a página" not in h
+    assert "fechar a aba" in h.lower() or "fecha a aba" in h.lower()
+
+
+def test_the_server_stops_when_the_browser_tab_is_closed():
+    """The page says goodbye when its tab closes (and keeps saying hello
+    while it is open). Gone is: a goodbye with no hello after it, once the
+    grace for a reload has passed — or no hello at all for minutes, when
+    the browser died without a word. Never gone before a hello was ever
+    heard: the browser takes a while to open."""
+    gone = core.browser_gone
+    assert not gone({"seen_s": None, "left_s": None})
+    assert not gone({"seen_s": 3.0, "left_s": None})
+    # the tab closed 2 s ago: a reload may still be on its way
+    assert not gone({"seen_s": 2.5, "left_s": 2.0})
+    # closed 30 s ago and nothing since
+    assert gone({"seen_s": 31.0, "left_s": 30.0})
+    # closed 30 s ago, but a page said hello since (a reload, another tab)
+    assert not gone({"seen_s": 4.0, "left_s": 30.0})
+    # no goodbye, but silent for five minutes: the browser is gone
+    assert gone({"seen_s": 300.0, "left_s": None})
+    # a background tab is throttled to a beat a minute: not gone
+    assert not gone({"seen_s": 70.0, "left_s": None})
+
+
+def test_stopping_tells_the_page_first():
+    """Desligar cannot close a tab the launcher did not open through a
+    script, so the page is told to show that the server is gone before
+    the process is killed, instead of a frozen page."""
+    import inspect
+    src = inspect.getsource(core.Server.stop)
+    assert "shutdown" in src

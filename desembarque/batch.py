@@ -269,6 +269,12 @@ def merge_page_rows(existing: dict | None, rows: list[dict],
     return sorted(list(rows) + kept, key=_place)
 
 
+# The folder, inside the folder of PDFs, where their transcriptions are kept
+# (see `scripts/serve.py: store_for`). Named here because the walk below must
+# not descend into it, and the folder picker must not offer it as a place to go.
+STORE_DIR = "transcriptions"
+
+
 def collect_pdfs(folder: Path, recursive: bool = True) -> list[Path]:
     """Every PDF under a folder, in a stable order.
 
@@ -297,7 +303,9 @@ def collect_pdfs(folder: Path, recursive: bool = True) -> list[Path]:
 
     if recursive:
         for where, dirs, files in os.walk(folder):
-            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            # the store the server keeps beside the PDFs is not theirs to read
+            dirs[:] = [d for d in dirs
+                       if not d.startswith(".") and d != STORE_DIR]
             take(where, files)
     else:
         try:

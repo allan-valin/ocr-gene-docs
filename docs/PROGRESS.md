@@ -6,6 +6,66 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-16, late — the page answers every click; the launcher is two buttons
+
+Allan tried the program on his own folder (one APESP list, two AN
+dossiers, two certidões, twenty JPEGs) and could not make sense of it:
+"nothing seems to do anything". Each thing he hit, and what changed:
+
+* **Transcrever documento did nothing.** The documents were already read
+  (by the test server earlier that day), the pages he opened had no table
+  rows (a certidão is prose; the APESP list is 859 px wide and unreadable),
+  so the page said "Documento não transcrito" with a button whose answer
+  was "already done", in silence. Now a page the engine read and found no
+  table on says so, shows the prose the engine read off it (`/api/geometry`
+  carries `texts` per page), and points at ↻ Reler for a second reading.
+  Reler itself drew its progress into a hidden element when rows were on
+  screen; it is shown now.
+* **Gerar tabela vazia showed "ilegível" in every cell.** `build_grid`
+  wrote `None` into the columns, which is the record's word for "read, not
+  legible". The empty grid now carries only the measured fields; absent
+  paints blank.
+* **No feedback after a click, so actions pile up.** A log under the panes,
+  "O que está acontecendo", one line per action and its outcome (folder
+  loaded, document opened with its row count, reading asked for / already
+  on disk / in progress page by page / finished with counts, grid measured,
+  index progress per document, saves that fail, the engine's live page
+  cut), plus a bar across the top while any request is unanswered and a
+  line after 4 s saying the machine is busy. The empty grid he was filling
+  vanished under a finished re-read: the log says so when it happens.
+* **Transcriptions went to data/transcriptions in the repo**, where a new
+  user does not look and a one-file build has no repo. They go to a
+  `transcriptions` folder inside the folder of PDFs now (`store_for`;
+  `--store` overrides; the repo's own `data/scans` keeps
+  `data/transcriptions` so nothing here moved). The walk and the folder
+  picker skip that folder. His bisavo folder therefore starts empty next
+  time — the new-user experience he wanted to see.
+* **Launcher: Ligar opened the browser, Abrir a página opened a second
+  one.** One button: Ligar starts and opens. Closing the browser tab stops
+  the server: the page says hello every 4 s (`/api/ping`) and goodbye on
+  `pagehide` (`/api/bye`); the launcher asks `/api/clients` and
+  `browser_gone` decides (goodbye with no hello for 15 s, or silence for
+  3 min — a background tab is throttled to a beat a minute). Desligar
+  cannot close a tab (a browser lets no program close a tab it did not
+  open): it tells the server first (`/api/shutdown`), the page's next
+  hello hears `closing` and shows "O servidor foi desligado. Pode fechar
+  esta aba." before the process is killed. Same when the server dies
+  unasked (two failed hellos).
+* **F1 opened a window the size of the main one**, which read as the
+  program. The help is 520×540, offset 70 px, titled "Ajuda — Desembarque",
+  with a "Fechar a ajuda" button and a line saying closing it stops
+  nothing.
+
+Tests: 1041 pass. Checked headless on the running server: the page loads
+with no script error, the log fills, rows paint. Not yet seen by Allan in
+his browser; his launcher and server are the old code until restarted.
+
+Left alone: the live view's outline lands on the last band of a batch of
+16, which can be mid-page ("reler places the highlight in the middle of
+the page") — it is the band the engine finished, not the one it is on;
+a per-band report would cost the batch. The APESP list stays unreadable
+at that scan size.
+
 ## 2026-10-16, night — one row per written line; watching the engine read
 
 Coding only, by Allan's word, while he needed the machine. Three things

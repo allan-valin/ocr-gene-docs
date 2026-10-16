@@ -41,6 +41,7 @@ def server(tmp_path, monkeypatch):
     monkeypatch.setitem(serve.STATE, "root", tmp_path)
     monkeypatch.setattr(serve, "JOBS", serve.JobRunner(tmp_path / ".cache"))
     monkeypatch.setattr(serve, "BATCH", serve.BatchIndexer())
+    monkeypatch.setattr(serve, "CLIENTS", {"seen": None, "left": None, "closing": False})
     srv = ThreadingHTTPServer(("127.0.0.1", 0), serve.Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{srv.server_address[1]}", tmp_path
@@ -1089,3 +1090,87 @@ def test_the_page_can_watch_a_document_being_read(server, monkeypatch):
     assert seen["live"]["at"] == 0 and seen["live"]["page"] == 1
     _, after = call(f"{base}/api/live?pdf=doc0.pdf")
     assert after["page"] == 0 and after["reading"] == []
+
+
+# ---- where the transcriptions go ---------------------------------------
+def test_transcriptions_live_beside_the_pdfs_they_came_from(tmp_path):
+    """Allan, 2026-10-16: with everything under the repo's data/transcriptions
+    a person does not know where their reading went; and a one-file build
+    has no repo. The store is a `transcriptions` folder inside the folder
+    of PDFs. The repo's own corpus folder keeps its old store, so nothing
+    on this machine moves."""
+    assert serve.store_for(tmp_path / "docs bisavo") == tmp_path / "docs bisavo" / "transcriptions"
+    assert serve.store_for(serve.ROOT / "data" / "scans") == serve.ROOT / "data" / "transcriptions"
+    assert serve.store_for(tmp_path, store=tmp_path / "x") == tmp_path / "x"
+
+
+def test_a_folder_listing_skips_the_transcriptions_folder(server):
+    base, folder = server
+    (folder / "transcriptions").mkdir()
+    (folder / "ships").mkdir()
+    _, b = call(f"{base}/api/browse")
+    assert b["dirs"] == ["ships"]
+
+
+def test_the_store_folder_holds_no_pdfs_to_index(tmp_path):
+    from desembarque.batch import collect_pdfs
+    (tmp_path / "a.pdf").write_bytes(b"%PDF-1.7\n")
+    (tmp_path / "transcriptions").mkdir()
+    (tmp_path / "transcriptions" / "b.pdf").write_bytes(b"%PDF-1.7\n")
+    assert [p.name for p in collect_pdfs(tmp_path)] == ["a.pdf"]
+
+
+# ---- the page says hello, and goodbye --------------------------------------
+def test_the_page_s_heartbeat_and_goodbye_are_counted(server):
+    base, _ = server
+    _, c = call(f"{base}/api/clients")
+    assert c["seen_s"] is None and c["left_s"] is None
+    code, p = call(f"{base}/api/ping", method="POST")
+    assert code == 200 and p["closing"] is False
+    _, c = call(f"{base}/api/clients")
+    assert c["seen_s"] is not None and c["seen_s"] < 5 and c["left_s"] is None
+    call(f"{base}/api/bye", method="POST")
+    _, c = call(f"{base}/api/clients")
+    assert c["left_s"] is not None and c["left_s"] < 5
+
+
+def test_shutdown_is_announced_to_the_page_before_it_happens(server):
+    base, _ = server
+    code, s = call(f"{base}/api/shutdown", method="POST")
+    assert code == 200 and s["closing"] is True
+    _, p = call(f"{base}/api/ping", method="POST")
+    assert p["closing"] is True
+
+
+# ---- the empty grid is empty ------------------------------------------------
+def test_an_empty_grid_has_no_cells_the_page_could_call_illegible(monkeypatch):
+    """Allan: *Gerar tabela vazia* showed 'ilegível' in every cell. A null
+    is the record's word for 'read and not legible'; a cell nobody has read
+    is absent, which the page paints blank."""
+    class Geo:
+        rows = [(0.1, 0.2), (0.2, 0.3)]
+        col_edges = [0.0, 0.3, 0.6, 1.0]
+        skew = 0.0
+        row_pitch = 0.1
+        def normalized_rows(self): return self.rows
+        def normalized_cols(self): return self.col_edges
+        def name_column(self, _i): return (0.3, 0.6)
+    monkeypatch.setattr(serve, "analyze_pdf_page", lambda *a, **k: Geo())
+    g = serve.build_grid(Path("/x.pdf"), 1)
+    assert g["detected"] and len(g["rows"]) == 2
+    for r in g["rows"]:
+        assert r["name_raw"] == ""
+        assert "nationality" not in r and "age" not in r
+
+
+def test_a_page_s_prose_is_handed_to_the_page_with_its_geometry(server):
+    """A certidão has no table: what the engine read is prose, stored under
+    the page's `form`. The page opened on it showed 'Documento não
+    transcrito' and nothing else; now the text travels with the geometry."""
+    base, _ = server
+    h = "a" * 64
+    serve.JOBS.store(h, {"hash": h, "engine": "fake", "rows": [],
+                         "pages": [{"n": 1, "form": {"text": "Cidade de Blankenloch, Baden"}},
+                                   {"n": 2}]})
+    _, g = call(f"{base}/api/geometry?hash={h}")
+    assert g["texts"] == {"1": "Cidade de Blankenloch, Baden"}

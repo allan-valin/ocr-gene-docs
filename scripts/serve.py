@@ -40,9 +40,9 @@ from desembarque.identity import identify, cached_hash  # noqa: E402
 from desembarque.recheck import why_check       # noqa: E402
 from desembarque.vocab import language_for     # noqa: E402
 from desembarque.jobs import JobRunner             # noqa: E402
-from desembarque.batch import (BatchIndexer, collect_pdfs, is_indexed,  # noqa: E402
-                               merge_page_rows, preserve_human_work,
-                               saved_page)
+from desembarque.batch import (STORE_DIR, BatchIndexer, collect_pdfs,  # noqa: E402
+                               is_indexed, merge_page_rows,
+                               preserve_human_work, saved_page)
 from desembarque.serve_shapes import (ui_geometry, ui_meta,  # noqa: E402
                                       ui_transcription)
 from desembarque.export import (csv_filename, hits_to_csv,  # noqa: E402
@@ -126,8 +126,39 @@ def current_names() -> Names:
     global NAMES
     NAMES = NAMES.fresh()
     return NAMES
+def store_for(root: Path, store: Path | None = None) -> Path:
+    """Where the transcriptions of the PDFs under `root` are kept.
+
+    Beside them, in a `transcriptions` folder inside the folder of PDFs: a
+    person who points this at a folder sees where the reading went, and a
+    one-file build has no repository to keep it in (Allan, 2026-10-16). The
+    repository's own corpus folder, `data/scans`, keeps its store where the
+    bench and every script expect it, `data/transcriptions`, so nothing on
+    the machine this was built on moves. `--store` overrides both.
+    """
+    if store is not None:
+        return store
+    if root.resolve() == (ROOT / "data" / "scans").resolve():
+        return ROOT / "data" / "transcriptions"
+    return root / STORE_DIR
+
+
 JOBS = JobRunner(ROOT / "data" / "transcriptions")
 BATCH = BatchIndexer()
+# Whether a browser page is there. The page says hello every few seconds and
+# goodbye when its tab closes; the launcher asks `/api/clients` and stops the
+# server when the last page has gone (Allan, 2026-10-16: "if the tab is
+# closed, server shuts down"). `closing` is the launcher's word that it is
+# about to stop the server, which the page is told on its next hello so it
+# can say so instead of freezing.
+CLIENTS: dict = {"seen": None, "left": None, "closing": False}
+
+
+def clients_state(now: float | None = None) -> dict:
+    now = time.time() if now is None else now
+    ago = lambda t: None if t is None else round(now - t, 1)  # noqa: E731
+    return {"seen_s": ago(CLIENTS["seen"]), "left_s": ago(CLIENTS["left"]),
+            "closing": bool(CLIENTS["closing"])}
 # Documents are indexed in parallel: one page is ~4 s, and a real folder is
 # thousands of them. Four workers rather than one per core — each loads its own
 # recogniser, and this has to leave a laptop usable while it runs.
@@ -230,7 +261,8 @@ def list_dir(d: Path) -> dict:
             if e.name.startswith("."):
                 continue
             if e.is_dir():
-                dirs.append(e.name)
+                if e.name != STORE_DIR:   # the server's own, not a place to go
+                    dirs.append(e.name)
             elif e.suffix.lower() == ".pdf":  # only PDFs, as asked
                 pdfs.append({"name": e.name, "size": e.stat().st_size})
     except PermissionError:
@@ -384,9 +416,10 @@ def build_grid(pdf: Path, page_n: int) -> dict:
     bands = geo.normalized_rows()
     cols = geo.normalized_cols()
     name = geo.name_column(0)
-    rows = [{"n": i + 1, "name_raw": "", "nationality": None,
-             "age": None, "sex": None, "status": None, "occupation": None,
-             "origin": None, "notes": None, "conf": {}, "band": list(b)}
+    # Only what was measured. A null in a column is the record's word for
+    # "read, and not legible", which the page paints as *ilegível*; a cell
+    # nobody has read yet is absent, and the page paints it blank.
+    rows = [{"n": i + 1, "name_raw": "", "conf": {}, "band": list(b)}
             for i, b in enumerate(bands)]
     return {
         "detected": True,
@@ -749,8 +782,14 @@ class Handler(BaseHTTPRequestHandler):
                 how = {str(p["n"]): (p.get("geometry") or {}).get("measured_by")
                        for p in stored.get("pages") or []
                        if isinstance(p, dict) and (p.get("geometry") or {}).get("measured_by")}
+                # and what a page said as prose, for the pages that have no
+                # table to show: a certidão is a page of text, and the page
+                # opened on it said "não transcrito" with the text on disk
+                texts = {str(p["n"]): p["form"]["text"]
+                         for p in stored.get("pages") or []
+                         if isinstance(p, dict) and (p.get("form") or {}).get("text")}
                 return self._send(200, {"hash": q.get("hash", ""), "pages": geo,
-                                        "measured_by": how})
+                                        "measured_by": how, "texts": texts})
 
             if u.path == "/api/health":
                 return self._send(200, {"ok": True, "root": str(STATE["root"]),
@@ -765,6 +804,9 @@ class Handler(BaseHTTPRequestHandler):
                 got = live.get(q.get("pdf", ""))
                 return self._send(200, got or {"file": q.get("pdf", ""), "page": 0,
                                                "reading": sorted(live.names())})
+
+            if u.path == "/api/clients":
+                return self._send(200, clients_state())
 
             if u.path == "/api/job":
                 job = JOBS.get(q.get("id", ""))
@@ -889,6 +931,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(409, {"error": engines.status()["detail"]})
             return self._send(202, state.as_dict())
 
+        if u.path == "/api/ping":
+            # the page is here; `closing` tells it the launcher is stopping us
+            CLIENTS["seen"] = time.time()
+            return self._send(200, clients_state())
+        if u.path == "/api/bye":
+            CLIENTS["left"] = time.time()
+            return self._send(200, clients_state())
+        if u.path == "/api/shutdown":
+            CLIENTS["closing"] = True
+            return self._send(200, clients_state())
+
         if u.path == "/api/index/stop":
             BATCH.stop()
             st = BATCH.state
@@ -918,6 +971,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", type=Path, default=ROOT / "data" / "scans")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-open", action="store_true")
+    ap.add_argument("--store", type=Path, default=None,
+                    help="where the transcriptions are kept; the default is "
+                         "a 'transcriptions' folder inside --root")
     args = ap.parse_args(argv)
 
     root = args.root.expanduser().resolve()
@@ -925,10 +981,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"not a folder: {root}", file=sys.stderr)
         return 1
     STATE["root"] = root
+    global JOBS
+    JOBS = JobRunner(store_for(root, args.store))
 
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"Desembarque serving {root}\n  {url}\nCtrl-C to stop")
+    print(f"Desembarque serving {root}\n  transcriptions in {JOBS.cache}\n"
+          f"  {url}\nCtrl-C to stop")
     if not args.no_open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     # in the background: the port answers immediately, and the corpus is ready

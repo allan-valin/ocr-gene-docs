@@ -1,8 +1,9 @@
 """The window a person double-clicks.
 
-Three buttons and a folder: *Ligar* starts the server on the folder of PDFs,
-*Abrir a página* opens the page, *Desligar* stops the server — and closing
-the window stops it too, so nothing is left running that nobody can see.
+Two buttons and a folder: *Ligar* starts the server on the folder of PDFs and
+opens the page in the browser, *Desligar* stops the server — and closing the
+window, or the browser tab, stops it too, so nothing is left running that
+nobody can see.
 *Ajuda* (or F1) opens one page that says what each button does and why.
 The first time, with nothing installed, the only button is *Instalar*, which
 makes the virtual environment and installs the recogniser, showing what it is
@@ -46,6 +47,7 @@ class Window:
         self.server = core.Server(self._command)
         self.events: queue.Queue = queue.Queue()
         self._installing = False
+        self._stopping = False
         self._help: Toplevel | None = None
         self._build()
         self._refresh()
@@ -89,9 +91,8 @@ class Window:
         row.pack(fill=X, pady=(0, 8))
         self.b_install = ttk.Button(row, text="Instalar (uma vez)", command=self.install)
         self.b_start = ttk.Button(row, text="Ligar", command=self.start, style="Accent.TButton")
-        self.b_open = ttk.Button(row, text="Abrir a página", command=self.open)
         self.b_stop = ttk.Button(row, text="Desligar", command=self.stop)
-        for b in (self.b_install, self.b_start, self.b_open, self.b_stop):
+        for b in (self.b_install, self.b_start, self.b_stop):
             b.pack(side=LEFT, padx=(0, 6))
         ttk.Checkbutton(self.root, text="Ler os PDFs da pasta ao ligar (os já lidos são pulados)",
                         variable=self.index_on_start).pack(anchor=W, pady=(0, 8))
@@ -120,12 +121,14 @@ class Window:
         installed = core.venv_python() is not None
         running = self.server.alive
         self.b_install.configure(state=NORMAL if not installed and not self._installing else DISABLED)
-        self.b_start.configure(state=NORMAL if installed and not running else DISABLED)
-        self.b_open.configure(state=NORMAL if running else DISABLED)
-        self.b_stop.configure(state=NORMAL if running else DISABLED)
+        self.b_start.configure(state=NORMAL if installed and not running
+                               and not self._stopping else DISABLED)
+        self.b_stop.configure(state=NORMAL if running and not self._stopping else DISABLED)
         if not installed and not self._installing:
             self.status.set("Nada instalado ainda: clique em Instalar (uma vez). "
                             "Demora alguns minutos e precisa de internet.")
+        elif self._stopping:
+            self.status.set("Desligando…")
         elif not running and not self._installing:
             self.status.set("Servidor parado.")
 
@@ -180,10 +183,18 @@ class Window:
     def open(self) -> None:
         webbrowser.open(f"http://127.0.0.1:{self.port}/")
 
-    def stop(self) -> None:
-        self.server.stop()
-        self._say("Servidor parado.")
+    def stop(self, why: str = "") -> None:
+        """Off the UI thread: the server is told first and the page given a
+        few seconds to hear, which is too long for a window to freeze."""
+        if self._stopping or not self.server.alive:
+            return
+        self._stopping = True
         self._refresh()
+        threading.Thread(target=self._stop_worker, args=(why,), daemon=True).start()
+
+    def _stop_worker(self, why: str) -> None:
+        self.server.stop()
+        self.events.put(("stopped", why))
 
     def help(self) -> None:
         """One window, reused: F1 twice does not open two."""
@@ -191,9 +202,19 @@ class Window:
             self._help.lift()
             return
         top = Toplevel(self.root)
-        top.title(TITLE + " — Ajuda")
-        top.minsize(560, 480)
+        top.title("Ajuda — " + TITLE)
+        # Smaller than the main window and set off from it: the same size on
+        # top of it read as the program itself, and closing it looked like
+        # closing the program (Allan, 2026-10-16). And its own Fechar button.
+        top.geometry("520x540+%d+%d" % (self.root.winfo_rootx() + 70,
+                                         self.root.winfo_rooty() + 70))
+        top.minsize(420, 360)
         top.configure(padx=8, pady=8)
+        foot = ttk.Frame(top)
+        foot.pack(side="bottom", fill=X, pady=(8, 0))
+        ttk.Label(foot, text="Esta é só a ajuda; fechar aqui não desliga nada.",
+                  style="Muted.TLabel").pack(side=LEFT)
+        ttk.Button(foot, text="Fechar a ajuda", command=top.destroy).pack(side=RIGHT)
         text = Text(top, wrap="word", padx=14, pady=10, relief="flat",
                     background="#fbfbf9", font=nametofont("TkDefaultFont"))
         bold = nametofont("TkDefaultFont").copy()
@@ -212,7 +233,7 @@ class Window:
         self._help = top
 
     def close(self) -> None:
-        self.server.stop()
+        self.server.stop(pause=1.5)
         self.root.destroy()
 
     # ---- the clock -------------------------------------------------------
@@ -221,11 +242,14 @@ class Window:
         the recogniser busy an answer takes seconds, and a window that waits
         for it freezes, which is what a person reads as broken."""
         while True:
-            if self.server.alive:
+            if self.server.alive and not self._stopping:
                 st = core.index_status(self.port)
                 if st.get("status") == "unknown" and self._last_status:
                     st = {**self._last_status, "status": "unknown"}
                 self.events.put(("status", st))
+                # the browser tab closed: the server goes with it
+                if core.browser_gone(core.clients(self.port)):
+                    self.events.put(("gone",))
             time.sleep(POLL_MS / 1000)
 
     def _poll(self) -> None:
@@ -255,6 +279,14 @@ class Window:
                             + " · sem resposta do servidor neste momento")
                 self.status.set("Ligado em http://127.0.0.1:%d — %s"
                                 % (self.port, line))
+        elif kind == "gone":
+            if self.server.alive and not self._stopping:
+                self._say("A aba do navegador foi fechada: desligando o servidor.")
+                self.stop()
+        elif kind == "stopped":
+            self._stopping = False
+            self._say("Servidor parado." + (" " + ev[1] if ev[1] else ""))
+            self._refresh()
         elif kind == "installed":
             self._installing = False
             self._say("Instalação concluída." if ev[1]
@@ -267,7 +299,7 @@ class Window:
                 self.status.set("Não iniciou.")
                 self._refresh()
                 return
-            self._say(f"Servidor ligado sobre {folder}")
+            self._say(f"Servidor ligado sobre {folder}; abrindo a página no navegador.")
             self._refresh()
             self.open()
             if self.index_on_start.get():
