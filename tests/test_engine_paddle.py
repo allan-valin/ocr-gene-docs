@@ -952,3 +952,20 @@ def test_the_band_sink_keeps_the_plain_rectangle_beside_the_carved_crop():
                     eng._carved_crops(page, geo, margin=40))
     assert eng.band_sink[0]["carved"] is first, \
         "the looser second reading is the alternatives, not the row's own ink"
+
+
+def test_an_ordinal_glued_to_a_capital_is_taken_off():
+    """The name column's left rule sits so close to the Numero column that the
+    crop sweeps up the number's last digit with no gap at all: BS.ENT.017038 p2
+    reads `1Ismenia Pinto Saldanha`, `5Haim Bardavid` (row 15), `0Maria Jose`
+    (row 30). A digit welded to a capital is the line number, never a name."""
+    from desembarque.engine_paddle import strip_ordinal
+    assert strip_ordinal("1Ismenia Pinto Saldanha") == "Ismenia Pinto Saldanha"
+    assert strip_ordinal("5Haim Bardavid") == "Haim Bardavid"
+    assert strip_ordinal("0Maria Jose") == "Maria Jose"
+    assert strip_ordinal("1FREDERIC ALEXANDER MACKINNON") == "FREDERIC ALEXANDER MACKINNON"
+    # a lower-case letter after the digit is not that pattern: `9szaac` may be
+    # a misread *I*, and is left for the menu to sort out
+    assert strip_ordinal("9szaac. burico") == "9szaac. burico"
+    # a run of more than three digits is not a line number
+    assert strip_ordinal("1234Maria") == "1234Maria"

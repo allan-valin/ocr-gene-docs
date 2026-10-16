@@ -253,6 +253,12 @@ def refine(im, margin: int = INK_MARGIN):
 # punctuation the clerk used or the recogniser invented: ".9", "1I", "12.", "10".
 _ORDINAL = re.compile(r"^[\s.,;:'`\-]*\d{1,3}[\s.,;:'`\-]+")
 _ONLY_ORDINAL = re.compile(r"^[\s.,;:'`\-]*\d{1,3}[\s.,;:'`\-]*$")
+# Where the name column's left rule hugs the Numero column the crop sweeps up
+# the number's last digit with no gap: `1Ismenia Pinto Saldanha`, `5Haim
+# Bardavid` on row 15 (BS.ENT.017038 p2). A digit welded to a capital is the
+# line number; welded to a lower-case letter it may be a misread *I* (`9szaac`)
+# and is left alone.
+_GLUED_ORDINAL = re.compile(r"^\d{1,3}(?=[A-ZÀ-Þ])")
 
 
 def strip_ordinal(text: str) -> str:
@@ -271,7 +277,8 @@ def strip_ordinal(text: str) -> str:
         return ""
     if _ONLY_ORDINAL.match(t):
         return ""
-    return _ORDINAL.sub("", t, count=1).strip()
+    t = _ORDINAL.sub("", t, count=1).strip()
+    return _GLUED_ORDINAL.sub("", t, count=1)
 
 
 def list_breaks(ordinals: list[str], lookback: int = 3) -> list[int]:
