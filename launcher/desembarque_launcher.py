@@ -93,7 +93,7 @@ class Window:
         self.b_stop = ttk.Button(row, text="Desligar", command=self.stop)
         for b in (self.b_install, self.b_start, self.b_open, self.b_stop):
             b.pack(side=LEFT, padx=(0, 6))
-        ttk.Checkbutton(self.root, text="Ler os PDFs da pasta ao ligar (os já lidos saltam)",
+        ttk.Checkbutton(self.root, text="Ler os PDFs da pasta ao ligar (os já lidos são pulados)",
                         variable=self.index_on_start).pack(anchor=W, pady=(0, 8))
 
         ttk.Label(self.root, textvariable=self.status, anchor=W, justify=LEFT,
@@ -107,7 +107,7 @@ class Window:
         self.log.configure(yscrollcommand=bar.set)
         self.log.pack(side=LEFT, fill=BOTH, expand=True)
         bar.pack(side=RIGHT, fill=Y)
-        self._say("Escolha a pasta com os PDFs e carregue em Ligar. "
+        self._say("Escolha a pasta com os PDFs e clique em Ligar. "
                   "Ajuda (F1) explica cada botão.")
 
     def _say(self, line: str) -> None:
@@ -124,7 +124,7 @@ class Window:
         self.b_open.configure(state=NORMAL if running else DISABLED)
         self.b_stop.configure(state=NORMAL if running else DISABLED)
         if not installed and not self._installing:
-            self.status.set("Nada instalado ainda: carregue em Instalar (uma vez). "
+            self.status.set("Nada instalado ainda: clique em Instalar (uma vez). "
                             "Demora alguns minutos e precisa de internet.")
         elif not running and not self._installing:
             self.status.set("Servidor parado.")
@@ -148,7 +148,7 @@ class Window:
     def install(self) -> None:
         self._installing = True
         self._refresh()
-        self.status.set("A instalar… isto demora alguns minutos.")
+        self.status.set("Instalando… isto leva alguns minutos.")
         threading.Thread(target=self._install_worker, daemon=True).start()
 
     def _install_worker(self) -> None:
@@ -169,7 +169,7 @@ class Window:
             messagebox.showwarning(TITLE, "Escolha primeiro a pasta com os PDFs.")
             return
         self._save()
-        self.status.set("A arrancar o servidor…")
+        self.status.set("Iniciando o servidor…")
         self.b_start.configure(state=DISABLED)
         threading.Thread(target=self._start_worker, args=(folder,), daemon=True).start()
 
@@ -264,7 +264,7 @@ class Window:
             ok, folder = ev[1], ev[2]
             if not ok:
                 self._say(self.server.last_error)
-                self.status.set("Não arrancou.")
+                self.status.set("Não iniciou.")
                 self._refresh()
                 return
             self._say(f"Servidor ligado sobre {folder}")

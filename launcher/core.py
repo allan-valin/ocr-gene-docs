@@ -82,9 +82,9 @@ def describe_index(st: dict) -> str:
     """One line a person can read: how far, and how long, in hours."""
     status = st.get("status", "unknown")
     if status == "idle":
-        return "nada a indexar ainda"
+        return "nada para indexar ainda"
     if status == "unknown":
-        return "o servidor está ocupado e não respondeu (a ler?)"
+        return "o servidor está ocupado e não respondeu (lendo?)"
     done = int(st.get("done") or 0) + int(st.get("skipped") or 0)
     total = int(st.get("total") or 0)
     failed = int(st.get("failed") or 0)
@@ -99,10 +99,10 @@ def describe_index(st: dict) -> str:
                 cur = cur.rsplit(".", 1)[0]
                 cur = cur if len(cur) <= 40 else cur[:37] + "…"
                 mins = int(st.get("elapsed_s") or 0) // 60
-                parts.append(f"a ler {cur} há {mins} min" if mins
-                             else f"a ler {cur}")
+                parts.append(f"lendo {cur} há {mins} min" if mins
+                             else f"lendo {cur}")
             else:
-                parts.append("a estimar o tempo…")
+                parts.append("estimando o tempo…")
         else:
             h = f"{eta / 3600:.1f}".rstrip("0").rstrip(".")
             parts.append(f"faltam cerca de {h} h" if eta >= 3600
@@ -116,41 +116,41 @@ def describe_index(st: dict) -> str:
 
 HELP = """\
 O que isto faz
-O Desembarque lê listas de passageiros em PDF e deixa procurar nomes numa
-página no navegador. Tudo corre no seu computador; nada é enviado para fora.
+O Desembarque lê listas de passageiros em PDF e permite buscar nomes em uma
+página no navegador. Tudo roda no seu computador; nada é enviado para fora.
 
 Pasta com os PDFs
-Onde estão as listas. Só ficheiros .pdf contam; imagens (JPG, PNG) são
-ignoradas. Pode mudar de pasta e voltar a Ligar.
+Onde estão as listas. Só arquivos .pdf contam; imagens (JPG, PNG) são
+ignoradas. Pode trocar de pasta e clicar em Ligar de novo.
 
 Instalar (uma vez)
-Cria um ambiente Python próprio e descarrega o motor de leitura (cerca de
+Cria um ambiente Python próprio e baixa o motor de leitura (cerca de
 1,5 GB, precisa de internet). Só aparece enquanto não estiver instalado.
 
 Ligar
-Arranca o servidor: o programa que lê os PDFs e serve a página. Carregar os
-modelos demora 1 a 2 minutos; a janela avisa quando está pronto e abre o
+Inicia o servidor: o programa que lê os PDFs e serve a página. Carregar os
+modelos leva 1 a 2 minutos; a janela avisa quando está pronto e abre o
 navegador. Sem o servidor ligado a página não existe.
 
 Abrir a página
 Abre o navegador em http://127.0.0.1:{port}/. Pode fechar o navegador e
-abrir de novo à vontade; o servidor continua a correr.
+abrir de novo à vontade; o servidor continua rodando.
 
 Ler os PDFs da pasta ao ligar
 Transcreve os PDFs da pasta que ainda não foram lidos. Cerca de 20 s por
-página: uma lista de 9 páginas leva uns 3 minutos; os já lidos saltam. A
-linha de estado diz em que documento vai e quanto falta. Enquanto lê, o
+página: uma lista de 9 páginas leva uns 3 minutos; os já lidos são pulados.
+A linha de status diz em que documento está e quanto falta. Enquanto lê, o
 computador fica lento.
 
 Desligar
-Pára o servidor; fechar a janela faz o mesmo. O que já foi lido fica
-guardado (pasta data/transcriptions) e não se perde; da próxima vez
-continua de onde ficou.
+Para o servidor; fechar a janela faz o mesmo. O que já foi lido fica
+salvo (pasta data/transcriptions) e não se perde; da próxima vez
+continua de onde parou.
 
-Se algo correr mal
+Se algo der errado
 "o servidor não respondeu a tempo": o computador estava ocupado; espere e
-carregue em Ligar outra vez. Outras mensagens: copie o texto da caixa de
-baixo e envie-o a quem lhe passou o programa.
+clique em Ligar de novo. Outras mensagens: copie o texto da caixa abaixo
+e mande para quem lhe passou o programa.
 """
 
 
@@ -196,7 +196,7 @@ class Server:
         while time.time() < deadline:
             if self.proc.poll() is not None:
                 out = (self.proc.stdout.read() if self.proc.stdout else "") or ""
-                self.last_error = (f"o servidor parou ao arrancar (código "
+                self.last_error = (f"o servidor parou ao iniciar (código "
                                    f"{self.proc.returncode})\n{out[-2000:]}")
                 self.proc = None
                 return False

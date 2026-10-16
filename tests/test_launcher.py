@@ -67,7 +67,7 @@ def test_a_server_that_dies_at_once_is_reported_not_waited_for(tmp_path):
 
 
 def test_the_index_bar_speaks_hours_not_percentages():
-    assert core.describe_index({"status": "idle"}) == "nada a indexar ainda"
+    assert core.describe_index({"status": "idle"}) == "nada para indexar ainda"
     s = core.describe_index({"status": "running", "done": 3, "skipped": 2,
                              "total": 50, "eta_s": 7200, "failed": 0})
     assert "5 de 50" in s and "2 h" in s
@@ -145,6 +145,6 @@ def test_a_server_too_busy_to_answer_is_not_reported_as_nothing_to_index():
     timed out, got nothing, and printed 'nada a indexar ainda' for minutes
     while five documents were being read. No answer is 'busy', not 'idle'."""
     assert "ocupado" in core.describe_index({"status": "unknown"})
-    assert core.describe_index({"status": "idle"}) == "nada a indexar ainda"
+    assert core.describe_index({"status": "idle"}) == "nada para indexar ainda"
     import inspect
     assert inspect.signature(core.index_status).parameters["timeout"].default >= 15
