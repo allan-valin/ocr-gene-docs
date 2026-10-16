@@ -6,6 +6,56 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-16, night — one row per written line; watching the engine read
+
+Coding only, by Allan's word, while he needed the machine. Three things
+built, tested, pushed; nothing run over the corpus.
+
+**One row per written line on handwritten pages** (d0a88b5, 9219554).
+`secondreading.rows_from_lines`: every line kraken finds in the name column
+is a row, numbered afresh in page order; `name_raw` is the line clipped to
+the column, `read_by` the model; the band it sat in gives its reading as
+`second_read` and, when it held that one line only, its other columns.
+A person's row stands for the first line of its band; the printed heading
+keeps its row; lines above the first band or below the last are the
+sheet's printing; a line the recogniser read nothing off is not a row; a
+band the engine named that no line fell in keeps its row (the segmenter
+misses one now and then: OL.PRJ.17347 p14, 28 named bands, 26 lines).
+The page's bands become the rows' own extents (`geometry.rows_from:
+lines`), so the review page paints them unchanged. Runs at index time
+through `read_record`; `truthset.pairs` sends a sheet's band numbers to
+the rows the bands became, so the held-out bench still scores.
+`scripts/rerow_from_lines.py` does the same to the stored corpus from the
+line files under `data/fullpage-ppocrv6` in seconds — dry run on ten
+documents: 41 pages, rows 1187 → 1129, named rows kept or gained on every
+page, blank bands gone. **`--write` over the corpus waits for Allan.**
+
+**Watching the engine read** (64543ab). `desembarque.live`: the engine
+reports the bands as soon as a page's grid is cut and each batch of
+sixteen names as it is read (its own batch size, so watching costs
+nothing), keyed by thread because four reader threads share one engine.
+`/api/live?pdf=` serves it; the review page polls it while a transcription
+or the folder index runs on the open document, shows every band as an
+empty row, fills the names in, outlines the band just read. Not yet seen
+in a browser: the self-test build takes eight minutes of CPU and a real
+read needs the engine — first thing when the machine is free.
+
+**Resolution, corrected.** The evening entry said the engine renders at
+300 dpi. For the archive's MRC PDFs it does not: `page_geometry.page_image`
+takes the embedded bilevel mask at the scan's own resolution (AN: 200 ppi,
+2088×3224) and renders only when there is none; detection already runs on
+a copy capped at 2000 px a side (`TEXT_MAX_SIDE`), recognition on crops
+resized to 48 px high. So "lower resolution for typed pages" has little
+left to take; where the twenty seconds a page go — extraction (11.6 s the
+first time, cached), the mask reading, the render fallback, the loose
+second reading, the header read — wants one profiled page, not a guess.
+
+**Allan's questions, answered 2026-10-16:** typed-or-not probe before
+reading (cheap, moot per above); interactive reading (built); one-file
+install (PyInstaller one-folder + Inno Setup ≈ 2 GB, 2–3 days, needs a
+Windows machine; a true one-file exe unpacks 3 GB per start, no); the 341
+dossiers (keep, the lines-first rebuild supersedes them).
+
 ## 2026-10-16, evening — the apply was stopped and measured; the second reading ships with the launcher
 
 **Allan stopped the edge re-read at 341 of 496 dossiers** ("idk why you keep
