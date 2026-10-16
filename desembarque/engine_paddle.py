@@ -715,6 +715,7 @@ class PaddleEngine:
         self._local = threading.local()
         self._page = None
         self._page_plain = False
+        self._page_lock = threading.Lock()
         # Where the columns were on the last page of each dossier that printed
         # its headings. A list runs to twenty pages of the same sheet and only
         # the first prints them; the rest are measured with the columns carried
@@ -788,9 +789,10 @@ class PaddleEngine:
         return PaddleOCR(**kw)
 
     def _full_page(self):
-        if self._page is None:
-            self._page = self._build_page(self.mkldnn and not self._page_plain)
-        return self._page
+        with self._page_lock:
+            if self._page is None:
+                self._page = self._build_page(self.mkldnn and not self._page_plain)
+            return self._page
 
     def _predict_page(self, image: Path):
         """Run the detection pipeline, dropping oneDNN if oneDNN refuses.
@@ -814,11 +816,19 @@ class PaddleEngine:
         try:
             return self._full_page().predict(str(image))
         except Exception:
-            if not self.mkldnn or self._page_plain:
+            if not self.mkldnn:
                 raise
-            self._page_plain = True
-            self._page = self._build_page(False)
-            return self._page.predict(str(image))
+            # The engine is shared by the server's reader threads, and their
+            # first pages meet this failure at the same moment. One thread
+            # rebuilds; the others must not take "already rebuilt" for "the
+            # plain pipeline failed too" -- each gets one turn on what was
+            # built. A plain pipeline that truly fails raises on that turn.
+            with self._page_lock:
+                if not self._page_plain:
+                    self._page_plain = True
+                    self._page = self._build_page(False)
+                page = self._page
+            return page.predict(str(image))
 
     # ---- recognition --------------------------------------------------------
     def _recognize(self, crops: list) -> list[tuple[str, float]]:

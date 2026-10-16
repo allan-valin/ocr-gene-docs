@@ -322,6 +322,44 @@ def test_the_fallback_is_remembered_rather_than_rediscovered():
     assert built == [True, False], "rebuilt once, not once per page"
 
 
+def test_four_threads_meeting_the_onednn_failure_at_once_all_get_their_page():
+    """The server reads on four threads sharing one engine. The first page on
+    each thread dies on oneDNN at the same moment; one thread rebuilds, and
+    the others found `_page_plain` already set and raised -- so `Certidão de
+    casamento 1.pdf` p1 was stored as an error on 2026-10-16, with the same
+    error on 3 pages of the corpus, all among the first read. A thread that
+    loses the race takes one turn on the pipeline the winner built."""
+    import threading
+    from desembarque.engine_paddle import PaddleEngine
+    eng = PaddleEngine(mkldnn=True)
+    built, gate = [], threading.Barrier(4)
+
+    class SlowFake(FakePipeline):
+        def predict(self, path):
+            if self.mkldnn:
+                gate.wait(timeout=5)      # all four fail together
+            return super().predict(path)
+
+    eng._build_page = lambda mkldnn: built.append(mkldnn) or SlowFake(mkldnn)
+    eng._full_page()                      # shared, built once, as the server does
+    out, errors = [], []
+
+    def read():
+        try:
+            out.append(eng.read_page(Path("cover.png"))["text"])
+        except Exception as e:            # noqa: BLE001
+            errors.append(e)
+
+    ts = [threading.Thread(target=read) for _ in range(4)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(timeout=10)
+    assert errors == [], errors
+    assert len(out) == 4 and all("ARQUIVO NACIONAL" in t for t in out)
+    assert built == [True, False], "one rebuild for all four"
+
+
 def test_a_failure_that_is_not_onednn_still_raises():
     """Falling back must not turn every other fault into a silent empty page."""
     import pytest
