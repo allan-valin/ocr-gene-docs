@@ -6,6 +6,28 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-17, menu — every reading for a word, in a box
+
+Allan on Kuboch: the menu offered KORCH and five first-letter capital
+swaps; KUBACH (o→a, the round rule) was generated and cut. Two things:
+
+* **The short menu's tail rotates across rules** (`_rotated`), one
+  reading per rule in turn, and within a rule a change in the body of the
+  word before one at the capital (`_changed_at`). Kuboch: KORCH, KUBOCB,
+  KUBACH, KIIBOCH, KUBOCD, KUBCCH. The rule order itself is still my
+  assumption; the measured fix is a confusion table from the held-out
+  set, offered, not started.
+* **"ver todas as leituras…"** at the foot of the menu opens a box like
+  the progress one (`#readings`, scrollable): every reading the sources
+  make, grouped — the archive's neighbours down to the floor, the ink's
+  readings by rule with the rule said in words — each a button that
+  chooses it; bold = a name this archive has read, dashed = a name
+  current in these lists' languages. `/api/names?all=1` → `menu_all`.
+  On the real server: Kuboch 38 (1 archive, 27 ascender, 6 round, 4
+  minims), Guarge 39 with GUASGE and GUANGE in it.
+
+Tests: 1064 pass.
+
 ## 2026-10-17, later still — the launcher reads what the server says, and notices when it dies
 
 Allan closed the tab; minutes later Ligar was still disabled and Desligar

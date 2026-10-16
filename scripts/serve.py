@@ -50,7 +50,7 @@ from desembarque.export import (csv_filename, hits_to_csv,  # noqa: E402
 from desembarque.voyage import (Voyage, is_complete, merge_voyages,  # noqa: E402
                                 parse_voyage)
 from desembarque import search as searchlib          # noqa: E402
-from desembarque.gazetteer import (Names, fold, menu_for,   # noqa: E402
+from desembarque.gazetteer import (Names, fold, menu_all, menu_for,   # noqa: E402
                                    names_by_language, spoken_names)
 from desembarque import pdf as pdflib               # noqa: E402
 from desembarque import secondreading               # noqa: E402
@@ -786,6 +786,13 @@ class Handler(BaseHTTPRequestHandler):
                 # The row's own nationality, snapped to a word these forms
                 # print. It orders the menu and never filters it (T11).
                 lang = language_names_for(q.get("nacionalidade"))
+                if q.get("all", "") not in ("", "0"):
+                    # everything the sources made, for the box with a
+                    # scrollbar; the menu shows a dozen of these
+                    return self._send(200, {**menu_all(word, current_names(), spoken=SPOKEN,
+                                                       language_names=lang),
+                                            "source": "nomes deste acervo e outras leituras do "
+                                                      "mesmo traço — não é leitura do motor"})
                 return self._send(200, {
                     "word": word,
                     "guesses": menu_for(word, current_names(),

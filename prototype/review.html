@@ -263,6 +263,25 @@
   #progress.mini .hint{display:none}
   #progress.mini .row{margin:5px 0}
   #progress.mini .acts{margin-top:6px}
+  /* every reading for one word, grouped, with a scrollbar: the popup menu
+     shows a dozen and said nothing of the rest (Allan, 2026-10-17) */
+  #readings{position:fixed;inset:0;z-index:55;background:rgba(40,35,30,.42);display:flex;
+    align-items:center;justify-content:center}
+  #readings[hidden]{display:none}
+  #readings .box{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:10px;padding:16px 20px;width:min(640px,94vw);max-height:84vh;display:flex;
+    flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.3);font-size:12.5px}
+  #readings h2{margin:0 0 4px;font-size:14px}
+  #readings .sub{color:var(--muted);font-size:11px;margin-bottom:8px}
+  #readings .list{overflow:auto;min-height:0;padding-right:4px}
+  #readings h3{margin:10px 0 4px;font-size:12px;color:var(--muted);font-weight:600}
+  #readings h3 span{font-weight:400}
+  #readings .names{display:flex;flex-wrap:wrap;gap:4px}
+  #readings .names button{padding:3px 8px;font-size:12px}
+  #readings .names button.seen{font-weight:600}
+  #readings .names button.lista{border-style:dashed}
+  #readings .acts{display:flex;justify-content:flex-end;margin-top:10px}
+  .altmenu button.more{color:var(--accent);font-style:italic}
   /* what is happening: one line per action, newest at the bottom */
   #loghead{display:flex;align-items:center;gap:8px;padding:3px 14px 0;font-size:10.5px;
     color:var(--muted);border-top:1px solid var(--line);background:var(--panel)}
@@ -285,6 +304,12 @@
 </head>
 <body>
 <div class="warnbar" id="warn"></div>
+<div id="readings" hidden><div class="box">
+  <h2 id="rdtitle">Leituras possíveis</h2>
+  <div class="sub" id="rdsub"></div>
+  <div class="list" id="rdlist"></div>
+  <div class="acts"><button id="rdclose" type="button">Fechar</button></div>
+</div></div>
 <div id="progress" hidden><div class="box">
   <h2 id="pgtitle">Lendo…</h2>
   <div class="row" id="pgfolder"><b><span>Pasta</span><span></span></b><div class="bar"><i></i></div></div>
@@ -1759,10 +1784,49 @@ document.addEventListener("click",e=>{
   menu.style.top = `${Math.round(box.bottom + scrollY + 2)}px`;
   menu.addEventListener("click", ev=>{
     const b = ev.target.closest("button"); if(!b) return;
+    if(b.dataset.all){ openReadings(i, w, words[w], r); closeAltMenu(); return; }
     chooseReading(i, w, b.dataset.o);
     closeAltMenu();
   });
 });
+// ---- every reading, in a box ------------------------------------------------
+// The menu shows a dozen of what the sources make — the archive's
+// neighbours, the ink's readings by rule — and said nothing of the rest
+// (Allan, 2026-10-17: "37 readings for kuboch but only six were shown").
+// Everything, grouped and scrollable, each a button that chooses it.
+function renderReadings(j, i, w){
+  const el=$("#rdlist"); if(!el) return 0;
+  const btn = g => { const b=document.createElement("button"); b.type="button"; b.dataset.o=g.name;
+    b.className=(g.seen?"seen ":"")+(g.lista?"lista":""); b.textContent=g.name;
+    b.title=(g.seen?`${g.seen}× neste acervo`:"nunca lido neste acervo")+(g.lista?" · nome corrente nas línguas destas listas":"")
+      +(g.score!=null?` · ${Math.round(g.score*100)}% parecido`:"")+" · palpite, confira no original"; return b; };
+  el.innerHTML="";
+  let n=0;
+  const section=(title, hint, gs)=>{
+    if(!gs.length) return;
+    const h=document.createElement("h3"); h.innerHTML=`${title} <span>— ${hint} (${gs.length})</span>`; el.appendChild(h);
+    const d=document.createElement("div"); d.className="names"; gs.forEach(g=>d.appendChild(btn(g))); el.appendChild(d); n+=gs.length;
+  };
+  section("≈ Nomes deste acervo", "parecidos na grafia com a leitura, mais parecidos primeiro", j.arquivo||[]);
+  for(const g of (j.traco||[])) section(`⌇ ${g.why}`, "o mesmo traço lido de outro modo", g.names||[]);
+  if(!n) el.innerHTML=`<div class="sub">nenhuma leitura além da do motor</div>`;
+  el.onclick=ev=>{ const b=ev.target.closest("button[data-o]"); if(!b) return;
+    chooseReading(i, w, b.dataset.o); $("#readings").hidden=true; };
+  return n;
+}
+function openReadings(i, w, word, r){
+  const natCell = ((r||{}).cells||{}).nacionalidade;
+  const nat = (r||{}).nationality || (natCell && (natCell.value || "")) || "";
+  $("#rdtitle").textContent=`Leituras possíveis para “${word}”`;
+  $("#rdsub").textContent="carregando…"; $("#rdlist").innerHTML=""; $("#readings").hidden=false;
+  fetch(`/api/names?q=${encodeURIComponent(word)}&all=1`+(nat?`&nacionalidade=${encodeURIComponent(nat)}`:""))
+    .then(r=>r.json()).then(j=>{
+      const n=renderReadings(j, i, w);
+      $("#rdsub").textContent=`${n} leituras: palpites, não leituras da página. Negrito = nome que este acervo já leu; tracejado = nome corrente nas línguas destas listas. Clique numa para escolher.`;
+    }).catch(e=>{ $("#rdsub").textContent="não foi possível carregar: "+e; });
+}
+document.addEventListener("click",e=>{ if(e.target.id==="rdclose") $("#readings").hidden=true; });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("#readings").hidden) $("#readings").hidden=true; });
 // Names this archive is known to carry, offered for a word the engine mangled.
 // They are guesses and everything about how they are shown says so: their own
 // section, their own colour, the word "palpite", and never mixed in among the
@@ -1807,7 +1871,9 @@ function fetchGuesses(menu, word, readings, r){
              title="${why(g)}"
              >${g.name}<i>${mark(g)}</i></button>`).join("")
       : `<div class="why guessy">nenhum palpite para esta palavra</div>`;
-    menu.innerHTML = GUESSES_FIRST ? block + readings : readings + block;
+    // a dozen is the menu; everything the sources made is a box away
+    const more = `<button class="more" data-all="1" title="todas as leituras que as fontes produzem para esta palavra, por origem e regra">ver todas as leituras…</button>`;
+    menu.innerHTML = (GUESSES_FIRST ? block + readings : readings + block) + more;
   }).catch(()=>{ const w=menu.querySelector(".guessy"); if(w) w.textContent="palpites indisponíveis"; });
 }
 // The switch is on when the page loads, so it has to say so — a control whose

@@ -1311,3 +1311,12 @@ def test_fewer_index_workers_on_a_card(monkeypatch):
     assert serve.index_workers() == 4
     monkeypatch.setenv("DESEMBARQUE_WORKERS", "3")
     assert serve.index_workers() == 3
+
+
+def test_the_names_endpoint_hands_over_everything_when_asked(server, monkeypatch):
+    base, _ = server
+    from desembarque.gazetteer import Names
+    monkeypatch.setattr(serve, "current_names", lambda: Names({"KORCH": 3}))
+    _, j = call(f"{base}/api/names?q=Kuboch&all=1")
+    assert "arquivo" in j and "traco" in j
+    assert any(n["name"] == "KUBACH" for g in j["traco"] for n in g["names"])

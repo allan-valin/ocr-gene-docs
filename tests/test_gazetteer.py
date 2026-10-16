@@ -273,3 +273,18 @@ def test_the_unknown_tail_of_the_menu_rotates_across_rules():
     tail = [g for g in menu_for("Guarge", names) if g["how"] == "traço"]
     assert tail and not all(g["name"][0] != "G" for g in tail), [g["name"] for g in tail]
     assert any(g["name"].startswith("GUAR") or g["name"].startswith("GUAS") for g in tail)
+
+
+def test_everything_generated_for_a_word_can_be_asked_for():
+    """Allan, 2026-10-17: "you mention 37 readings for kuboch but only six
+    were shown". The menu is the short list; `menu_all` is every reading
+    the sources produced, grouped by source and rule, for a box with a
+    scrollbar."""
+    from desembarque.gazetteer import Names, menu_all
+    names = Names({"KORCH": 3, "KUBACH": 1})
+    got = menu_all("Kuboch", names)
+    assert [g["name"] for g in got["arquivo"]][:1] == ["KORCH"] or "KORCH" in [g["name"] for g in got["arquivo"]]
+    groups = {g["rule"]: g["names"] for g in got["traco"]}
+    assert "KUBACH" in [n["name"] for n in groups["round"]]
+    assert sum(len(g["names"]) for g in got["traco"]) >= 30
+    assert all(g["why"] for g in got["traco"])

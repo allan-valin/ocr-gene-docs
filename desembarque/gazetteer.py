@@ -287,6 +287,35 @@ def _changed_at(g: dict) -> int:
     return min(len(src), len(name))
 
 
+def menu_all(word: str, names: "Names", spoken: set[str] | None = None,
+             language_names: set[str] | None = None) -> dict:
+    """Every reading the sources produce for a word, grouped, for a box
+    with a scrollbar (Allan, 2026-10-17: 37 readings made, six shown).
+    `menu_for` is the short list; this is the rest of it, nothing cut:
+    the archive's neighbours down to the floor, the ink's readings by
+    rule in rule order, and the language lists' names among them."""
+    w = fold(word)
+    read_here = {fold(n) for n in names.counts}
+    spoken = {fold(n) for n in (spoken or set())}
+    known = read_here | spoken
+    lang = {fold(n) for n in (language_names or set())}
+    arquivo = [dict(g, how="arquivo", lang=g["name"] in lang)
+               for g in names.suggest(word, limit=200)]
+    by_rule: dict[str, list[dict]] = {}
+    for c in strokes.variants(word, known=known, limit=400):
+        plain = c.word.replace(" ", "")
+        by_rule.setdefault(c.rule, []).append({
+            "name": c.word, "cost": c.cost,
+            "seen": names.counts.get(plain, 0),
+            "lista": plain not in read_here and plain in spoken,
+            "lang": plain in lang})
+    traco = [{"rule": r, "why": WHY.get(r, "outra leitura do mesmo traço"),
+              "names": sorted(gs, key=lambda g: (-g["seen"], not g["lista"], g["name"]))}
+             for r, gs in sorted(by_rule.items(), key=lambda kv: RULE_ORDER.get(kv[0], 9))]
+    return {"word": word, "arquivo": arquivo, "traco": traco,
+            "known": w in known}
+
+
 def _rotated(unknown: list[dict]) -> list[dict]:
     """The unknown tail with one reading per rule in turn.
 

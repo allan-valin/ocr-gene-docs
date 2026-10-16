@@ -488,6 +488,14 @@ window.addEventListener("load",async()=>{
       ok("and shows the prose the page carried", txt.includes("Cidade de Blankenloch"));
       D = keepD; rows = keepRows; pageIdx = keepIdx; renderEmpty();
     }
+    if(typeof renderReadings==="function"){
+      const n = renderReadings({arquivo:[{name:"KORCH",score:0.73,seen:3}],
+        traco:[{rule:"round",why:"letra redonda parecida",names:[{name:"KUBACH",seen:0},{name:"KUBECH",seen:0}]},
+               {rule:"ascender",why:"haste alta",names:[{name:"BUBOCH",seen:0}]}]}, 0, 0);
+      ok("every reading for a word goes in a box, grouped by source and rule",
+         n===4 && document.querySelectorAll("#rdlist h3").length===3
+         && document.querySelectorAll("#rdlist button[data-o]").length===4);
+    }
     ok("a row from a distrusted grid still offers other readings for each word",
        nameCell({name_raw: "Ling pilt", whole_line: true, line: "Ling · pilt 13 M."}).includes("altword"));
     ok("a row cut from a written line shows that line, not the band it came from",
