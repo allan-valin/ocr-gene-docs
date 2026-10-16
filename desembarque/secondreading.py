@@ -20,6 +20,8 @@ whether the pass ran.
 """
 from __future__ import annotations
 
+import re
+
 import unicodedata
 import warnings
 from pathlib import Path
@@ -243,8 +245,115 @@ def _written_rows(lines: list[dict]) -> list[dict]:
         out.append({"x0": min(m["x0"] for m in g), "x1": max(m["x1"] for m in g),
                     "y0": min(m["y0"] for m in g), "y1": max(m["y1"] for m in g),
                     "text": " · ".join((m.get("text") or "").strip() for m in g),
+                    "cells": [(m["x0"], m["x1"], (m.get("text") or "").strip()) for m in g],
                     "cuts": []})
     return out
+
+
+def _letters(t: str) -> int:
+    return sum(ch.isalpha() for ch in t)
+
+
+# the neighbours of the densest hundredth that still belong to the name
+# column: at a quarter the kinship column next to it (chefe, filho, só) came
+# in; at half it stays out (APESP p6, span 0.18-0.32 of the width)
+_NAME_FLOOR = 0.5
+
+
+def _name_span(rows: list[dict], cols: list[float] | None = None) -> tuple[float, float]:
+    """Where the name column is: the stretch of the page with the most
+    letters in it, from the lines themselves. Not from the sheet's column
+    rules: on the page this was written for the detector's edges were
+    sub-rules (0.241, 0.262) that cut the names in half. Letters are
+    spread over hundredths of the width; the densest hundredth and its
+    neighbours holding at least a quarter as much are the column."""
+    bins = [0.0] * 100
+    for r in rows:
+        for x0, x1, t in r["cells"]:
+            n = _letters(t)
+            lo, hi = max(0, int(x0 * 100)), min(99, int(x1 * 100))
+            for i in range(lo, hi + 1):
+                bins[i] += n / (hi - lo + 1)
+    peak = max(range(100), key=lambda i: bins[i])
+    if bins[peak] <= 0:
+        return 0.0, 1.0
+    a = b = peak
+    while a > 0 and bins[a - 1] >= _NAME_FLOOR * bins[peak]:
+        a -= 1
+    while b < 99 and bins[b + 1] >= _NAME_FLOOR * bins[peak]:
+        b += 1
+    return a / 100, (b + 1) / 100
+
+
+_AGE = re.compile(r"^\d{1,2}$")
+_SEX = re.compile(r"^[mfMF]$")
+_CIVIL = re.compile(r"^[scvSCV]$")
+_NUMBER = re.compile(r"^\d{1,4}$")
+_TOKEN = re.compile(r"[^\W\d_]+|\d+")
+
+
+def _tokens(text: str) -> list[str]:
+    """Words and numbers apart: the segmenter hands over `v49`, `„28 m-`,
+    `35If:CI` as one cell each."""
+    return _TOKEN.findall(text)
+
+
+def _row_from_cells(line: dict, name: tuple[float, float]) -> dict:
+    """One written row's cells put in their columns by content and place
+    (Allan, 2026-10-17: "everything is being put under Nome"). The name
+    is the cells in the name column. A number to its left is the list
+    number. To its right, token by token: a word before the age is the
+    kinship (chefe, filho, só), the first one- or two-digit number is the
+    age, m/f the sex, s/c/v the civil state, and the words after the age
+    are nationality then trade, the order every one of these forms
+    prints them in. Stored as the engine stores its column readings, so
+    the page shows them as readings; `columns_by: content` says how."""
+    a, b = name
+    cells = line.get("cells") or []
+
+    def overlap(x0, x1):
+        return max(0.0, min(x1, b) - max(x0, a)) / max(x1 - x0, 1e-6)
+    in_name = [c for c in cells if overlap(c[0], c[1]) >= 0.5]
+    if not in_name and cells:
+        in_name = [max(cells, key=lambda c: _letters(c[2]))]
+    left = [t for c in cells if c not in in_name and (c[0] + c[1]) / 2 < a for t in [c[2]]]
+    right = [t for c in cells if c not in in_name and (c[0] + c[1]) / 2 >= a for t in [c[2]]]
+    # the name is the words of its cells; a number in them is the age
+    # and sex the segmenter joined on (`Agostis. " 28 M.`), and goes right
+    name_words, spill = [], []
+    for c in in_name:
+        for tok in _tokens(c[2]):
+            if spill or tok.isdigit():
+                spill.append(tok)
+            else:
+                name_words.append(tok)
+    got: dict[str, str] = {}
+    for t in left:
+        for tok in _tokens(t):
+            if _NUMBER.match(tok) and "numero" not in got:
+                got["numero"] = tok
+    before_age, after_age = [], []
+    for tok in spill + [tok for t in right for tok in _tokens(t)]:
+        if _AGE.match(tok) and "idade" not in got:
+            got["idade"] = tok
+        elif _SEX.match(tok) and "sexo" not in got:
+            got["sexo"] = tok
+        elif _CIVIL.match(tok) and "estado" not in got:
+            got["estado"] = tok
+        elif _letters(tok) >= 2:
+            (after_age if "idade" in got else before_age).append(tok)
+    # one short word before the age is the kinship (chefe, filho, só);
+    # anything longer there is not, and reads on as nationality and trade
+    if before_age and len(before_age[0]) <= 7:
+        got["parentesco"] = before_age.pop(0)
+    after_age = before_age + after_age
+    if after_age:
+        got["nacionalidade"] = after_age[0]
+    if len(after_age) > 1:
+        got["profissao"] = " ".join(after_age[1:])
+    return {"name_raw": " ".join(name_words).strip(), "line": line.get("text", ""),
+            "columns_by": "content",
+            **({"cells": {k: {"text": v} for k, v in got.items()}} if got else {})}
 
 
 def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
@@ -287,9 +396,11 @@ def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
     written = [ln for ln in lines if (ln.get("text") or "").strip()]
     weak = len(bands) * 2 < len(written)
     drawn = bands            # where the engine's bands were, for a person's row
+    name_span = None
     if weak:
         x0, x1, top, bottom, bands, heading = 0.0, 1.0, 0.0, 1.0, [], set()
         lines = _written_rows(lines)
+        name_span = _name_span(lines)
     placed: dict[int | None, list[dict]] = {}
     inside = []
     for line in lines:
@@ -319,6 +430,7 @@ def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
         else:
             row = {"name_raw": clip(line, x0, x1).strip(), "read_by": MODEL_TAG}
             if weak:
+                row.update(_row_from_cells(line, name_span))
                 row["whole_line"] = True
             if band is not None:
                 said = (band.get("name_raw") or "").strip()

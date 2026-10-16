@@ -706,7 +706,7 @@ function splitDitto(word){
 }
 function nameCell(r){
   // a line read whole, the grid distrusted: name, age, trade in one string
-  if(r.whole_line) return `<span class="whole" title="linha inteira da página: a grade da tabela não foi encontrada, então o nome vem com o resto da linha">${displayName(nameText(r))}</span>`;
+  if(r.whole_line) return `<span class="whole" title="a grade da tabela não foi encontrada: linha lida da página inteira, colunas atribuídas pelo conteúdo (número, idade, sexo, nacionalidade, profissão) — confira no original. Linha lida: ${(r.line||"").replace(/"/g,"”")}">${displayName(nameText(r))}</span>`;
   const text = nameText(r);
   if(EDIT) return text;
   // Every word opens its readings, not only the words the engine happened to

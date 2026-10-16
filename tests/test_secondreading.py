@@ -257,8 +257,10 @@ def test_a_grid_that_found_a_fraction_of_the_writing_is_not_trusted():
                   line(y, y + 0.02, "-", x0=0.5, x1=0.52)]
     rows, extents = sr.rows_from_lines(bands, lines, geo)
     assert len(rows) == 30, "one row per written row, not per cell"
-    assert rows[0]["name_raw"] == "166 · Name 0 · 18 m"
-    assert rows[29]["name_raw"] == "195 · Name 29 · 47 m"
+    assert rows[0]["name_raw"] == "Name 0" and rows[0]["line"] == "166 · Name 0 · 18 m"
+    assert rows[0]["cells"]["numero"]["text"] == "166"
+    assert rows[0]["cells"]["idade"]["text"] == "18" and rows[0]["cells"]["sexo"]["text"] == "m"
+    assert rows[29]["name_raw"] == "Name 29" and rows[29]["cells"]["numero"]["text"] == "195"
     assert all(r["whole_line"] for r in rows)
     assert all("band" not in r for r in rows)
     assert extents[0] == [0.049, 0.071]
@@ -276,7 +278,7 @@ def test_a_grid_that_found_a_fraction_of_the_writing_is_not_trusted():
 def test_the_apesp_page_gives_the_row_with_kubach_on_it():
     fx = json.loads((Path(__file__).parent / "fixtures" / "apesp_p6_lines.json").read_text())
     rows, extents = sr.rows_from_lines(fx["bands"], fx["lines"], fx["geometry"])
-    texts = [r["name_raw"] for r in rows]
+    texts = [r["line"] for r in rows]
     hit = [t for t in texts if "Kuboch August" in t]
     assert hit, texts
     assert "92" in hit[0], hit[0]                      # his row number on the list
@@ -304,3 +306,29 @@ def test_the_second_reading_runs_on_the_gpu_when_torch_has_one(monkeypatch):
     import inspect
     assert inspect.signature(sr.read_record).parameters["device"].default is None, \
         "read_record picks the device itself unless told"
+
+
+def test_a_distrusted_grid_still_puts_the_cells_in_their_columns():
+    """Allan, 2026-10-17: "everything is being put under Nome, cell
+    information not cut/distributed". The sheet's column rules are there
+    even when its row rules were not found: the name column is where the
+    letters are, a number to its left is the list number, and to its
+    right the cells are read by what they hold — a kinship word before
+    the age, the age, m/f, s/c/v, then nationality and trade in the order
+    every one of these forms prints them."""
+    fx = json.loads((Path(__file__).parent / "fixtures" / "apesp_p6_lines.json").read_text())
+    rows, _ = sr.rows_from_lines(fx["bands"], fx["lines"], fx["geometry"])
+    k = next(r for r in rows if "Kuboch" in r["name_raw"])
+    assert k["name_raw"] == "Kuboch August"
+    assert k["cells"]["numero"]["text"] == "92"
+    assert k["cells"]["idade"]["text"] == "18"
+    assert k["cells"]["sexo"]["text"] == "m"
+    assert "NR. E" not in k["name_raw"] and k["line"].startswith("NR. E")
+    g = next(r for r in rows if "Irignn" in r["name_raw"])
+    assert g["cells"]["numero"]["text"] == "68"
+    assert g["cells"]["idade"]["text"] == "18" and g["cells"]["sexo"]["text"] == "m"
+    assert g["cells"]["nacionalidade"]["text"] == "Talions"
+    assert g["cells"]["profissao"]["text"] == "Maratore"
+    m = next(r for r in rows if "Gengna Maria" in r["name_raw"])
+    assert m["cells"]["idade"]["text"] == "41" and m["cells"]["parentesco"]["text"] == "chece"
+    assert all(r.get("columns_by") == "content" for r in rows)

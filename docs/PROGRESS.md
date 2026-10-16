@@ -6,6 +6,28 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-17, later — on a distrusted grid the cells go to their columns
+
+Allan: "everything is being put under Nome, cell information not
+cut/distributed with the single page read". The fallback had joined the
+written row into one string. Now (`_row_from_cells`): the name column is
+where the letters are, measured from the lines themselves (densest
+hundredth of the width and its neighbours holding at least half as much:
+0.18–0.32 on that page; the detector's rule edges, 0.241/0.262, cut the
+names in half and are not used); a cell overlapping it by half is the
+name. A number to its left is the list number (`cells.numero`). To its
+right, token by token (words and digits split, since the segmenter hands
+over `v49` and `„28 m-` as one cell): one short word before the age is
+the kinship (chefe, filho, só), the first one- or two-digit number the
+age, m/f the sex, s/c/v the civil state, then nationality and trade in
+the order every one of these forms prints them. A digit inside the name
+cell starts the spill to the right (`Agostis. " 28 M.`). Stored as
+`cells`, the way the engine stores column readings, so the page shows
+them as readings; `columns_by: content` and the whole `line` are kept on
+the row and said on hover. On the real page: Kubach → name `Kuboch
+August`, numero 92, idade 18, sexo m; Irignn Guseppe → 68, 18, m,
+Talions, Maratore; Gengna Maria → chece, 41. Tests: 1058 pass.
+
 ## 2026-10-17, small hours — one venv, on the GPU
 
 Allan: "how the fuck are you able to test everything then if this is
