@@ -275,6 +275,46 @@ def _composed(unknown: list[dict], names: "Names", word: str,
     return out
 
 
+def _changed_at(g: dict) -> int:
+    """Where the reading differs from the word it came from; 0 for the
+    capital, -1 when unknown."""
+    src, name = fold(g.get("of") or ""), fold(g.get("name") or "")
+    if not src:
+        return -1
+    for i, (a, b) in enumerate(zip(src, name)):
+        if a != b:
+            return i
+    return min(len(src), len(name))
+
+
+def _rotated(unknown: list[dict]) -> list[dict]:
+    """The unknown tail with one reading per rule in turn.
+
+    Sorted by rule and cut at five, the tail was five readings of the
+    first rule: `Kuboch` has nine capitals in K's ascender group, so the
+    menu offered BUBOCH, DUBOCH, FUBOCH, HUBOCH, JUBOCH and never KUBACH,
+    which the round rule had made (Allan, 2026-10-17: "suggestions
+    basically only try changing the first letter"). Rules in their order,
+    one each, round and round: the ascender's first, the round hand's
+    first, the minims' first, then each rule's second.
+    """
+    by_rule: dict[str, list[dict]] = {}
+    for g in unknown:
+        by_rule.setdefault(g.get("rule") or "", []).append(g)
+    # within a rule, a change in the body of the word before one at the
+    # capital: the capital is the letter the person sees best, and the
+    # tail was first-letter swaps and nothing else
+    for r, gs in by_rule.items():
+        gs.sort(key=lambda g: (_changed_at(g) == 0, g["name"]))
+    order = sorted(by_rule, key=lambda r: RULE_ORDER.get(r, 9))
+    out: list[dict] = []
+    while any(by_rule[r] for r in order):
+        for r in order:
+            if by_rule[r]:
+                out.append(by_rule[r].pop(0))
+    return out
+
+
 def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
              spoken: set[str] | None = None,
              language_names: set[str] | None = None) -> list[dict]:
@@ -311,7 +351,7 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
     for c in strokes.variants(word, known=known, limit=limit * 3):
         plain = c.word.replace(" ", "")
         from_list = plain not in read_here and plain in spoken
-        ink.append({"name": c.word,
+        ink.append({"name": c.word, "of": word,
                     "how": "traço+lista" if from_list else "traço",
                     "rule": c.rule, "cost": c.cost,
                     "why": (WHY.get(c.rule, "outra leitura do mesmo traço")
@@ -346,7 +386,7 @@ def menu_for(word: str, names: "Names", limit: int = MENU_LIMIT,
     out: list[dict] = []
     at: dict[str, dict] = {}
     for g in (near[:1] + seen_names + composed + near[1:] + from_list
-              + unknown[:UNKNOWN_LIMIT]):
+              + _rotated(unknown)[:UNKNOWN_LIMIT]):
         was = at.get(g["name"])
         if was is not None:
             # Both sources arriving at the same name is the strongest thing
