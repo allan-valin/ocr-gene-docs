@@ -98,9 +98,11 @@ def test_the_corpus_scripts_still_find_the_helpers():
 # written lines and 1,339 lines fall on no band (counted 2026-10-16), so about
 # one name in six had no row of its own. The segmenter's lines become the rows.
 
-def band_rows(n=4, conf=0.4):
-    return [{"page": 3, "n": i, "name_raw": f"band {i}", "conf": {"name": conf},
-             "nacionalidade": f"nat {i}"} for i in range(1, n + 1)]
+def band_rows(n=4, conf=0.4, named=()):
+    """Engine bands, blank unless `named` says which carry a reading: a
+    named band the lines miss keeps its row, so a test says what it needs."""
+    return [{"page": 3, "n": i, "name_raw": f"band {i}" if i in named else "",
+             "conf": {"name": conf}, "nacionalidade": f"nat {i}"} for i in range(1, n + 1)]
 
 
 GEO = {"columns": [0.1, 0.4], "rows": [[0.10, 0.19], [0.20, 0.29], [0.30, 0.39], [0.40, 0.49]]}
@@ -120,7 +122,7 @@ def test_two_lines_in_one_band_become_two_rows():
 
 
 def test_the_band_reading_stays_as_the_second_reading():
-    rows, _ = sr.rows_from_lines(band_rows(), [line(0.21, 0.28, "Gregorio Bonel")], GEO)
+    rows, _ = sr.rows_from_lines(band_rows(named={2}), [line(0.21, 0.28, "Gregorio Bonel")], GEO)
     assert rows == [{"n": 1, "name_raw": "Gregorio Bonel", "read_by": sr.MODEL_TAG,
                      "second_read": {"model": sr.BAND_TAG, "text": "band 2"},
                      "page": 3, "conf": {"name": 0.4}, "nacionalidade": "nat 2", "band": 2}]
@@ -155,7 +157,7 @@ def test_a_row_a_person_typed_stands_for_the_first_line_of_its_band():
 
 
 def test_a_person_s_row_with_no_line_is_kept_where_its_band_is():
-    bands = band_rows()
+    bands = band_rows(named={4})
     bands[3]["edits"] = [{"field": "name_raw", "by": "allan"}]
     rows, extents = sr.rows_from_lines(bands, [line(0.11, 0.18, "First")], GEO)
     assert [r["name_raw"] for r in rows] == ["First", "band 4"]
@@ -208,3 +210,26 @@ def test_the_bench_pairs_a_sheet_keyed_by_bands_with_the_rows_the_bands_became()
     truth = {"page": 3, "rows": {"1": "Carlos Cook", "2": "Gregorio Bonel"}}
     got = truthset.pairs(truth, rows)
     assert [(p["truth"], p["row"]["n"]) for p in got] == [("Carlos Cook", 2), ("Gregorio Bonel", 3)]
+
+
+def test_a_line_above_the_first_band_is_the_printed_header_not_a_row():
+    lines = [line(0.02, 0.05, "NOME"), line(0.11, 0.18, "John Wynne"), line(0.93, 0.96, "of passengers")]
+    rows, _ = sr.rows_from_lines(band_rows(), lines, GEO)
+    assert [r["name_raw"] for r in rows] == ["John Wynne"]
+
+
+def test_a_line_the_recogniser_read_nothing_off_is_not_a_row():
+    lines = [line(0.11, 0.18, ""), line(0.21, 0.28, "  "), line(0.31, 0.38, "Angele Primi")]
+    rows, _ = sr.rows_from_lines(band_rows(), lines, GEO)
+    assert [r["name_raw"] for r in rows] == ["Angele Primi"]
+
+
+def test_a_band_the_engine_named_that_no_line_fell_in_keeps_its_row():
+    """The segmenter misses a line now and then (OL.PRJ.17347 p14: 28 named
+    bands, 26 lines). The band's row stays, as the engine read it; only
+    blank bands go."""
+    bands = band_rows(named={1, 2, 4})
+    rows, extents = sr.rows_from_lines(bands, [line(0.11, 0.18, "First"), line(0.41, 0.48, "Last")], GEO)
+    assert [(r["name_raw"], r.get("band")) for r in rows] == [("First", 1), ("band 2", 2), ("Last", 4)]
+    assert "read_by" not in rows[1]
+    assert extents[1] == [0.20, 0.29]

@@ -15,7 +15,10 @@ def write_record(tmp_path, cursive=True):
                                                              "rows": [[0.1, 0.19], [0.2, 0.29]]}}],
            "rows": [{"page": 2, "n": 1, "name_raw": "noise", "conf": {"name": conf}},
                     {"page": 2, "n": 2, "name_raw": "more", "conf": {"name": conf}},
-                    {"page": 2, "n": 3, "name_raw": "x", "conf": {"name": conf}}]}
+                    # a third named row on the typed page: the hand label wants
+                    # three readings before it calls a page anything
+                    {"page": 2, "n": 3, "name_raw": "" if cursive else "x",
+                     "conf": {"name": conf}}]}
     (tmp_path / "records").mkdir()
     f = tmp_path / "records" / "abc.json"
     f.write_text(json.dumps(rec))

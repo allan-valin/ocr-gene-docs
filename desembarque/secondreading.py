@@ -188,6 +188,15 @@ def _band_of(line: dict, bands: list[tuple[float, float]]) -> int | None:
     return best
 
 
+def _table_extent(bands: list[tuple[float, float]]) -> tuple[float, float]:
+    """Top and bottom of the rows, with half a band of slack either side."""
+    if not bands:
+        return 0.0, 1.0
+    heights = sorted(b - a for a, b in bands)
+    slack = heights[len(heights) // 2] / 2
+    return min(a for a, _ in bands) - slack, max(b for _, b in bands) + slack
+
+
 def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
                     ) -> tuple[list[dict], list[list[float]]]:
     """One row per written line in the name column, and the band of each.
@@ -214,13 +223,25 @@ def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
     bands = [tuple(b) for b in geo.get("rows") or [] if b and len(b) == 2]
     by_band = {r.get("n"): r for r in rows}
     heading = {n for n, r in by_band.items() if r.get("header")}
+    # the table is where the bands are: a line above the first band is the
+    # printed header (`NOME`, `procedente de`), one below the last is the
+    # foot of the sheet, and neither is a passenger. Half a band of slack.
+    top, bottom = _table_extent(bands)
     placed: dict[int | None, list[dict]] = {}
     inside = []
     for line in lines:
         if line["x1"] < x0 or line["x0"] > x1:
             continue
+        yc = (line["y0"] + line["y1"]) / 2
+        if not (top <= yc <= bottom):
+            continue
         b = _band_of(line, bands)
         if b in heading:
+            continue
+        # a line the recogniser read nothing off -- a stroke of the column
+        # rule, a blot at the column's edge -- is not a row; a person's row
+        # in that band is kept below either way
+        if not clip(line, x0, x1).strip():
             continue
         inside.append((line, b))
         placed.setdefault(b, []).append(line)
@@ -250,12 +271,14 @@ def rows_from_lines(rows: list[dict], lines: list[dict], geo: dict
             seen_band.add(b)
         out.append(row)
         extents.append([round(line["y0"], 4), round(line["y1"], 4)])
-    # a heading row, and a person's row whose band no line fell in, are kept
-    # where their band is
+    # a heading row, a person's row, and a band the engine read a name off
+    # that no line fell in (the segmenter missed it, or joined it to the
+    # line above) are kept where their band is: a name on the page must not
+    # vanish because the better reader did not see it. Blank bands go.
     for n, r in sorted(by_band.items(), key=lambda kv: kv[0] or 0):
         if n in seen_band or n is None:
             continue
-        if r.get("header") or typed_by_a_person(r):
+        if r.get("header") or typed_by_a_person(r) or (r.get("name_raw") or "").strip():
             a, b_ = bands[n - 1] if 0 < n <= len(bands) else (0.0, 0.0)
             out.append({k: v for k, v in r.items() if k != "n"} | {"band": n})
             extents.append([a, b_])
