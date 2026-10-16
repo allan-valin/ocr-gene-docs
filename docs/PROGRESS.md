@@ -42,7 +42,18 @@ trade), so the first cut gave 150 rows; grouping lines whose centre
 falls in the first line's span (`_written_rows`; the row's union span
 swallowed the next row) gives 46 rows for 33 written ones plus the
 heading, e.g. row 39 `NR. E · 92 · Kuboch August · 18 m · fota.` On this
-machine it runs only once kraken is in `.venv-ocr`. Tests: 1053 pass.
+machine it runs only once kraken is in `.venv-ocr`.
+
+**Double-checked after finishing** (Allan: "the tests don't seem to be
+doing much if they don't catch this stuff" — right; they handed made-up
+lines to the function). Two checks that are now how it is done: the
+real server (`venv-all`, engine + kraken) read page 6 through
+`/api/transcribe?page=6` into a scratch store in 98 s: 46 rows, row 39
+`NR. E · 92 · Kuboch August · 18 m`, `rows_from: lines`, `partial`. And
+the segmenter's 201 lines off that page are a fixture
+(`tests/fixtures/apesp_p6_lines.json`) with a test that asks what a
+person asks: the row with Kubach on it, with his number, his neighbours
+on their own rows, 36–60 rows in all. Tests: 1054 pass.
 
 ## 2026-10-16, latest — stop at the end of the page, one page alone, zoom on the scan
 

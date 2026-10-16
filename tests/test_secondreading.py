@@ -1,6 +1,7 @@
 """The kraken second reading runs per document at index time, so an install
 made from the launcher reads cursive pages the way the corpus on Allan's
 machine is read, instead of showing the engine's noise alone."""
+import json
 from pathlib import Path
 
 from desembarque import secondreading as sr
@@ -261,3 +262,30 @@ def test_a_grid_that_found_a_fraction_of_the_writing_is_not_trusted():
     assert all(r["whole_line"] for r in rows)
     assert all("band" not in r for r in rows)
     assert extents[0] == [0.049, 0.071]
+
+
+# --- a real page ---------------------------------------------------------------
+#
+# The tests above hand made-up lines to the function and passed while the real
+# page came out as five empty rows (Allan, 2026-10-16: "the tests don't seem to
+# be doing much if they don't catch this stuff"). This one is the segmenter's
+# own 201 lines off that page, as kraken produced them, with the engine's
+# bands and grid as stored. What a person asked of that page: the row with
+# the name they were looking for.
+
+def test_the_apesp_page_gives_the_row_with_kubach_on_it():
+    fx = json.loads((Path(__file__).parent / "fixtures" / "apesp_p6_lines.json").read_text())
+    rows, extents = sr.rows_from_lines(fx["bands"], fx["lines"], fx["geometry"])
+    texts = [r["name_raw"] for r in rows]
+    hit = [t for t in texts if "Kuboch August" in t]
+    assert hit, texts
+    assert "92" in hit[0], hit[0]                      # his row number on the list
+    # one row per written row, not per cell and not three rows in one:
+    # 33 passengers and the sheet's heading, give or take the segmenter
+    assert 36 <= len(rows) <= 60, len(rows)
+    assert all(r.get("whole_line") for r in rows)
+    assert extents == sorted(extents)
+    # the neighbours are on their own rows, in order
+    at = texts.index(hit[0])
+    assert "Helbing" in texts[at - 2] and "Klara" in texts[at - 1]
+    assert "Julian" in texts[at + 1]
