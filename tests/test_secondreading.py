@@ -251,16 +251,18 @@ def test_a_grid_that_found_a_fraction_of_the_writing_is_not_trusted():
     lines = []
     for i in range(30):
         y = 0.05 + i * 0.027
-        lines += [line(y, y + 0.02, f"Name {i}", x0=0.18, x1=0.35),
+        # letters only: a digit in a name cell is age and sex the segmenter
+        # joined on, and spills right by design
+        lines += [line(y, y + 0.02, f"Name {'ABCDEFGHIJKLMNOPQRSTUVWXYZabcd'[i]}", x0=0.18, x1=0.35),
                   line(y + 0.002, y + 0.021, f"{18 + i} m", x0=0.40, x1=0.45),
                   line(y - 0.001, y + 0.019, str(166 + i), x0=0.12, x1=0.16),
                   line(y, y + 0.02, "-", x0=0.5, x1=0.52)]
     rows, extents = sr.rows_from_lines(bands, lines, geo)
     assert len(rows) == 30, "one row per written row, not per cell"
-    assert rows[0]["name_raw"] == "Name 0" and rows[0]["line"] == "166 · Name 0 · 18 m"
+    assert rows[0]["name_raw"] == "Name A" and rows[0]["line"] == "166 · Name A · 18 m"
     assert rows[0]["cells"]["numero"]["text"] == "166"
     assert rows[0]["cells"]["idade"]["text"] == "18" and rows[0]["cells"]["sexo"]["text"] == "m"
-    assert rows[29]["name_raw"] == "Name 29" and rows[29]["cells"]["numero"]["text"] == "195"
+    assert rows[29]["name_raw"] == "Name d" and rows[29]["cells"]["numero"]["text"] == "195"
     assert all(r["whole_line"] for r in rows)
     assert all("band" not in r for r in rows)
     assert extents[0] == [0.049, 0.071]
