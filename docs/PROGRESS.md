@@ -6,6 +6,30 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-18, late — proposal: Claude as an optional reviewer of name readings
+
+Allan sent pages from 1750 manuscripts to Claude online and found the
+reading much better than Desembarque's. Expected: a frontier vision model
+against a CTC line recogniser (the CHURRO measurement of 2026-10 found
+the same, +63% findable cursive names, research licence only). Proposed
+future task, not built:
+
+* Opt-in, off by default, the person's own API key kept in the launcher's
+  settings; the core stays open-weight and the app works without it.
+* Per page, the server sends the name-column crop and the rows' readings
+  with their alternatives; Claude answers per row as structured output
+  (reading, confidence, note). Stored as one more *source* in the word
+  menu, "leitura de Claude", beside the engine's and kraken's — never
+  overwriting, the person picks. Same rule as everything else here:
+  nothing asserted that the page does not say.
+* Cost at today's prices (input $4 / output $20 per million on Opus 5.5;
+  half that on Sonnet 5.5): a page's crop is ~2.5k image tokens plus the
+  rows, ~1k out — about $0.03 a page on Opus, $0.015 on Sonnet; a
+  20-page dossier under a dollar. The Batches API halves that for a
+  folder read overnight.
+* It contradicts two of Allan's own rules — open-source-only dependencies
+  and the open-weight engine — so it waits for his explicit yes.
+
 ## 2026-10-18, night — the demo closed its own tab; three languages
 
 Allan opened the demo and the tab closed by itself. Three causes in a
