@@ -2029,7 +2029,12 @@ addEventListener("resize",()=>paintBand(sel));
 // Two ways to run. Opened from disk, the payload is embedded at build time,
 // because file:// blocks fetch(). Served over http, the data comes from the
 // API and the folder picker becomes available.
-const SERVED = location.protocol.startsWith("http");
+// Embedded data means no server, whatever the protocol: the demo on GitHub
+// Pages is http and pinged /api/ping, failed twice, and closed its own tab
+// as "the server has gone" (Allan, 2026-10-18).
+const EMBEDDED = (()=>{ const el=document.getElementById("payload"); const t=el?el.textContent.trim():"";
+  return !!t && t!=="__DATA__"; })();
+const SERVED = location.protocol.startsWith("http") && !EMBEDDED;
 function loadData(){
   const el=document.getElementById("payload");
   if(el && el.textContent.trim()) return Promise.resolve(JSON.parse(el.textContent));
