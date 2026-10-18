@@ -2299,7 +2299,12 @@ loadData().then(d=>{
     }
   }).catch(()=>{});
   const g=(d.documents.find(x=>x.geometry)||{}).geometry;
-  $("#warn").textContent="Protótipo. "+(g?g.note:"");
+  // the public demo (scripts/make_demo.py): the author's own pages, read
+  // by the real pipeline; the archive's pages are not published
+  $("#warn").textContent = d.demo
+    ? "Demonstração: fotos de anotações de prova do autor, lidas pelo motor (texto impresso) e pelo leitor de letra manuscrita. "
+      + "Nada é lido aqui no navegador: o programa roda no seu computador; as listas do arquivo não são publicadas."
+    : "Protótipo. "+(g?g.note:"");
   const t=d.documents.filter(x=>x.transcribed||x.rows).length;
   say(`pasta carregada: ${d.documents.length} documentos, ${t} já lidos`, "ok");
   openDoc(d.active||0);

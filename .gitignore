@@ -60,3 +60,4 @@ data/spike_*.json
 # names in git is a list of names online, and a test that needs one skips
 # instead. See tests/test_vocab.py.
 launcher/settings.json
+demo/
