@@ -6,6 +6,31 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-18, night — the demo closed its own tab; three languages
+
+Allan opened the demo and the tab closed by itself. Three causes in a
+row, each found by loading the live page in headless chromium with
+console logging (the only check that saw them):
+
+1. `SERVED` was "the protocol is http", true on GitHub Pages: the page
+   pinged `/api/ping`, failed twice, and closed its tab as "the server
+   has gone". Now: embedded data means unserved, whatever the protocol.
+2. That fix named the placeholder inside the script; the builder
+   replaced it there too and the page died on load with
+   `SyntaxError: Unexpected identifier 'documents'`. The check reads the
+   payload's first character; a test parses the built page with node.
+3. The Pages CDN caches ten minutes, so a reload right after a deploy
+   still showed the previous build.
+
+Hardened besides: `gone()` returns without a server; the demo hides what
+a browser alone cannot do (Transcrever, Só esta página, Corrigir, the
+folder search, the drawn-area tools and their ×). And the demo switches
+PT / EN / DE with flags in the header (static chrome through a map,
+the lines it writes through `tr()`; remembered in localStorage, first
+pick from `navigator.language`). Not translated: the document header's
+"página 1 de 1", the "p.1" strip, hidden buttons, the help legend. The
+application itself stays pt-BR. Tests: 1097 pass.
+
 ## 2026-10-18, evening — the public demo on the site
 
 Allan asked what it would take to run the project on his GitHub site and

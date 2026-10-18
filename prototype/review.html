@@ -193,6 +193,9 @@
   #readtabs{display:flex;gap:4px;padding:4px 6px;border-bottom:1px solid var(--line);align-items:center}
   #readtabs button{padding:3px 9px;font-size:11px}
   #readtabs span{font-size:11px;color:var(--muted);margin-left:auto}
+  #langs{display:inline-flex;gap:4px;margin-left:10px}
+  #langs button{padding:2px 7px;font-size:11px}
+  #langs button[aria-pressed="true"]{background:var(--focus);color:#fff}
   #ctbl td.y{color:var(--muted);font-size:11px;white-space:nowrap}
   #rowPane{background:var(--panel)}
   table{border-collapse:collapse;width:100%;font-size:12.5px}
@@ -354,6 +357,7 @@
 </div></div>
 <header>
   <h1>Desembarque</h1>
+  <span id="langs" hidden><button type="button" data-lang="pt" title="Português (Brasil)" aria-pressed="true">🇧🇷 PT</button><button type="button" data-lang="en" title="English" aria-pressed="false">🇬🇧 EN</button><button type="button" data-lang="de" title="Deutsch" aria-pressed="false">🇩🇪 DE</button></span>
   <span class="meta" id="docmeta"></span>
   <span class="spacer"></span>
   <div id="find">
@@ -449,11 +453,11 @@ Um ano ou o nome do navio na busca não competem com o nome: eles reordenam o qu
       <button id="zoomout" type="button" title="Diminuir (Ctrl + roda do mouse sobre a página)">−</button>
       <button id="zoomin" type="button" title="Aumentar (Ctrl + roda do mouse sobre a página)">+</button>
       <button id="zoomreset" type="button" title="Largura da coluna">100%</button>
-      <span style="margin-left:10px">Ler só uma área</span>
+      <span id="regiontools"><span style="margin-left:10px">Ler só uma área</span>
       <button id="regionadd" type="button" aria-pressed="false"
         title="Desenhar na imagem uma coluna (ou área) a ler sozinha: para tabelas sem réguas e digitalizações com duas páginas, em que a leitura da página inteira sai errada. Arraste na imagem; pode desenhar várias; a primeira é a coluna do nome. Esc sai do modo.">＋ Coluna a ler</button>
       <button id="regionclear" type="button" title="Tirar as áreas desenhadas nesta página">Limpar</button>
-      <button id="regionread" type="button" title="Ler só as áreas desenhadas desta página. O resultado fica na aba Leitura personalizada, ao lado da leitura completa, sem mexer nela.">Ler as áreas</button>
+      <button id="regionread" type="button" title="Ler só as áreas desenhadas desta página. O resultado fica na aba Leitura personalizada, ao lado da leitura completa, sem mexer nela.">Ler as áreas</button></span>
     </div>
     <div id="scanInner">
       <img id="scan" alt="Digitalização original da relação de passageiros" draggable="false">
@@ -926,14 +930,14 @@ function docYear(d){
 }
 function renderDocList(){
   const t=DB.documents.filter(d=>d.rows).length;
-  $("#sidehead").innerHTML=`<span>${DB.documents.length} documentos · ${t} transcrito${t===1?"":"s"}</span>`
+  $("#sidehead").innerHTML=`<span>${tr("docs", DB.documents.length, t)}</span>`
     + (SERVED?`<button id="pick" title="Escolher pasta">📂 Pasta</button>`:"");
   renderIndexBar(idxState);
   $("#doclist").innerHTML=DB.documents.map((d,i)=>`
     <div class="doc ${i===docIdx?"on":""}" data-d="${i}">
       <b>${d.ship}</b>
       <span>${docYear(d)}${d.notation} · ${d.total_pages} p.</span>
-      ${d.partial?'<span class="badge">parcial</span>':d.transcribed||d.rows?'<span class="badge">transcrito</span>':""}
+      ${d.partial?`<span class="badge">${tr("partial")}</span>`:d.transcribed||d.rows?`<span class="badge">${tr("badge")}</span>`:""}
     </div>`).join("");
 }
 function renderPageStrip(){
@@ -1023,10 +1027,9 @@ function openDoc(i,page){
   $("#reread").title = !D.transcribed ? "Ler este documento com o motor."
     : D.partial ? "Ler as páginas que faltam (a leitura parou ao fim de uma página, ou só uma página foi lida)."
     : "Ler este documento de novo com o motor atual. Correções já salvas são mantidas.";
-  $("#stat").textContent = showRows ? "" : "sem transcrição";
-  say(`${D.file} · página ${D.pages[pageIdx].n} · `
-      + (showRows ? `${rows.length} linhas` : D.transcribed ? "lido, sem linhas de tabela nesta página"
-                                                          : "ainda não lido"));
+  $("#stat").textContent = showRows ? "" : tr("noTranscription");
+  say(tr("page", D.file, D.pages[pageIdx].n)
+      + (showRows ? tr("rows", rows.length) : D.transcribed ? tr("readNoTable") : tr("unread")));
   // and again once this dossier's own measurements arrive
   loadGeometry().then(()=>{ applyGeometry(); paintBand(sel);
                            if(!$("#empty").hidden) renderEmpty(); });
@@ -1113,12 +1116,11 @@ function renderEmpty(msg){
     return;
   }
   if(D.transcribed){
-    e.innerHTML = `<b>Página ${n}: ${text ? "texto lido pelo motor — não há tabela nesta página."
-                                           : "lida pelo motor, sem linhas de tabela."}</b><br>
-      ${text ? `<blockquote class="prose"></blockquote>` : "O motor não leu nada nesta página.<br>"}
-      Para ler o documento de novo com o motor atual, use <b>↻ Reler</b> acima.
+    e.innerHTML = `<b>${text ? tr("pageText", n) : tr("pageNone", n)}</b><br>
+      ${text ? `<blockquote class="prose"></blockquote>` : tr("readNothing")+"<br>"}
+      ${SERVED ? `Para ler o documento de novo com o motor atual, use <b>↻ Reler</b> acima.
       <b>Gerar tabela vazia</b> mede as réguas da página e dá uma grade para preencher à mão.
-      ${SERVED ? `<br><button id="dogrid" title="Detecta a grade da tabela sem modelo: linhas vazias para preencher à mão">Gerar tabela vazia</button>` : ""}`;
+      <br><button id="dogrid" title="Detecta a grade da tabela sem modelo: linhas vazias para preencher à mão">Gerar tabela vazia</button>` : ""}`;
     if(text) e.querySelector(".prose").textContent=text;
     return;
   }
@@ -1131,6 +1133,91 @@ function renderEmpty(msg){
        <button id="dopage" ${engineOK?"":"disabled"} title="Ler só a página aberta — rápido para conferir">Só esta página</button>
        <button id="dogrid" title="Detecta a grade da tabela sem modelo: linhas vazias para preencher à mão">Gerar tabela vazia</button>` : ""}`;
 }
+// ---- the demo's languages ---------------------------------------------
+// The application is pt-BR; the public demo on the site is read by people
+// who are not, so its chrome and the lines it writes switch between
+// Portuguese, English and German (Allan, 2026-10-18). Static texts are
+// a map from element to text; the few dynamic lines the demo produces
+// go through tr(). Only shown with embedded data.
+let LANG="pt";
+const MSG={
+  pt:{ loaded:(n,t)=>`pasta carregada: ${n} documentos, ${t} já lidos`,
+       page:(f,n)=>`${f} · página ${n} · `, rows:n=>`${n} linhas`, readNoTable:"lido, sem linhas de tabela nesta página", unread:"ainda não lido",
+       noTranscription:"sem transcrição", docs:(n,t)=>`${n} documentos · ${t} transcrito${t===1?"":"s"}`,
+       badge:"transcrito", partial:"parcial",
+       pageText:n=>`Página ${n}: texto lido pelo motor — não há tabela nesta página.`, pageNone:n=>`Página ${n}: lida pelo motor, sem linhas de tabela.`, readNothing:"O motor não leu nada nesta página.",
+       custom:n=>`Leitura personalizada${n==null?"":` (${n} linha${n===1?"":"s"})`}`, note:(k,r)=>`${k} área${k>1?"s":""} · ${r==="kraken"?"leitor de letra manuscrita":r}`, unreadAreas:"ainda não lida: Ler as áreas",
+       area:i=>`Área ${i}${i===1?" (nome)":""}`, height:"altura", customStat:(n,k)=>`leitura personalizada: ${n} linhas de ${k} área${k>1?"s":""}`,
+       banner:"Demonstração: fotos de anotações de prova do autor, lidas pelo motor (texto impresso) e pelo leitor de letra manuscrita. Nada é lido aqui no navegador: o programa roda no seu computador; as listas do arquivo não são publicadas." },
+  en:{ loaded:(n,t)=>`folder loaded: ${n} documents, ${t} already read`,
+       page:(f,n)=>`${f} · page ${n} · `, rows:n=>`${n} rows`, readNoTable:"read, no table rows on this page", unread:"not read yet",
+       noTranscription:"no transcription", docs:(n,t)=>`${n} documents · ${t} read`,
+       badge:"read", partial:"partial",
+       pageText:n=>`Page ${n}: text read by the engine — there is no table on this page.`, pageNone:n=>`Page ${n}: read by the engine, no table rows.`, readNothing:"The engine read nothing on this page.",
+       custom:n=>`Custom reading${n==null?"":` (${n} line${n===1?"":"s"})`}`, note:(k,r)=>`${k} area${k>1?"s":""} · ${r==="kraken"?"handwriting reader":r}`, unreadAreas:"not read yet",
+       area:i=>`Area ${i}${i===1?" (name)":""}`, height:"height", customStat:(n,k)=>`custom reading: ${n} lines from ${k} area${k>1?"s":""}`,
+       banner:"Demo: photos of the author's own exam notes, read by the engine (printed text) and by the handwriting reader. Nothing is read here in the browser: the program runs on your computer; the archive's passenger lists are not published." },
+  de:{ loaded:(n,t)=>`Ordner geladen: ${n} Dokumente, ${t} bereits gelesen`,
+       page:(f,n)=>`${f} · Seite ${n} · `, rows:n=>`${n} Zeilen`, readNoTable:"gelesen, keine Tabellenzeilen auf dieser Seite", unread:"noch nicht gelesen",
+       noTranscription:"keine Transkription", docs:(n,t)=>`${n} Dokumente · ${t} gelesen`,
+       badge:"gelesen", partial:"teilweise",
+       pageText:n=>`Seite ${n}: Text vom Motor gelesen — keine Tabelle auf dieser Seite.`, pageNone:n=>`Seite ${n}: vom Motor gelesen, keine Tabellenzeilen.`, readNothing:"Der Motor hat auf dieser Seite nichts gelesen.",
+       custom:n=>`Eigene Lesung${n==null?"":` (${n} Zeile${n===1?"":"n"})`}`, note:(k,r)=>`${k} Bereich${k>1?"e":""} · ${r==="kraken"?"Handschrift-Leser":r}`, unreadAreas:"noch nicht gelesen",
+       area:i=>`Bereich ${i}${i===1?" (Name)":""}`, height:"Höhe", customStat:(n,k)=>`eigene Lesung: ${n} Zeilen aus ${k} Bereich${k>1?"en":""}`,
+       banner:"Demo: Fotos von Prüfungsnotizen des Autors, gelesen vom Motor (gedruckter Text) und vom Handschrift-Leser. Hier im Browser wird nichts gelesen: das Programm läuft auf Ihrem Rechner; die Passagierlisten des Archivs werden nicht veröffentlicht." },
+};
+function tr(key,...a){ const m=(MSG[LANG]||MSG.pt)[key] ?? MSG.pt[key]; return typeof m==="function" ? m(...a) : m; }
+// static chrome: element → text (t), title, placeholder (ph); pt is the file
+const UI={
+  en:{ "#findq":{ph:"Search in this document…  (Ctrl+F)"}, "#scopebtn":{title:"Column to search"}, "#scopelabel":{t:"Name"},
+       "#guessbtn":{t:"≈ Likely",title:"Show likely names of this archive beside the engine's readings. Guesses, not readings."},
+       "#doubtbtn":{t:"? Check",title:"Mark the rows worth a second look first: low engine score, name inferred from position, reading unlike any name of this archive, one stroke away from a name, or two names glued into one word. It does not mean they are wrong."},
+       "#prev":{title:"Previous (Shift+Enter)"}, "#next":{title:"Next (Enter)"}, "#side":{title:"Show or hide the document list"},
+       "#lock":{t:"⇅ Sync",title:"Lock the two panes together"}, "#crop":{t:"Name column",title:"Isolate the name column"},
+       "#editmode":{t:"✎ Correct"}, "#exportcsv":{t:"⭳ Export",title:"Download this document's rows as CSV, with the source of each"},
+       "#corpusq":{ph:"Name — or just the ship, or just the year…"},
+       "#scantools > span:first-child":{t:"Image"}, "#enh-original":{t:"Original"}, "#enh-realce":{t:"Enhance"}, "#enh-forte":{t:"High contrast"}, "#enh-negativo":{t:"Negative"},
+       "#zoomreset":{title:"Column width"}, "#zoomin":{title:"Zoom in (Ctrl + mouse wheel over the page)"}, "#zoomout":{title:"Zoom out (Ctrl + mouse wheel over the page)"},
+       "#tabfull":{t:"Full reading",title:"The engine's reading of the whole page"}, "#tabcustom":{title:"The reading of the drawn areas alone"},
+       "#tbl thead th:nth-child(2)":{t:"Name"}, "#tbl thead th:nth-child(3)":{t:"Nationality"}, "#tbl thead th:nth-child(4)":{t:"Age"}, "#tbl thead th:nth-child(5)":{t:"Sex"}, "#tbl thead th:nth-child(6)":{t:"Civil status"}, "#tbl thead th:nth-child(7)":{t:"Occupation"}, "#tbl thead th:nth-child(8)":{t:"Origin"},
+       "#loghead span":{t:"What is happening"}, "#logmore":{t:"more",title:"Show more lines"},
+       "footer span:nth-child(1)":{html:"<kbd>Ctrl</kbd>+<kbd>F</kbd> search"}, "footer span:nth-child(2)":{html:"<kbd>Enter</kbd>/<kbd>Shift</kbd>+<kbd>Enter</kbd> next/previous"}, "footer span:nth-child(3)":{html:"<kbd>↑</kbd><kbd>↓</kbd> rows"}, "footer span:nth-child(4)":{html:"<kbd>V</kbd> verify"}, "footer span:nth-child(5)":{html:"<kbd>Esc</kbd> close search"} },
+  de:{ "#findq":{ph:"In diesem Dokument suchen…  (Strg+F)"}, "#scopebtn":{title:"Zu durchsuchende Spalte"}, "#scopelabel":{t:"Name"},
+       "#guessbtn":{t:"≈ Wahrscheinlich",title:"Wahrscheinliche Namen dieses Archivs neben den Lesungen des Motors zeigen. Vermutungen, keine Lesungen."},
+       "#doubtbtn":{t:"? Prüfen",title:"Zeilen markieren, die zuerst einen zweiten Blick verdienen: niedriger Motor-Score, Name aus der Position erschlossen, Lesung ohne Ähnlichkeit zu Namen dieses Archivs, einen Strich von einem Namen entfernt, oder zwei Namen in einem Wort. Das heißt nicht, dass sie falsch sind."},
+       "#prev":{title:"Zurück (Umschalt+Enter)"}, "#next":{title:"Weiter (Enter)"}, "#side":{title:"Dokumentliste ein- oder ausblenden"},
+       "#lock":{t:"⇅ Synchron",title:"Beide Bereiche gemeinsam scrollen"}, "#crop":{t:"Namensspalte",title:"Die Namensspalte isolieren"},
+       "#editmode":{t:"✎ Korrigieren"}, "#exportcsv":{t:"⭳ Exportieren",title:"Die Zeilen dieses Dokuments als CSV herunterladen, mit der Herkunft jeder Zeile"},
+       "#corpusq":{ph:"Name — oder nur das Schiff, oder nur das Jahr…"},
+       "#scantools > span:first-child":{t:"Bild"}, "#enh-original":{t:"Original"}, "#enh-realce":{t:"Verstärkt"}, "#enh-forte":{t:"Hoher Kontrast"}, "#enh-negativo":{t:"Negativ"},
+       "#zoomreset":{title:"Spaltenbreite"}, "#zoomin":{title:"Vergrößern (Strg + Mausrad über der Seite)"}, "#zoomout":{title:"Verkleinern (Strg + Mausrad über der Seite)"},
+       "#tabfull":{t:"Vollständige Lesung",title:"Die Lesung der ganzen Seite durch den Motor"}, "#tabcustom":{title:"Die Lesung nur der gezeichneten Bereiche"},
+       "#tbl thead th:nth-child(2)":{t:"Name"}, "#tbl thead th:nth-child(3)":{t:"Staatsangehörigkeit"}, "#tbl thead th:nth-child(4)":{t:"Alter"}, "#tbl thead th:nth-child(5)":{t:"Geschlecht"}, "#tbl thead th:nth-child(6)":{t:"Familienstand"}, "#tbl thead th:nth-child(7)":{t:"Beruf"}, "#tbl thead th:nth-child(8)":{t:"Herkunft"},
+       "#loghead span":{t:"Was gerade passiert"}, "#logmore":{t:"mehr",title:"Mehr Zeilen zeigen"},
+       "footer span:nth-child(1)":{html:"<kbd>Strg</kbd>+<kbd>F</kbd> suchen"}, "footer span:nth-child(2)":{html:"<kbd>Enter</kbd>/<kbd>Umschalt</kbd>+<kbd>Enter</kbd> weiter/zurück"}, "footer span:nth-child(3)":{html:"<kbd>↑</kbd><kbd>↓</kbd> Zeilen"}, "footer span:nth-child(4)":{html:"<kbd>V</kbd> prüfen"}, "footer span:nth-child(5)":{html:"<kbd>Esc</kbd> Suche schließen"} },
+};
+let UI_PT=null;
+function setLang(l){
+  if(!UI[l] && l!=="pt") return;
+  if(!UI_PT){ UI_PT={}; for(const sel of Object.keys(UI.en)){ const el=document.querySelector(sel); if(!el) continue;
+    UI_PT[sel]={t:el.textContent, html:el.innerHTML, title:el.getAttribute("title"), ph:el.getAttribute("placeholder")}; } }
+  LANG=l;
+  for(const sel of Object.keys(UI.en)){
+    const el=document.querySelector(sel); if(!el) continue;
+    const v = l==="pt" ? UI_PT[sel] : UI[l][sel];
+    if(!v) continue;
+    if(v.html!=null && (l!=="pt" || UI_PT[sel].html!=null) && sel.startsWith("footer")) el.innerHTML=v.html;
+    else if(v.t!=null) el.textContent=v.t;
+    if(v.title!=null) el.setAttribute("title", v.title);
+    if(v.ph!=null) el.setAttribute("placeholder", v.ph);
+  }
+  document.querySelectorAll("#langs button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.lang===l)));
+  document.documentElement.lang = l==="pt" ? "pt-BR" : l;
+  try{ localStorage.setItem("desembarque-lang", l); }catch(e){}
+  if(DB && DB.demo) $("#warn").textContent = tr("banner");
+  if(D) openDoc(docIdx, D.pages[pageIdx] && D.pages[pageIdx].n);
+}
+document.addEventListener("click", e=>{ const b=e.target.closest("#langs button"); if(b) setLang(b.dataset.lang); });
 let ENGINE=null, poll=null;
 // Reading a document again is how an engine improvement reaches a dossier that
 // is already in the cache. Without it the only way was to delete the file by
@@ -2100,7 +2187,7 @@ function regionsHere(){
 function paintRegions(){
   const el=$("#regions"); if(!el||!D) return;
   el.innerHTML = regionsHere().map((r,i)=>`<div class="reg" style="left:${r.x0*100}%;top:${r.y0*100}%;width:${(r.x1-r.x0)*100}%;height:${(r.y1-r.y0)*100}%">
-      <b>${i+1}${i===0?" nome":""}</b><button type="button" data-k="${i}" title="Tirar esta área">×</button></div>`).join("");
+      <b>${i+1}${i===0?" nome":""}</b>${SERVED?`<button type="button" data-k="${i}" title="Tirar esta área">×</button>`:""}</div>`).join("");
 }
 function setDrawing(on){
   REG.drawing=on;
@@ -2137,9 +2224,9 @@ function renderTabs(){
   if(tabs.hidden){ REG.tab="full"; }
   $("#tabfull").setAttribute("aria-pressed", String(REG.tab==="full"));
   $("#tabcustom").setAttribute("aria-pressed", String(REG.tab==="custom"));
-  $("#tabcustom").textContent = c ? `Leitura personalizada (${c.rows.length} linha${c.rows.length===1?"":"s"})` : "Leitura personalizada";
+  $("#tabcustom").textContent = tr("custom", c ? c.rows.length : null);
   $("#tabnote").textContent = REG.tab==="custom"
-    ? (c ? `${c.regions.length} área${c.regions.length>1?"s":""} · ${c.reader==="kraken"?"leitor de letra manuscrita":c.reader}` : "ainda não lida: Ler as áreas")
+    ? (c ? tr("note", c.regions.length, c.reader) : tr("unreadAreas"))
     : "";
 }
 function setTab(t){
@@ -2156,10 +2243,10 @@ function setTab(t){
 }
 function renderCustom(c){
   const regs=(c&&c.regions)||regionsHere();
-  $("#chead").innerHTML=`<tr><th class="num">#</th>${regs.map((_,i)=>`<th>Área ${i+1}${i===0?" (nome)":""}</th>`).join("")}<th class="y">altura</th></tr>`;
+  $("#chead").innerHTML=`<tr><th class="num">#</th>${regs.map((_,i)=>`<th>${tr("area", i+1)}</th>`).join("")}<th class="y">${tr("height")}</th></tr>`;
   if(!c){ $("#crows").innerHTML=`<tr><td colspan="${regs.length+2}" style="color:var(--muted);padding:14px">Áreas desenhadas, ainda não lidas. Clique em Ler as áreas, na barra da imagem.</td></tr>`; return; }
   $("#crows").innerHTML=c.rows.map((r,i)=>`<tr data-ci="${i}" class="${i===REG.csel?"sel":""}"><td class="num">${r.n}</td>${(r.cells||[r.name_raw]).map(t=>`<td>${t||""}</td>`).join("")}<td class="y">${r.page_y?Math.round(r.page_y[0]*100)+"%":""}</td></tr>`).join("");
-  $("#stat").textContent=`leitura personalizada: ${c.rows.length} linhas de ${regs.length} área${regs.length>1?"s":""}`;
+  $("#stat").textContent=tr("customStat", c.rows.length, regs.length);
 }
 function selectCustom(n){
   const c=customHere(); if(!c) return;
@@ -2266,7 +2353,7 @@ document.addEventListener("click",e=>{
 // open, so the page says the server is gone rather than freezing.
 let GONE=false, pinging=false, pingFails=0;
 function gone(msg){
-  if(GONE) return; GONE=true;
+  if(!SERVED || GONE) return; GONE=true;
   clearInterval(poll); clearInterval(idxPoll);
   say(msg, "err");
   const g=document.createElement("div"); g.id="gone";
@@ -2290,6 +2377,19 @@ if(SERVED){
 
 bootIndexBar();
 if(SERVED){ $("#warn").textContent="Carregando a pasta…"; say("carregando a pasta…"); }
+else {
+  // nothing a browser alone cannot do is offered: reading, correcting,
+  // the folder search, the areas (Allan, 2026-10-18: "the demo uses static
+  // stuff, makes no sense to see it break when nothing is found")
+  for(const id of ["reread","readpage","editmode","regiontools","corpusfind","indexbar"]){ const el=$("#"+id); if(el) el.hidden=true; }
+}
+if(EMBEDDED){
+  $("#langs").hidden=false;
+  let saved=null; try{ saved=localStorage.getItem("desembarque-lang"); }catch(e){}
+  const want = saved || ((navigator.language||"pt").toLowerCase().startsWith("de") ? "de"
+             : (navigator.language||"pt").toLowerCase().startsWith("en") ? "en" : "pt");
+  if(want!=="pt") setLang(want);
+}
 loadData().then(d=>{
   DB=d;
   $("#scan").onload=()=>paintBand(sel);
@@ -2308,12 +2408,9 @@ loadData().then(d=>{
   const g=(d.documents.find(x=>x.geometry)||{}).geometry;
   // the public demo (scripts/make_demo.py): the author's own pages, read
   // by the real pipeline; the archive's pages are not published
-  $("#warn").textContent = d.demo
-    ? "Demonstração: fotos de anotações de prova do autor, lidas pelo motor (texto impresso) e pelo leitor de letra manuscrita. "
-      + "Nada é lido aqui no navegador: o programa roda no seu computador; as listas do arquivo não são publicadas."
-    : "Protótipo. "+(g?g.note:"");
+  $("#warn").textContent = d.demo ? tr("banner") : "Protótipo. "+(g?g.note:"");
   const t=d.documents.filter(x=>x.transcribed||x.rows).length;
-  say(`pasta carregada: ${d.documents.length} documentos, ${t} já lidos`, "ok");
+  say(tr("loaded", d.documents.length, t), "ok");
   openDoc(d.active||0);
 }).catch(e=>{
   say("a pasta não pôde ser carregada: "+e, "err");
