@@ -111,9 +111,10 @@ def test_the_help_says_what_each_button_does_and_why():
     things take."""
     h = core.help_text(port=8765)
     for word in ("Verificar a instalação", "Ligar", "Desligar",
-                 "Ler os PDFs", "127.0.0.1:8765", "PDF", "20 s", "fechar a janela"):
+                 "Ler os PDFs", "127.0.0.1:8765", "PDF", "35 s", "3 min", "fechar a janela",
+                 "Aquecer", "Desinstalar"):
         assert word in h, word
-    assert len(h) < 2500
+    assert len(h) < 4000
 
 
 @pytest.mark.skipif(not os.environ.get("DISPLAY"), reason="no display")
@@ -238,7 +239,8 @@ def test_readiness_is_three_tiers_and_the_install_does_only_what_is_missing(tmp_
     tiers, never the whole thing again."""
     model = tmp_path / "medium.safetensors"
     r = core.readiness(tmp_path, model=model)
-    assert r == {"python": False, "viewer": False, "engine": False, "handwriting": False}
+    assert r == {"python": False, "viewer": False, "engine": False, "handwriting": False,
+                 "gpu": False}
     assert core.missing(r) == ["viewer", "engine", "handwriting"]
     venv = tmp_path / ".venv-ocr"
     site = venv / "lib" / "python3.12" / "site-packages"
@@ -308,3 +310,189 @@ def test_a_server_that_dies_on_its_own_is_noticed_and_the_window_can_start_again
     assert note and "7" in note
     assert srv.proc is None
     assert srv.reap() is None
+
+
+# ---- Windows test, 2026-10-17 (docs/WINDOWS-TEST-2026-10-17.md) ------------
+
+def test_an_nvidia_card_is_found_through_nvidia_smi_and_its_driver_judged():
+    """Allan's Windows laptop has an RTX 4050 and the launcher installed
+    the CPU wheels: a page took three minutes instead of half a one. The
+    launcher asks nvidia-smi, which the driver installs on every system,
+    and says whether the driver is new enough for the CUDA 13 wheels."""
+    smi = lambda: "NVIDIA GeForce RTX 4050 Laptop GPU, 595.99.02\n"
+    g = core.gpu(query=smi)
+    assert g == {"vendor": "nvidia", "name": "NVIDIA GeForce RTX 4050 Laptop GPU",
+                 "driver": "595.99.02", "cuda": True}
+    old = core.gpu(query=lambda: "NVIDIA GeForce GTX 1060, 552.44")
+    assert old["cuda"] is False, "CUDA 13 wants a 580 driver"
+    assert core.gpu(query=lambda: None) is None
+    assert core.gpu(query=lambda: "") is None
+
+
+def test_the_install_takes_the_cuda_wheels_when_the_card_can_use_them():
+    """Device choice is the install's, never a flag's (engine_paddle.device_for):
+    so the install is where the card has to be seen. With an NVIDIA card and
+    a driver for it, torch comes from the cu130 index and paddle is the
+    GPU build from PaddlePaddle's cu130 index, in the same .venv-ocr."""
+    card = {"vendor": "nvidia", "name": "x", "driver": "595.99.02", "cuda": True}
+    cmds = [" ".join(c) for c in core.install_command(Path("/r"), gpu=card)]
+    kraken = [c for c in cmds if "requirements-kraken.txt" in c]
+    assert len(kraken) == 1 and "whl/cu130" in kraken[0] and "whl/cpu" not in kraken[0]
+    gpu = [c for c in cmds if "paddlepaddle-gpu" in c]
+    assert len(gpu) == 1 and "packages/stable/cu130" in gpu[0]
+    assert cmds.index(gpu[0]) < cmds.index(next(c for c in cmds if "paddleocr" in c)), \
+        "the GPU paddle goes in before paddleocr"
+    assert not any("requirements-ocr.txt" in c for c in cmds), "that file names the CPU wheel"
+    assert all("paddlepaddle-gpu" in c for c in cmds if "paddlepaddle" in c and "uninstall" not in c)
+    # an old driver: the CPU wheels, as before
+    old = {"vendor": "nvidia", "name": "x", "driver": "552.44", "cuda": False}
+    cmds = [" ".join(c) for c in core.install_command(Path("/r"), gpu=old)]
+    assert any("whl/cpu" in c for c in cmds) and not any("paddlepaddle-gpu" in c for c in cmds)
+
+
+def test_a_cpu_venv_can_be_switched_to_the_card_without_a_second_venv(tmp_path):
+    """Allan's Windows copy already has a 2.5 GB CPU venv: the switch
+    replaces the wheels in it ("never leave an orphan", "do not build a
+    second venv next to a usable one"). The `gpu` tier: paddle's CPU wheel
+    out, the GPU one in, torch force-reinstalled from the cu130 index."""
+    venv = tmp_path / ".venv-ocr"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin" / "python").write_text("")
+    card = {"vendor": "nvidia", "name": "x", "driver": "595.99.02", "cuda": True}
+    cmds = [" ".join(c) for c in core.install_command(tmp_path, tiers=["gpu"], gpu=card)]
+    assert not any("venv " in c for c in cmds)
+    assert any("uninstall -y paddlepaddle" in c for c in cmds)
+    assert any("paddlepaddle-gpu" in c and "cu130" in c for c in cmds)
+    assert any("force-reinstall" in c and "whl/cu130" in c and "torch" in c for c in cmds)
+    assert not any("requirements.txt" in c or "requirements-ocr.txt" in c for c in cmds)
+
+
+def test_readiness_says_whether_the_installed_readers_can_see_a_card(tmp_path):
+    """Read off two files pip wrote, no interpreter started: torch/version.py
+    says `cuda = '13.0'` or `cuda = None`; paddle/version/__init__.py says
+    `cuda_version = '13.0'` or `'False'`. Both must be CUDA builds for the
+    launcher to offer the card."""
+    venv = tmp_path / ".venv-ocr"
+    site = venv / "lib" / "python3.12" / "site-packages"
+    (site / "torch").mkdir(parents=True)
+    (site / "paddle" / "version").mkdir(parents=True)
+    (venv / "bin").mkdir()
+    (venv / "bin" / "python").write_text("")
+    (site / "torch" / "version.py").write_text("cuda: Optional[str] = None\n")
+    (site / "paddle" / "version" / "__init__.py").write_text("cuda_version     = 'False'\n")
+    assert core.readiness(tmp_path)["gpu"] is False
+    (site / "torch" / "version.py").write_text("cuda: Optional[str] = '13.0'\n")
+    assert core.readiness(tmp_path)["gpu"] is False, "paddle is still the CPU build"
+    (site / "paddle" / "version" / "__init__.py").write_text("cuda_version     = '13.0'\n")
+    assert core.readiness(tmp_path)["gpu"] is True
+    assert "gpu" not in core.missing(core.readiness(tmp_path)), "a CPU install is not a missing tier"
+
+
+def test_uninstall_removes_the_venv_and_the_model_and_nothing_of_the_person_s(tmp_path):
+    """"No traces left behind": everything installed is .venv-ocr and the
+    model under ~/.cache/kraken; the PDFs and their transcriptions are the
+    person's and stay. The models can be kept for a reinstall."""
+    venv = tmp_path / ".venv-ocr"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin" / "python").write_text("")
+    model = tmp_path / "cache" / "kraken" / "ppocrv6-hist" / "medium.safetensors"
+    model.parent.mkdir(parents=True)
+    model.write_bytes(b"x")
+    settings = tmp_path / "launcher" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text("{}")
+    pdfs = tmp_path / "pdfs" / "transcriptions"
+    pdfs.mkdir(parents=True)
+    (pdfs / "a.json").write_text("{}")
+    gone = core.uninstall(tmp_path, model=model, settings=settings, models=False)
+    assert not venv.exists() and model.exists() and not settings.exists()
+    assert (pdfs / "a.json").exists()
+    assert any(".venv-ocr" in g for g in gone) and not any("ppocrv6" in g for g in gone)
+    gone = core.uninstall(tmp_path, model=model, settings=settings, models=True)
+    assert not model.parent.exists()
+    assert any("ppocrv6-hist" in g for g in gone)
+
+
+def test_the_server_is_started_on_the_chosen_device_and_told_to_warm_up(tmp_path):
+    """The toggle has teeth: `DESEMBARQUE_DEVICE` forces the device even
+    when both builds are there, and `--warm` has the server load its
+    models at start instead of inside the first page."""
+    cmd = core.serve_command(Path("/v/python"), Path("/r"), Path("/pdfs"), 8765, warm=True)
+    assert "--warm" in cmd
+    assert "--warm" not in core.serve_command(Path("/v/python"), Path("/r"), Path("/pdfs"), 8765)
+    assert core.serve_env("cpu")["DESEMBARQUE_DEVICE"] == "cpu"
+    assert core.serve_env("gpu")["DESEMBARQUE_DEVICE"] == "gpu"
+    assert "DESEMBARQUE_DEVICE" not in core.serve_env(None)
+    port = free_port()
+    srv = core.Server(lambda folder, p: [sys.executable, str(STUB), str(p), "--say-device"])
+    try:
+        assert srv.start(tmp_path, port, wait=15, env={"DESEMBARQUE_DEVICE": "cpu"}) is True
+        time.sleep(0.3)
+        assert any("device=cpu" in ln for ln in srv.log)
+    finally:
+        srv.stop(pause=0)
+
+
+def test_the_page_estimate_is_measured_or_per_device_never_twenty_seconds():
+    """The help and the progress box promised "uns 20 s"; a page on the
+    Windows CPU took three minutes and the bar sat at the end for most of
+    it. The number is what was measured when there is a measurement, and
+    the device's figure when there is none."""
+    assert core.page_estimate("gpu") == "uns 35 s por página"
+    assert core.page_estimate("cpu") == "uns 3 min por página"
+    assert core.page_estimate("cpu", measured=181) == "uns 3 min por página"
+    assert core.page_estimate("gpu", measured=34.2) == "uns 34 s por página"
+    assert core.page_estimate("cpu", measured=95.6) == "uns 1 min 36 s por página"
+    assert "20 s" not in core.help_text()
+
+
+def test_the_install_log_is_summarised_into_a_status_line():
+    """Thirty minutes of pip's log looked like a hang: the status line
+    says what is being downloaded and how big it is, and the bar counts
+    the install's commands."""
+    d = core.describe_install_line
+    assert d("  Downloading torch-2.14.0+cu130-cp312-cp312-win_amd64.whl (2.9 GB)") == "baixando torch (2.9 GB)"
+    assert d("  Downloading paddlepaddle_gpu-3.4.0-cp312-cp312-win_amd64.whl (1.1 GB)") == "baixando paddlepaddle_gpu (1.1 GB)"
+    assert d("Collecting kraken==7.1.1") == "resolvendo kraken"
+    assert d("Installing collected packages: a, b, c") == "instalando 3 pacotes"
+    assert d("Successfully installed a-1 b-2") == "instalados: a-1 b-2"
+    assert d("     |████| 1.2/2.9 GB") is None
+
+
+@pytest.mark.skipif(not os.environ.get("DISPLAY"), reason="no display")
+def test_the_window_offers_the_device_the_warm_up_and_an_uninstall(monkeypatch):
+    """Windows test, 2026-10-17: a radio for where to read (the card greyed
+    when the install cannot use one), each with its time per page; the
+    warm-up toggle on by default; an install bar; and Desinstalar in the
+    check window."""
+    from tkinter import Tk, Toplevel
+    import launcher.desembarque_launcher as dl
+    monkeypatch.setattr(core, "gpu", lambda: None)
+    monkeypatch.setattr(core, "load_settings", lambda *a: {})
+    root = Tk()
+    root.withdraw()
+    try:
+        w = dl.Window(root)
+        root.update()
+        assert w.device.get() in ("gpu", "cpu")
+        assert w.warm.get() is True
+        assert "35 s" in w.r_gpu.cget("text") and "3 min" in w.r_cpu.cget("text")
+        assert str(w.r_gpu.cget("state")) == "disabled", "no card: the option is there, greyed"
+        assert w.install_bar is not None
+        cmd = w._command(Path("/pdfs"), 8765)
+        assert "--warm" in cmd
+        w.warm.set(False)
+        assert "--warm" not in w._command(Path("/pdfs"), 8765)
+        w.check()
+        root.update()
+        top = [c for c in root.winfo_children() if isinstance(c, Toplevel)][-1]
+        texts = []
+        def walk(x):
+            for c in x.winfo_children():
+                try: texts.append(str(c.cget("text")))
+                except Exception: pass
+                walk(c)
+        walk(top)
+        assert any(t.startswith("Desinstalar") for t in texts)
+    finally:
+        root.destroy()

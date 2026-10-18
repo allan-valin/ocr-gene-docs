@@ -1107,8 +1107,8 @@ function startTranscription(force, page){
   clearInterval(poll);
   const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
   const file=D.file;
-  say(page ? `pedindo a leitura da página ${page} de ${file} · cerca de 20 s`
-           : `${force?"lendo de novo":"pedindo a leitura de"} ${file} · ${D.total_pages} páginas · cerca de 20 s por página`);
+  say(page ? `pedindo a leitura da página ${page} de ${file} · ${pageEstimate()}`
+           : `${force?"lendo de novo":"pedindo a leitura de"} ${file} · ${D.total_pages} páginas · ${pageEstimate()} por página`);
   $("#tbl").hidden=true; $("#empty").hidden=false;
   renderEmpty(`<b><span class="spin"></span>Transcrevendo…</b><br>
      ${D.ship||D.notation} · ${page?`página ${page}`:`${D.total_pages} páginas`}
@@ -1145,6 +1145,14 @@ let jobPage=0;
 // 2026-10-16). Hidden to a corner on request, or by itself when the open
 // document is the one being read: its rows arriving are the progress.
 let PG={shown:false, user:null}, liveLast=null;
+// How long a page takes: measured on this machine once a page has been
+// read (`page_s` on /api/engine), else the device's figure. "Uns 20 s" was
+// a constant and the Windows CPU took three minutes (2026-10-17).
+function pageEstimate(){
+  const e=ENGINE||{};
+  if(e.page_s) return `uns ${humanTime(e.page_s)}`;
+  return e.device==="gpu" ? "uns 35 s" : "uns 3 min";
+}
 function setBar(row, done, total, label){
   row.querySelector("b span:last-child").textContent=label;
   const bar=row.querySelector(".bar"), i=bar.querySelector("i");
@@ -1155,9 +1163,27 @@ function renderProgress(st, job, lv){
   const el=$("#progress"); if(!el) return false;
   const idx = st && st.status==="running";
   const running = idx || (job && (job.status==="running"||job.status==="queued"));
-  if(!running){ el.hidden=true; PG.shown=false; PG.user=null; return false; }
+  const warming = !running && ENGINE && ENGINE.warm==="warming";
+  if(!running && !warming){ el.hidden=true; PG.shown=false; PG.user=null; return false; }
   el.hidden=false; PG.shown=true;
   const f=$("#pgfolder");
+  if(warming){
+    // the readers loading their models at start, instead of inside the
+    // first page, which was then a minute slower unexplained
+    f.hidden=true; $("#pgdocs").innerHTML="";
+    const pg=$("#pgpage"); pg.hidden=false;
+    setBar(pg, 0, 0, "carregando os modelos (1 a 2 min)…");
+    pg.querySelector("span").textContent="Leitores";
+    $("#pgtitle").textContent="Aquecendo o leitor…";
+    $("#pgstop").hidden=true; $("#pgabort").hidden=true;
+    $("#pghint").textContent="Os modelos são carregados uma vez por sessão; depois cada página leva "
+      +pageEstimate()+". Dá para navegar e buscar enquanto isso; Esconder guarda esta caixa num canto.";
+    const mini = PG.user==="mini";
+    el.classList.toggle("mini", mini);
+    $("#pghide").textContent = mini ? "Mostrar" : "Esconder";
+    return true;
+  }
+  $("#pgpage").querySelector("span").textContent="Página";
   f.hidden=!idx;
   if(idx){
     const seen=(st.done||0)+(st.skipped||0);
@@ -1171,30 +1197,42 @@ function renderProgress(st, job, lv){
     const row=document.createElement("div"); row.className="row";
     row.innerHTML=`<b><span></span><span></span></b><div class="bar"><i></i></div>`;
     row.querySelector("span").textContent=r.file||"";
+    // steps a person can count: the engine's pages, then the handwriting
+    // reader's pages (known once the engine has said which are written by
+    // hand). On a CPU the second phase is two thirds of the time.
+    const sec = r.second||null;
     const within = r.total ? (r.done||0)/r.total : 0;
-    const pagesDone = Math.max(0,(r.page||0)-1) + within;
-    setBar(row, pagesDone, r.pages||0, `página ${r.page||0} de ${r.pages||"?"}`);
+    const enginePages = sec ? (r.pages||0) : Math.max(0,(r.page||0)-1) + within;
+    const steps = (r.pages||0) + (sec ? sec.total : 0);
+    setBar(row, enginePages + (sec ? sec.done : 0), steps,
+           sec ? `letra manuscrita: página ${sec.page} (${sec.done} de ${sec.total})`
+               : `página ${r.page||0} de ${r.pages||"?"}`);
     docs.appendChild(row);
   }
   const mine = D && (lv && lv.file===D.file && lv.page ? lv : reading.find(r=>r.file===D.file));
   const pg=$("#pgpage"); pg.hidden=!mine;
   if(mine){
-    if(mine.total) setBar(pg, mine.done||0, mine.total, `página ${mine.page}: ${mine.done||0} de ${mine.total} nomes`);
-    else if(mine.page_s!=null)
-      // no names cut yet, or none to cut: the clock against the usual
-      // twenty seconds is the only thing that moves on such a page
-      setBar(pg, Math.min(mine.page_s, 19), 20, `página ${mine.page||0}: lendo há ${Math.round(mine.page_s)} s (uma página leva uns 20 s)`);
+    // what the page is doing, never a clock against a constant: the bar
+    // sat at the end for thirty seconds on a page that took fifty
+    const secs = mine.page_s!=null ? ` (há ${humanTime(mine.page_s)})` : "";
+    if(mine.phase==="second")
+      setBar(pg, 0, 0, `página ${mine.page||0}: lendo as linhas à mão…`);
+    else if(mine.total) setBar(pg, mine.done||0, mine.total, `página ${mine.page}: ${mine.done||0} de ${mine.total} nomes`);
+    else if(mine.phase==="cutting" || mine.page_s!=null)
+      setBar(pg, 0, 0, `página ${mine.page||0}: procurando as linhas da tabela…${secs}`);
     else setBar(pg, 0, 0, `página ${mine.page||0}: começando…`);
   }
   $("#pgtitle").textContent = idx ? "Lendo a pasta…" : `Lendo ${job&&job.label?job.label:"o documento"}…`;
   // a stop is possible for the folder and for a running document alike
   const stoppable = idx || (job && job.id);
   $("#pgstop").hidden=!stoppable; $("#pgabort").hidden=!stoppable;
-  $("#pghint").textContent = "Cerca de 20 s por página; o computador fica lento enquanto lê. "
+  $("#pghint").textContent = `${pageEstimate()} por página${ENGINE&&ENGINE.page_s?" (medido aqui)":""}; o computador fica lento enquanto lê. `
     + "Parar termina a página atual e guarda o que já leu; Abortar descarta o documento em andamento. "
-    + "Esconder guarda esta caixa num canto e deixa navegar; cada documento aparece quando termina.";
-  const liveHere = lv && D && lv.file===D.file && lv.page && (lv.bands||[]).length;
-  const mini = PG.user==="mini" || (PG.user!=="full" && liveHere);
+    + "Esconder guarda esta caixa num canto e deixa navegar; a caixa some sozinha só quando tudo terminou.";
+  // to the corner only when asked: it went there by itself when the first
+  // bands came, with the table still empty, which read as "finished"
+  // (Windows test, 2026-10-17)
+  const mini = PG.user==="mini";
   el.classList.toggle("mini", !!mini);
   $("#pghide").textContent = mini ? "Mostrar" : "Esconder";
   return true;
@@ -1242,7 +1280,9 @@ function showLive(l){
   sel=Math.max(0, l.at==null?0:l.at);
   $("#tbl").hidden=false; $("#empty").hidden=true;
   render(); paintBand(sel);
-  $("#stat").textContent=`lendo… ${l.done||0} de ${l.total||rows.length} linhas da página ${l.page}`;
+  $("#stat").textContent = l.phase==="second"
+    ? `lendo as linhas à mão da página ${l.page}… a tabela é refeita quando terminar`
+    : `lendo… ${l.done||0} de ${l.total||rows.length} linhas da página ${l.page}`;
   return true;
 }
 function pollLive(){
@@ -1272,8 +1312,21 @@ function pollJob(id){
       <br><span class="warnstate">${j.message||""}</span>`);
   });
 }
+function refreshEngine(){
+  if(!SERVED) return;
+  fetch("/api/engine").then(r=>r.json()).then(x=>{
+    const was=ENGINE&&ENGINE.warm;
+    ENGINE=x;
+    if(was==="warming" && x.warm==="warm"){
+      say(x.warm_error ? "leitores prontos, com um aviso: "+x.warm_error : "leitores prontos", x.warm_error?"err":"ok");
+      renderProgress(idxState, jobLast, liveLast);
+    }
+    if(x.warm==="warming"){ renderProgress(idxState, jobLast, liveLast); setTimeout(refreshEngine, 3000); }
+  }).catch(()=>{});
+}
 function finishTranscription(why){
   liveShown=null; liveLast=null; renderProgress(idxState, jobLast, null);
+  refreshEngine();   // the page's seconds, measured, for the next estimate
   // what was on screen, so the line below can say it was replaced: a grid
   // somebody was filling in vanished under a finished reading, unexplained
   const hadGrid=!!(D && D.geometry && D.geometry.bands_source==="detected" && rows.length);
@@ -2079,6 +2132,7 @@ loadData().then(d=>{
   $("#scan").onload=()=>paintBand(sel);
   if(SERVED) fetch("/api/engine").then(r=>r.json()).then(x=>{
     ENGINE=x; renderIndexBar(idxState); if(D&&!rows.length) renderEmpty();
+    if(x.warm==="warming"){ say("aquecendo o leitor: carregando os modelos (1 a 2 min)…"); refreshEngine(); }
     // without the handwriting reader a cursive page is read by the engine
     // alone, and until now the only note of it was inside the record
     const sr=x.second_reading;

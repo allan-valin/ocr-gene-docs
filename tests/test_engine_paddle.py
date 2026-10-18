@@ -1057,3 +1057,32 @@ def test_the_engine_uses_the_gpu_when_paddle_was_built_for_one(monkeypatch):
     monkeypatch.setattr(ep, "_gpu_count", lambda: 0)
     kw = eng._predictor_kw()
     assert kw["device"] == "cpu" and kw["enable_mkldnn"] == eng.mkldnn
+
+
+def test_the_person_can_force_the_cpu_or_the_card(monkeypatch):
+    """`DESEMBARQUE_DEVICE=cpu` reads on the CPU with a card there (the
+    launcher's toggle); `gpu` is the card when paddle can see one."""
+    from desembarque import engine_paddle as ep
+    monkeypatch.setattr(ep, "_gpu_count", lambda: 1)
+    monkeypatch.setenv("DESEMBARQUE_DEVICE", "cpu")
+    assert ep.device_for() == "cpu"
+    monkeypatch.setenv("DESEMBARQUE_DEVICE", "gpu")
+    assert ep.device_for() == "gpu:0"
+    monkeypatch.setattr(ep, "_gpu_count", lambda: 0)
+    assert ep.device_for() == "cpu"
+
+
+def test_the_engine_can_be_warmed_before_the_first_page(monkeypatch):
+    """The models load on the first page, which is then minutes slower
+    with no explanation. `warm()` builds the recogniser and the detector
+    for this thread now; a second call does nothing."""
+    from desembarque import engine_paddle as ep
+    eng = ep.PaddleEngine()
+    made = []
+    monkeypatch.setattr(eng, "_make_recogniser", lambda mkldnn=None: made.append("rec") or "REC")
+    monkeypatch.setattr(eng, "_make_detector", lambda side=None: made.append("det") or "DET")
+    monkeypatch.setattr(eng, "_build_page", lambda mkldnn: made.append("page") or "PAGE")
+    eng.warm()
+    assert made == ["rec", "det", "page"], "the shared whole-page pipeline too"
+    eng.warm()
+    assert made == ["rec", "det", "page"]

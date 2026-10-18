@@ -334,3 +334,60 @@ def test_a_distrusted_grid_still_puts_the_cells_in_their_columns():
     m = next(r for r in rows if "Gengna Maria" in r["name_raw"])
     assert m["cells"]["idade"]["text"] == "41" and m["cells"]["parentesco"]["text"] == "chece"
     assert all(r.get("columns_by") == "content" for r in rows)
+
+
+def test_the_person_can_force_the_cpu_or_the_card(monkeypatch):
+    """The launcher's toggle has to have teeth when both builds are there:
+    `DESEMBARQUE_DEVICE=cpu` reads on the CPU with a card in the machine;
+    `gpu` asks for the card and gets the CPU when there is none."""
+    monkeypatch.setattr(sr, "_cuda", lambda: True)
+    monkeypatch.setenv("DESEMBARQUE_DEVICE", "cpu")
+    assert sr.device_for() == "cpu"
+    monkeypatch.setenv("DESEMBARQUE_DEVICE", "gpu")
+    assert sr.device_for() == "cuda:0"
+    monkeypatch.setattr(sr, "_cuda", lambda: False)
+    assert sr.device_for() == "cpu"
+
+
+def test_the_second_reading_reports_each_page_it_is_on_and_how_long_it_took(monkeypatch):
+    """On the Windows CPU the second reading was 133 of a page's 181
+    seconds, and the page watching saw nothing of it: the box said the
+    names were all read and the table stayed empty. Each page is reported
+    through `live` before it is read, and its seconds after."""
+    from desembarque import live
+    seen = []
+    live.watch("x.pdf", pages=3)
+    try:
+        read = lambda img: (seen.append(live.get("x.pdf")["second"]),
+                            [line(0.1 * i, 0.1 * i + 0.03, f"A {i}") for i in range(1, 6)])[1]
+        sr.read_record(record(), {3: Path("p3.png")}, read=read)
+        assert seen == [{"page": 3, "done": 0, "total": 1}]
+        got = live.get("x.pdf")
+        assert got["second"] == {"page": 3, "done": 1, "total": 1}
+        assert live.timings()["second"] and live.timings()["second"][0] >= 0
+    finally:
+        live.unwatch("x.pdf")
+
+
+def test_the_segmentation_model_is_loaded_once_and_the_warm_up_reads_a_blank(monkeypatch):
+    """kraken's `blla.segment` loads its default segmentation model from
+    disk on every call when given none; the server read every page that
+    way. Loaded once, kept. `warm()` loads both models from disk — not a
+    read of a blank page: that asked the card for 3.7 GB and OOMed
+    (2026-10-18); a failure is returned, never raised."""
+    loads = []
+    monkeypatch.setattr(sr, "_SEG", None)
+    monkeypatch.setattr(sr, "_load_seg", lambda: loads.append("seg") or "SEG")
+    assert sr.seg_model() == "SEG" and sr.seg_model() == "SEG"
+    assert loads == ["seg"]
+    calls = []
+    monkeypatch.setattr(sr, "load_model", lambda *a, **k: calls.append("rec") or "REC")
+    monkeypatch.setattr(sr, "read_page", lambda *a, **k: calls.append("read"))
+    monkeypatch.setattr(sr, "available", lambda *a, **k: True)
+    assert sr.warm() == ""
+    assert calls == ["rec"], "the models, and no read"
+    monkeypatch.setattr(sr, "load_model", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no cuda")))
+    assert "no cuda" in sr.warm()
+    n = len(calls)
+    monkeypatch.setattr(sr, "available", lambda *a, **k: False)
+    assert sr.warm() == "" and len(calls) == n, "nothing to warm without kraken"

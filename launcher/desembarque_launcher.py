@@ -46,7 +46,14 @@ class Window:
         self.folder = StringVar(value=self.settings.get("folder", ""))
         self.port = int(self.settings.get("port", core.DEFAULT_PORT))
         self.index_on_start = BooleanVar(value=self.settings.get("index", False))
+        # where to read and whether to load the models at start (Windows
+        # test, 2026-10-17): the card when the install can use one
+        self.device = StringVar(value=self.settings.get("device", "gpu"))
+        self.warm = BooleanVar(value=self.settings.get("warm", True))
+        self.card: dict | None = None
+        self.card_known = False
         self.status = StringVar(value="")
+        self.install_status = StringVar(value="")
         self.server = core.Server(self._command)
         self.events: queue.Queue = queue.Queue()
         self._installing = False
@@ -63,6 +70,7 @@ class Window:
         if core.missing(core.readiness()):
             root.after(150, self.check)
         threading.Thread(target=self._status_worker, daemon=True).start()
+        threading.Thread(target=lambda: self.events.put(("gpu", core.gpu())), daemon=True).start()
         root.after(POLL_MS, self._poll)
 
     # ---- layout ----------------------------------------------------------
@@ -104,11 +112,39 @@ class Window:
         self.b_stop = ttk.Button(row, text="Desligar", command=self.stop)
         for b in (self.b_start, self.b_stopidx, self.b_stop):
             b.pack(side=LEFT, padx=(0, 6))
-        ttk.Checkbutton(self.root, text="Ler os PDFs da pasta ao ligar (os já lidos são pulados)",
-                        variable=self.index_on_start).pack(anchor=W, pady=(0, 8))
+        how = ttk.LabelFrame(self.root, text="Como ler", padding=(10, 6))
+        how.pack(fill=X, pady=(0, 8))
+        self.card_line = ttk.Label(how, text="procurando placa de vídeo…", style="Muted.TLabel",
+                                   wraplength=600, justify=LEFT)
+        self.card_line.pack(anchor=W)
+        dev = ttk.Frame(how)
+        dev.pack(fill=X, pady=(4, 0))
+        ttk.Label(dev, text="Ler usando:").pack(side=LEFT)
+        self.r_gpu = ttk.Radiobutton(dev, text="placa de vídeo", variable=self.device, value="gpu",
+                                     command=self._save)
+        self.r_cpu = ttk.Radiobutton(dev, text="processador", variable=self.device, value="cpu",
+                                     command=self._save)
+        self.r_gpu.pack(side=LEFT, padx=(8, 0))
+        self.r_cpu.pack(side=LEFT, padx=(8, 0))
+        self.b_gpu = ttk.Button(dev, text="Instalar os leitores de GPU (uns 3 GB)",
+                                command=lambda: self.install(["gpu"]))
+        ttk.Checkbutton(how, text="Aquecer os leitores ao ligar (1 a 2 min; desligue para uma "
+                                  "sessão só de busca)",
+                        variable=self.warm, command=self._save).pack(anchor=W, pady=(4, 0))
+        ttk.Checkbutton(how, text="Ler os PDFs da pasta ao ligar (os já lidos são pulados)",
+                        variable=self.index_on_start, command=self._save).pack(anchor=W)
+        self._device_lines()
 
         ttk.Label(self.root, textvariable=self.status, anchor=W, justify=LEFT,
                   wraplength=600, style="Muted.TLabel").pack(fill=X, pady=(0, 6))
+        # the install: a bar that counts its commands and a line saying what
+        # pip is downloading and how big it is — thirty minutes of log
+        # alone looked like a hang (Windows test, 2026-10-17)
+        self.install_box = ttk.Frame(self.root)
+        self.install_bar = ttk.Progressbar(self.install_box, mode="determinate", maximum=1, value=0)
+        self.install_bar.pack(fill=X)
+        ttk.Label(self.install_box, textvariable=self.install_status, style="Muted.TLabel",
+                  wraplength=600, justify=LEFT).pack(anchor=W)
 
         box = ttk.Frame(self.root)
         box.pack(fill=BOTH, expand=True)
@@ -120,6 +156,27 @@ class Window:
         bar.pack(side=RIGHT, fill=Y)
         self._say("Escolha a pasta com os PDFs e clique em Ligar. "
                   "Ajuda (F1) explica cada botão; Verificar a instalação diz o que há.")
+
+    def _device_lines(self, measured: float | None = None) -> None:
+        """The radio's labels with the time per page — measured on this
+        machine once the server has read one, the device's figure before —
+        and the card's line; the card greyed when the readers cannot use it."""
+        ready = core.readiness()
+        usable = bool(self.card and self.card.get("cuda") and ready.get("gpu"))
+        self.r_gpu.configure(text="placa de vídeo (" + core.page_estimate(
+            "gpu", measured if self.device.get() == "gpu" else None) + ")",
+            state=NORMAL if usable else DISABLED)
+        self.r_cpu.configure(text="processador (" + core.page_estimate(
+            "cpu", measured if self.device.get() == "cpu" else None) + ")")
+        if not usable and self.device.get() == "gpu":
+            self.device.set("cpu")
+        if self.card_known:
+            self.card_line.configure(text=core.describe_gpu(self.card, ready))
+        if self.card and self.card.get("cuda") and not ready.get("gpu") and ready.get("engine") \
+                and not self._installing:
+            self.b_gpu.pack(side=LEFT, padx=(12, 0))
+        else:
+            self.b_gpu.pack_forget()
 
     def _say(self, line: str) -> None:
         self.log.configure(state=NORMAL)
@@ -151,7 +208,7 @@ class Window:
     # ---- actions ---------------------------------------------------------
     def _command(self, folder: Path, port: int) -> list[str]:
         py = core.venv_python()
-        return core.serve_command(py, core.ROOT, folder, port)
+        return core.serve_command(py, core.ROOT, folder, port, warm=bool(self.warm.get()))
 
     def choose(self) -> None:
         d = filedialog.askdirectory(title="Pasta com os PDFs das listas")
@@ -162,7 +219,9 @@ class Window:
     def _save(self) -> None:
         core.save_settings(core.SETTINGS, {"folder": self.folder.get(),
                                            "port": self.port,
-                                           "index": bool(self.index_on_start.get())})
+                                           "index": bool(self.index_on_start.get()),
+                                           "device": self.device.get(),
+                                           "warm": bool(self.warm.get())})
 
     def check(self) -> None:
         """The check window: what is installed, by tier, what each is for
@@ -196,8 +255,15 @@ class Window:
                 "sem o leitor de manuscritos os nomes à mão saem na leitura fraca do motor. "
                 "A instalação baixa só o que falta e precisa de internet.")
         ttk.Label(top, text=note, wraplength=520, justify=LEFT).pack(anchor=W, pady=(14, 0))
+        if self.card_known:
+            ttk.Label(top, text=core.describe_gpu(self.card, ready), wraplength=520,
+                      justify=LEFT, style="Muted.TLabel").pack(anchor=W, pady=(8, 0))
         foot = ttk.Frame(top)
         foot.pack(side="bottom", fill=X, pady=(10, 0))
+        if ready["python"] and not self.server.alive and not self._installing:
+            # "no traces left behind": the venv and the model are all there is
+            ttk.Button(foot, text="Desinstalar…",
+                       command=lambda: (top.destroy(), self.uninstall())).pack(side=LEFT, padx=(0, 6))
         if lacking:
             ttk.Button(foot, text="Instalar o que falta", style="Accent.TButton",
                        command=lambda: (top.destroy(), self.install(lacking))).pack(side=LEFT)
@@ -213,21 +279,52 @@ class Window:
         top.bind("<Escape>", lambda _e: top.destroy())
         self._check = top
 
+    def uninstall(self) -> None:
+        """Everything the install put on the machine, and nothing of the
+        person's: the venv, the settings, and if wanted the model."""
+        if self.server.alive or self._installing:
+            messagebox.showinfo(TITLE, "Desligue o servidor primeiro.")
+            return
+        if not messagebox.askyesno(
+                "Desinstalar — " + TITLE,
+                "Apagar tudo o que foi instalado (a pasta .venv-ocr, uns 3 GB, e as "
+                "configurações)?\n\nOs PDFs e as subpastas \"transcriptions\" são seus e "
+                "não são tocados. Depois disto, basta apagar a pasta do programa."):
+            return
+        models = messagebox.askyesno(
+            "Desinstalar — " + TITLE,
+            "Apagar também o modelo de letra manuscrita baixado (~60 MB, em "
+            "~/.cache/kraken)?\n\nNão: ele fica para uma reinstalação não baixar de novo.")
+        gone = core.uninstall(models=models)
+        self._say("Desinstalado: " + (", ".join(gone) if gone else "não havia nada."))
+        self._refresh()
+        self._device_lines()
+
     def install(self, tiers=None) -> None:
         self._tiers = list(tiers or core.missing(core.readiness()))
         if not self._tiers:
             return
         self._installing = True
         self._refresh()
-        self.status.set("Instalando: " + ", ".join(core.TIERS[t][0].lower() for t in self._tiers)
-                        + "… leva alguns minutos.")
+        self._device_lines()
+        names = {**{t: core.TIERS[t][0].lower() for t in core.TIERS}, "gpu": "leitores de GPU"}
+        self.status.set("Instalando: " + ", ".join(names[t] for t in self._tiers)
+                        + "… leva alguns minutos (uns 3 GB baixados).")
+        self.install_status.set("")
+        self.install_bar.configure(value=0, maximum=1)
+        self.install_box.pack(fill=X, pady=(0, 6))
         threading.Thread(target=self._install_worker, daemon=True).start()
 
     def _install_worker(self) -> None:
-        for cmd in core.install_command(tiers=self._tiers):
+        cmds = core.install_command(tiers=self._tiers, gpu=self.card)
+        for i, cmd in enumerate(cmds):
+            self.events.put(("step", i, len(cmds), " ".join(cmd[-2:])))
             self.events.put(("log", "$ " + " ".join(cmd)))
+            kw = {}
+            if sys.platform == "win32":
+                kw["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                 text=True, cwd=str(core.ROOT))
+                                 text=True, errors="replace", cwd=str(core.ROOT), **kw)
             for line in p.stdout:
                 self.events.put(("log", line))
             if p.wait() != 0:
@@ -246,7 +343,7 @@ class Window:
         threading.Thread(target=self._start_worker, args=(folder,), daemon=True).start()
 
     def _start_worker(self, folder: Path) -> None:
-        ok = self.server.start(folder, self.port)
+        ok = self.server.start(folder, self.port, env=core.serve_env(self.device.get()))
         self.events.put(("started", ok, folder))
 
     def open(self) -> None:
@@ -327,6 +424,9 @@ class Window:
                 if st.get("status") == "unknown" and self._last_status:
                     st = {**self._last_status, "status": "unknown"}
                 self.events.put(("status", st))
+                eng = core._get(self.port, "/api/engine", timeout=20.0)
+                if eng:
+                    self.events.put(("engine", eng))
                 # the browser tab closed: the server goes with it
                 if core.browser_gone(core.clients(self.port)):
                     self.events.put(("gone",))
@@ -355,6 +455,27 @@ class Window:
         kind = ev[0]
         if kind == "log":
             self._say(ev[1])
+            said = core.describe_install_line(ev[1].rstrip())
+            if said and self._installing:
+                self.install_status.set(said)
+        elif kind == "step":
+            _, i, n, what = ev
+            self.install_bar.configure(maximum=n, value=i)
+            self.install_status.set(f"passo {i + 1} de {n}: {what}")
+        elif kind == "gpu":
+            self.card, self.card_known = ev[1], True
+            self._device_lines()
+            if self.card:
+                self._say(core.describe_gpu(self.card, core.readiness()))
+        elif kind == "engine":
+            e = ev[1]
+            self._device_lines(measured=e.get("page_s"))
+            if e.get("warm") == "warming" and not getattr(self, "_said_warm", False):
+                self._said_warm = True
+                self._say("Aquecendo os leitores: carregando os modelos (1 a 2 min); a página diz quando estão prontos.")
+            elif e.get("warm") == "warm" and getattr(self, "_said_warm", False):
+                self._said_warm = False
+                self._say("Leitores prontos." + (" Aviso: " + e["warm_error"] if e.get("warm_error") else ""))
         elif kind == "status":
             st = ev[1]
             if st.get("status") != "unknown":
@@ -382,11 +503,16 @@ class Window:
             self._refresh()
         elif kind == "installed":
             self._installing = False
+            self.install_box.pack_forget()
             still = core.missing(core.readiness())
             self._say(("Instalação concluída." if not still else
                        "Instalado; ainda falta " + ", ".join(core.TIERS[t][0].lower() for t in still) + ".")
                       if ev[1] else "A instalação falhou — veja as linhas acima.")
+            if ev[1] and "gpu" in self._tiers and core.readiness().get("gpu"):
+                self.device.set("gpu")
+                self._save()
             self._refresh()
+            self._device_lines()
         elif kind == "started":
             ok, folder = ev[1], ev[2]
             if not ok:

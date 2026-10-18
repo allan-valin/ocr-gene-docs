@@ -12,6 +12,8 @@ from __future__ import annotations
 import collections
 import json
 import os
+import re
+import shutil
 import subprocess
 import threading
 import sys
@@ -55,65 +57,264 @@ TIER_ORDER = ("viewer", "engine", "handwriting")
 MODEL = Path.home() / ".cache" / "kraken" / "ppocrv6-hist" / "medium.safetensors"
 
 
-def _site_has(root: Path, pkg: str) -> bool:
+def _sites(root: Path) -> list[Path]:
     venv = root / ".venv-ocr"
     if os.name == "nt":
-        return (venv / "Lib" / "site-packages" / pkg).is_dir()
-    return any(p.is_dir() for p in venv.glob(f"lib/python*/site-packages/{pkg}"))
+        return [venv / "Lib" / "site-packages"]
+    return list(venv.glob("lib/python*/site-packages"))
+
+
+def _site_has(root: Path, pkg: str) -> bool:
+    return any((site / pkg).is_dir() for site in _sites(root))
+
+
+def _cuda_build(root: Path) -> bool:
+    """Whether both readers in the venv are CUDA builds, read off two files
+    pip wrote: torch's version.py says `cuda = '13.0'` or `cuda = None`,
+    paddle's says `cuda_version = '13.0'` or `'False'`. On Allan's Windows
+    laptop both were the CPU wheels beside an RTX 4050 (2026-10-17), and
+    nothing on screen said so."""
+    def says(rel: str, pattern: str) -> bool:
+        for site in _sites(root):
+            try:
+                text = (site / rel).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            m = re.search(pattern, text)
+            if m:
+                return m.group(1) not in ("None", "'False'", '"False"', "''", '""')
+        return False
+    return (says("torch/version.py", r"^cuda\s*(?::[^=]*)?=\s*(\S+)")
+            and says("paddle/version/__init__.py", r"^cuda_version\s*=\s*(\S+)"))
 
 
 def readiness(root: Path = ROOT, model: Path = MODEL) -> dict:
     """What is installed, by tier, read off the venv's site-packages: no
     interpreter is started, so the check is instant on every launch
-    (Allan, 2026-10-17: "it's probably better to enforce/verify")."""
+    (Allan, 2026-10-17: "it's probably better to enforce/verify").
+    `gpu` is not a tier: whether the readers installed are the CUDA builds."""
     py = venv_python(root) is not None
     return {
         "python": py,
         "viewer": py and all(_site_has(root, p) for p in ("pypdfium2", "numpy", "PIL")),
         "engine": py and _site_has(root, "paddleocr"),
         "handwriting": py and _site_has(root, "kraken") and model.exists(),
+        "gpu": py and _cuda_build(root),
     }
+
+
+# ---- the card ---------------------------------------------------------------
+# CUDA 13 wheels (torch 2.14 cu130, paddlepaddle-gpu 3.4.0 cu130) want an
+# NVIDIA driver of the 580 series or newer, on Windows and Linux alike.
+CUDA_DRIVER = 580
+TORCH_CPU = "https://download.pytorch.org/whl/cpu"
+TORCH_CUDA = "https://download.pytorch.org/whl/cu130"
+PADDLE_CUDA = "https://www.paddlepaddle.org.cn/packages/stable/cu130/"
+PADDLE_GPU = "paddlepaddle-gpu==3.4.0"
+
+
+def _nvidia_smi() -> str | None:
+    """nvidia-smi's one line "name, driver", or None without a card or
+    driver. The driver installs it on every system; on Windows it is on
+    the PATH or under System32."""
+    exe = shutil.which("nvidia-smi")
+    if exe is None and os.name == "nt":
+        cand = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "nvidia-smi.exe"
+        exe = str(cand) if cand.exists() else None
+    if exe is None:
+        return None
+    kw = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if os.name == "nt" else {}
+    try:
+        out = subprocess.run([exe, "--query-gpu=name,driver_version", "--format=csv,noheader"],
+                             capture_output=True, text=True, timeout=20, **kw)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout if out.returncode == 0 else None
+
+
+def gpu(query: Callable[[], str | None] = _nvidia_smi) -> dict | None:
+    """The NVIDIA card, when there is one: its name, its driver, and `cuda`,
+    whether the driver is new enough for the CUDA wheels. None without a
+    card. Other makers' cards (AMD, Intel, Apple) are not looked for yet:
+    see docs/WINDOWS-TEST-2026-10-17.md §5 for what each would take."""
+    out = query()
+    if not out or not out.strip():
+        return None
+    line = out.strip().splitlines()[0]
+    name, _, driver = line.rpartition(",")
+    name, driver = name.strip(), driver.strip()
+    if not name:
+        return None
+    try:
+        major = int(driver.split(".")[0])
+    except ValueError:
+        major = 0
+    return {"vendor": "nvidia", "name": name, "driver": driver,
+            "cuda": major >= CUDA_DRIVER}
+
+
+def describe_gpu(card: dict | None, ready: dict) -> str:
+    """One line for the window: which card, and whether the install uses it."""
+    if not card:
+        return "Sem placa NVIDIA: a leitura usa o processador."
+    if not card["cuda"]:
+        return (f"{card['name']}: o driver ({card['driver']}) é antigo para os leitores de "
+                f"GPU (precisa do {CUDA_DRIVER} ou mais novo). Atualize-o em nvidia.com; "
+                "até lá a leitura usa o processador.")
+    if ready.get("gpu"):
+        return f"{card['name']}: os leitores de GPU estão instalados."
+    return (f"{card['name']} está aí, mas os leitores instalados são os de processador "
+            "(uma página leva uns 3 min em vez de uns 35 s).")
 
 
 def missing(ready: dict) -> list[str]:
     return [t for t in TIER_ORDER if not ready.get(t)]
 
 
-def serve_command(python: Path, root: Path, folder: Path, port: int) -> list[str]:
+def serve_command(python: Path, root: Path, folder: Path, port: int,
+                  warm: bool = False) -> list[str]:
     """The server, on this folder, on this port, not opening a browser of its
-    own — the launcher opens one when the port answers."""
-    return [str(python), str(root / "scripts" / "serve.py"),
-            "--root", str(folder), "--port", str(port), "--no-open"]
+    own — the launcher opens one when the port answers. `warm` has it load
+    the readers' models at start, so the first page is not the slow one."""
+    cmd = [str(python), str(root / "scripts" / "serve.py"),
+           "--root", str(folder), "--port", str(port), "--no-open"]
+    if warm:
+        cmd.append("--warm")
+    return cmd
 
 
-def install_command(root: Path = ROOT, tiers=TIER_ORDER) -> list[list[str]]:
+def serve_env(device: str | None) -> dict:
+    """What the server is told beyond its command line: the device to read
+    on, when the person chose one. Unset, the readers pick for themselves
+    (the card when the install can see one, else the CPU)."""
+    return {"DESEMBARQUE_DEVICE": device} if device in ("cpu", "gpu") else {}
+
+
+# measured 2026-10-17: APESP p.6 with the second reading, 34 s on the RTX
+# 4050 and 181 s on its CPU (Windows), 96 s on the Linux CPU of the same laptop
+PAGE_S = {"gpu": 35, "cpu": 180}
+
+
+def _duration(s: float) -> str:
+    s = int(round(s))
+    if s < 60:
+        return f"{s} s"
+    if s >= 120:
+        # to the minute: "3 min 1 s" is a precision the measure does not have
+        return f"{int(round(s / 60))} min"
+    m, r = divmod(s, 60)
+    return f"{m} min {r} s" if r else f"{m} min"
+
+
+def page_estimate(device: str, measured: float | None = None) -> str:
+    """How long a page takes, measured on this machine when a page has been
+    read, else the figure for the device. Never a constant that pretends
+    to be a measurement: "uns 20 s" sat in the help while the Windows CPU
+    took three minutes (2026-10-17)."""
+    s = measured if measured else PAGE_S.get(device, PAGE_S["cpu"])
+    return f"uns {_duration(s)} por página"
+
+
+def install_command(root: Path = ROOT, tiers=TIER_ORDER, gpu: dict | None = None) -> list[list[str]]:
     """The commands that install these tiers, in order. `sys.executable` is
     the Python the launcher itself runs under, which is the one the person
     has. The venv is made only when it is not there: an install never does
-    again what is done, and never downloads what pip has in its cache."""
+    again what is done, and never downloads what pip has in its cache.
+
+    `gpu` is the card (`gpu()`); with one whose driver can take them, the
+    readers are the CUDA builds — torch from the cu130 index, paddle's GPU
+    wheel from PaddlePaddle's — in the same venv. The code picks the
+    device by what the install can see, so the install is the one lever
+    (Allan's RTX 4050 read on the CPU for a day, 2026-10-17). The `gpu`
+    tier alone switches a CPU venv already there: its wheels replaced,
+    never a second venv beside it."""
     py = (root / ".venv-ocr" / "Scripts" / "python.exe" if os.name == "nt"
           else root / ".venv-ocr" / "bin" / "python")
+    cuda = bool(gpu and gpu.get("cuda"))
+    pip = [str(py), "-m", "pip"]
+    paddle_gpu = pip + ["install", "--index-url", PADDLE_CUDA,
+                        "--extra-index-url", "https://pypi.org/simple", PADDLE_GPU, "numpy<2.4"]
     steps: list[list[str]] = []
     if not py.exists():
         steps.append([sys.executable, "-m", "venv", str(root / ".venv-ocr")])
-        steps.append([str(py), "-m", "pip", "install", "--upgrade", "pip"])
+        steps.append(pip + ["install", "--upgrade", "pip"])
     if "viewer" in tiers:
-        steps.append([str(py), "-m", "pip", "install", "-r", str(root / "requirements.txt")])
+        steps.append(pip + ["install", "-r", str(root / "requirements.txt")])
     if "engine" in tiers:
-        steps.append([str(py), "-m", "pip", "install", "-r", str(root / "requirements-ocr.txt")])
+        if cuda:
+            # the GPU paddle first: paddleocr does not depend on paddlepaddle,
+            # and requirements-ocr.txt names the CPU wheel, which pip then
+            # finds satisfied by the GPU one already there (same `paddle/`)
+            steps.append(paddle_gpu)
+            steps.append(pip + ["install", "paddleocr==3.7.0"])
+        else:
+            steps.append(pip + ["install", "-r", str(root / "requirements-ocr.txt")])
     if "handwriting" in tiers:
-        # the second reading of handwritten pages: kraken on a CPU-only torch
-        # (the default torch pulls CUDA, five gigabytes nobody here needs), and
-        # its PP-OCRv6 weights from Zenodo into ~/.cache/kraken
-        # one command, with the CPU wheels as an extra index: installed in two
-        # (CPU torch first, then kraken) pip resolved torch again from PyPI
-        # and the CUDA build came back, 2026-10-16
-        steps.append([str(py), "-m", "pip", "install", "--extra-index-url",
-                      "https://download.pytorch.org/whl/cpu", "torch", "torchvision",
-                      "-r", str(root / "requirements-kraken.txt")])
+        # the second reading of handwritten pages: kraken on torch — the CPU
+        # build (the default torch pulls CUDA, five gigabytes a machine
+        # without a card does not need) or the cu130 one — and its PP-OCRv6
+        # weights from Zenodo into ~/.cache/kraken.
+        # one command, with the wheels as an extra index: installed in two
+        # (torch first, then kraken) pip resolved torch again from PyPI and
+        # the other build came back, 2026-10-16
+        steps.append(pip + ["install", "--extra-index-url", TORCH_CUDA if cuda else TORCH_CPU,
+                            "torch", "torchvision", "-r", str(root / "requirements-kraken.txt")])
         steps.append([str(py), "-c", "from desembarque.secondreading import fetch_model; "
                                      "print(fetch_model())"])
+    if "gpu" in tiers and cuda and py.exists():
+        # the switch, in the venv that is there: paddle's CPU wheel out (the
+        # two share paddle/, so the GPU one must be put in with --no-deps
+        # after, 2026-10-17), torch replaced by the cu130 build
+        steps.append(pip + ["uninstall", "-y", "paddlepaddle"])
+        steps.append(paddle_gpu)
+        steps.append(pip + ["install", "--force-reinstall", "--no-deps", "--index-url",
+                            PADDLE_CUDA, PADDLE_GPU])
+        steps.append(pip + ["install", "--force-reinstall", "--extra-index-url", TORCH_CUDA,
+                            "torch==2.14.0", "torchvision==0.29.1"])
     return steps
+
+
+def uninstall(root: Path = ROOT, model: Path = MODEL, settings: Path = SETTINGS,
+              models: bool = True) -> list[str]:
+    """Remove what the install put on the machine and nothing else: the
+    venv, the launcher's settings, and with `models` the handwriting model's
+    folder under ~/.cache/kraken (kept for a reinstall otherwise). The PDFs
+    and their `transcriptions` folders are the person's and are not
+    touched. Returns what was removed, for the window to say."""
+    gone: list[str] = []
+    venv = root / ".venv-ocr"
+    if venv.exists():
+        shutil.rmtree(venv, ignore_errors=True)
+        gone.append(str(venv))
+    if models and model.parent.exists() and model.parent.name == "ppocrv6-hist":
+        shutil.rmtree(model.parent, ignore_errors=True)
+        gone.append(str(model.parent))
+    if settings.exists():
+        settings.unlink()
+        gone.append(str(settings))
+    return gone
+
+
+_DOWNLOAD = re.compile(r"^\s*Downloading\s+(\S+?)-\d[^\s]*\s+\((.+?)\)")
+_COLLECT = re.compile(r"^Collecting\s+([A-Za-z0-9_.\-]+)")
+
+
+def describe_install_line(line: str) -> str | None:
+    """pip's log, one line at a time, as a status line: what is being
+    downloaded and how big it is. None for the lines that say nothing
+    a person needs (progress ticks, warnings)."""
+    m = _DOWNLOAD.match(line)
+    if m:
+        return f"baixando {m.group(1)} ({m.group(2)})"
+    m = _COLLECT.match(line)
+    if m:
+        return f"resolvendo {m.group(1)}"
+    if line.startswith("Installing collected packages:"):
+        n = len([p for p in line.split(":", 1)[1].split(",") if p.strip()])
+        return f"instalando {n} pacote{'s' if n != 1 else ''}"
+    if line.startswith("Successfully installed"):
+        return "instalados: " + line.split(" ", 2)[2].strip()
+    return None
 
 
 def _get(port: int, path: str, timeout: float = 2.0, post: bool = False) -> dict | None:
@@ -240,23 +441,42 @@ só baixa o que falta e precisa de internet.
 
 Ligar
 Inicia o servidor (o programa que lê os PDFs) e abre a página no navegador,
-em http://127.0.0.1:{port}/. Carregar os modelos leva 1 a 2 minutos; a
-janela avisa quando está pronto. Fechar a aba do navegador desliga o
+em http://127.0.0.1:{port}/. Fechar a aba do navegador desliga o
 servidor; para voltar, clique em Ligar de novo.
+
+Ler usando: placa de vídeo ou processador
+Com uma placa NVIDIA e os leitores de GPU instalados, a leitura usa a
+placa: uns 35 s por página. No processador, uns 3 min por página. A
+janela diz qual placa há e o que está instalado; com placa e leitores de
+processador, "Instalar os leitores de GPU" troca-os (uns 3 GB, na mesma
+pasta .venv-ocr, sem instalar nada duas vezes). O tempo por página mostrado
+é o medido nesta máquina assim que uma página foi lida.
+
+Aquecer os leitores ao ligar
+Ligado por padrão: os modelos (uns 2,5 GB) são carregados assim que o
+servidor liga, e a página mostra "aquecendo o leitor…" até estarem
+prontos, 2 a 3 minutos. Mesmo assim a primeira página de uma sessão leva
+mais que as seguintes (na placa, uns 1,5 min a mais: é a placa se
+preparando na primeira leitura). Desligue para uma sessão só de busca,
+em que nada será transcrito: o servidor liga na hora.
 
 Ler os PDFs da pasta ao ligar
 Desligado por padrão: na página, cada documento tem o botão Transcrever
 (ou só uma página). Ligado, transcreve os PDFs da pasta que ainda não
-foram lidos. Cerca de 20 s por
-página: uma lista de 9 páginas leva uns 3 minutos; os já lidos são pulados.
-A linha de status diz em que documento está e quanto falta. Enquanto lê, o
-computador fica lento.
+foram lidos; os já lidos são pulados. A linha de status diz em que
+documento está e quanto falta. Enquanto lê, o computador fica lento.
 
 Parar ao fim da página
-Para a leitura da pasta assim que a página em leitura termina (uns 20 s).
+Para a leitura da pasta assim que a página em leitura termina.
 O que já foi lido fica, página por página; Ligar de novo continua da
 página seguinte. Para abortar e descartar o documento em andamento, use o
 botão Abortar na caixa de progresso da página.
+
+Desinstalar
+Na janela Verificar a instalação: apaga a pasta .venv-ocr (tudo o que foi
+instalado) e, se marcado, o modelo de letra manuscrita baixado em
+~/.cache/kraken. Os PDFs e as subpastas "transcriptions" são seus e não
+são tocados. Depois, basta apagar a pasta do programa.
 
 Desligar
 Para o servidor; fechar a janela ou a aba do navegador faz o mesmo. A aba
@@ -299,7 +519,8 @@ class Server:
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
-    def start(self, folder: Path, port: int, wait: float = 180.0) -> bool:
+    def start(self, folder: Path, port: int, wait: float = 180.0,
+              env: dict | None = None) -> bool:
         """True once the port answers. False, with `last_error`, when the
         process dies first or the wait runs out. Three minutes: the engine
         loads its models before the port answers, and on a laptop already
@@ -311,6 +532,8 @@ class Server:
         kw = {}
         if os.name == "nt":
             kw["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        if env:
+            kw["env"] = {**os.environ, **env}
         self.log.clear()
         self.proc = subprocess.Popen(self._command(folder, port),
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

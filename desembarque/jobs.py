@@ -11,6 +11,7 @@ opening the same dossier from a different folder, reuses the work.
 from __future__ import annotations
 
 import json
+import queue
 import threading
 import time
 import uuid
@@ -56,6 +57,38 @@ class JobRunner:
         self._jobs: dict[str, Job] = {}
         self._by_hash: dict[str, str] = {}
         self._lock = threading.Lock()
+        # one worker thread for every job, kept: the engine's predictors
+        # are per thread, and a thread per job rebuilt them on every
+        # Transcrever — 27 of a page's 33 s on the card (2026-10-18)
+        self._queue: queue.Queue = queue.Queue()
+        self._worker: threading.Thread | None = None
+
+    def _ensure_worker(self) -> None:
+        if self._worker is None or not self._worker.is_alive():
+            self._worker = threading.Thread(target=self._loop, name="jobs", daemon=True)
+            self._worker.start()
+
+    def _loop(self) -> None:
+        while True:
+            fn = self._queue.get()
+            try:
+                fn()
+            except Exception:   # a job's own errors are caught in run(); this is the hook's
+                pass
+
+    def on_worker(self, fn: Callable[[], None]) -> threading.Event:
+        """Run `fn` on the worker thread — the warm-up, so what it builds
+        is what the next job uses. The event is set when it has run."""
+        done = threading.Event()
+
+        def go() -> None:
+            try:
+                fn()
+            finally:
+                done.set()
+        self._queue.put(go)
+        self._ensure_worker()
+        return done
 
     # ---- cache -------------------------------------------------------------
     def cached_path(self, doc_hash: str) -> Path:
@@ -117,5 +150,6 @@ class JobRunner:
             finally:
                 job.finished = time.time()
 
-        threading.Thread(target=run, daemon=True).start()
+        self._queue.put(run)
+        self._ensure_worker()
         return job

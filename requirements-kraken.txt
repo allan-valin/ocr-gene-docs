@@ -2,8 +2,10 @@
 # medium weights for historical hands (Apache-2.0, Zenodo 21788410): the
 # second reading of every handwritten page, run per document at index time by
 # `desembarque.secondreading` since 2026-10-16. The launcher's Instalar step
-# installs this into .venv-ocr after a CPU-only torch and fetches the weights
-# to ~/.cache/kraken/ppocrv6-hist/medium.safetensors (61 MB). By hand:
+# installs this into .venv-ocr with torch — the CPU build, or the cu130 one
+# when nvidia-smi shows a card with a 580+ driver (launcher/core.py
+# install_command, since the Windows test of 2026-10-17) — and fetches the
+# weights to ~/.cache/kraken/ppocrv6-hist/medium.safetensors (61 MB). By hand:
 #
 #   .venv-ocr/bin/pip install --extra-index-url https://download.pytorch.org/whl/cpu \
 #       torch torchvision -r requirements-kraken.txt

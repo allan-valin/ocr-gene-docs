@@ -20,6 +20,9 @@ whether the pass ran.
 """
 from __future__ import annotations
 
+import threading
+import time
+
 import re
 
 import unicodedata
@@ -48,9 +51,14 @@ def _cuda() -> bool:
 
 def device_for() -> str:
     """Where kraken runs: the GPU when torch can see one, else the CPU.
-    Decided by the machine, never by a flag: Allan's laptop has an RTX
+    Decided by the machine, not by a flag: Allan's laptop has an RTX
     4050 and read every page on the CPU for a day (2026-10-17); a friend's
-    has none and must not be told to look for one."""
+    has none and must not be told to look for one. The one exception is
+    the launcher's toggle, `DESEMBARQUE_DEVICE=cpu`, which keeps a card
+    idle on purpose; `gpu` asks for the card and gets the CPU without one."""
+    import os
+    if os.environ.get("DESEMBARQUE_DEVICE", "").lower() == "cpu":
+        return "cpu"
     # `cuda:0`, not `cuda`: kraken's recogniser splits the device on the
     # colon and fell over without one (segmentation took either)
     return "cuda:0" if _cuda() else "cpu"
@@ -92,6 +100,43 @@ def fetch_model(dest: Path = MODEL, url: str = MODEL_URL) -> Path:
             f.write(chunk)
     tmp.replace(dest)
     return dest
+
+
+_SEG = None
+_SEG_LOCK = threading.Lock()
+
+
+def _load_seg():
+    """kraken's default segmentation model, from its package."""
+    import importlib.resources as resources
+    from kraken.lib import vgsl
+    return vgsl.TorchVGSLModel.load_model(resources.files("kraken").joinpath("blla.mlmodel"))
+
+
+def seg_model():
+    """The segmentation model, loaded once: `blla.segment` given none
+    loads it from disk on every page (2026-10-18)."""
+    global _SEG
+    with _SEG_LOCK:
+        if _SEG is None:
+            _SEG = _load_seg()
+        return _SEG
+
+
+def warm(model_path: Path = MODEL) -> str:
+    """Load both models from disk now, so a page does not pay for it.
+    Returns "" or what went wrong; never raises. Nothing to do without
+    kraken or its model. Not a read of a blank page: tried 2026-10-18,
+    kraken asked the card for 3.7 GB for a 256×64 blank and the OOM left
+    the first real page slower than with no warm-up at all."""
+    if not available(model_path):
+        return ""
+    try:
+        load_model(model_path)
+        seg_model()
+        return ""
+    except Exception as e:
+        return f"kraken: {type(e).__name__}: {e}"
 
 
 def load_model(path: Path = MODEL):
@@ -487,7 +532,7 @@ def _lines_of(image: Path, model, device: str) -> list[dict]:
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = None
     with Image.open(image) as im:
-        return read_page(im.convert("L"), None, model, device=device)
+        return read_page(im.convert("L"), seg_model(), model, device=device)
 
 
 def read_record(record: dict, images: dict[int, Path], read=None,
@@ -518,7 +563,13 @@ def read_record(record: dict, images: dict[int, Path], read=None,
            for p in record.get("pages") or () if isinstance(p, dict)}
     said: dict[int, dict[int, str]] = {}
     rerowed: dict[int, tuple[list[dict], list[list[float]]]] = {}
-    for n in wanted:
+    from . import live
+    for i, n in enumerate(wanted):
+        # the page watching is told which page kraken is on, of how many:
+        # on a CPU this phase is two thirds of the document and the box
+        # showed nothing of it (Windows test, 2026-10-17)
+        live.emit({"event": "second", "page": n, "done": i, "total": len(wanted)})
+        t0 = time.time()
         try:
             lines = read(images[n])
         except Exception as e:      # one page must not cost the document
@@ -526,6 +577,8 @@ def read_record(record: dict, images: dict[int, Path], read=None,
             if log:
                 log(f"second reading of page {n} failed: {e}")
             continue
+        finally:
+            live.emit({"event": "second_done", "page": n, "seconds": time.time() - t0})
         if rerow:
             on_page = [r for r in record.get("rows") or () if r.get("page") == n]
             rows, extents = rows_from_lines(on_page, lines, geo.get(n, {}))

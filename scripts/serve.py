@@ -549,6 +549,7 @@ def _transcribe_document(pdf: Path, job, eng) -> dict:
             break
         job.page = n
         live.emit({"event": "page", "page": n})
+        page_t0 = time.time()
         img = page_image(pdf, n, CACHE) or render_page(pdf, n, dpi=200)
         if img is None:
             pages.append({"n": n, "error": "render failed"})
@@ -558,6 +559,9 @@ def _transcribe_document(pdf: Path, job, eng) -> dict:
                            is_complete(voyage))
         res = eng.transcribe_page(img, classify(n), source=pdf, page=n,
                                   text=want)
+        # the seconds this page took the engine, for the estimate the
+        # progress box shows: measured here, never a constant
+        live.emit({"event": "page_done", "page": n, "seconds": time.time() - page_t0})
         page = {"n": n, "kind": res.kind, "error": res.error}
         # What the page said as prose, and where each fragment sat. Reading a
         # page costs twenty seconds and re-reading the corpus costs hours, so
@@ -632,6 +636,50 @@ def hash_index(folder: Path) -> dict[str, str]:
         except OSError:
             continue
     return out
+
+
+# The readers' models load on the first page they read, so the first page
+# of a session was minutes slower than the rest, with "available: true" on
+# the engine all along (Windows test, 2026-10-17). With `--warm` they are
+# loaded at start, and the page shows "aquecendo o leitor…" until `warm`.
+WARM = {"state": "cold", "error": ""}
+
+
+def warm_the_readers() -> None:
+    """Load the engine's predictors and kraken's model on this thread.
+    `WARM` goes warming → warm; a reader that fails leaves its error in
+    `WARM["error"]` and the state warm anyway, so nothing waits for ever
+    (the page is then read as it always was, and the error is logged)."""
+    WARM["state"] = "warming"
+    errors = []
+    eng = engines.active()
+
+    def warm_engine() -> None:
+        try:
+            if eng.available() and hasattr(eng, "warm"):
+                eng.warm()
+        except Exception as e:
+            errors.append(f"engine: {type(e).__name__}: {e}")
+    # on the job runner's thread: the predictors are per thread, and that
+    # is the thread Transcrever reads on (the folder index's workers build
+    # their own, once per run)
+    JOBS.on_worker(warm_engine).wait(600)
+    said = secondreading.warm()
+    if said:
+        errors.append(said)
+    WARM["error"] = "; ".join(errors)
+    WARM["state"] = "warm"
+    if errors:
+        print("warm-up: " + WARM["error"], flush=True)
+
+
+def device_name() -> str:
+    """`gpu` or `cpu`: where the engine reads, as the page says it."""
+    try:
+        from desembarque.engine_paddle import device_for
+        return "gpu" if device_for() != "cpu" else "cpu"
+    except Exception:
+        return "cpu"
 
 
 def warm_the_index(root: Path | None = None) -> None:
@@ -873,7 +921,13 @@ class Handler(BaseHTTPRequestHandler):
                 # a cursive page is read by the engine alone, and the
                 # record's note of that is where nobody looks
                 return self._send(200, {**engines.status(),
-                                        "second_reading": secondreading.status()})
+                                        "second_reading": secondreading.status(),
+                                        # cold | warming | warm, the device read
+                                        # on, and the seconds a page has been
+                                        # measured to take here (None before one)
+                                        "warm": WARM["state"], "warm_error": WARM["error"],
+                                        "device": device_name(),
+                                        "page_s": live.estimate()})
 
             if u.path == "/api/live":
                 # what the engine is reading on this document right now:
@@ -1074,6 +1128,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--store", type=Path, default=None,
                     help="where the transcriptions are kept; the default is "
                          "a 'transcriptions' folder inside --root")
+    ap.add_argument("--warm", action="store_true",
+                    help="load the readers' models at start, not inside the first page")
     args = ap.parse_args(argv)
 
     root = args.root.expanduser().resolve()
@@ -1093,6 +1149,8 @@ def main(argv: list[str] | None = None) -> int:
     # in the background: the port answers immediately, and the corpus is ready
     # by the time a name has been typed into it
     threading.Thread(target=warm_the_index, daemon=True).start()
+    if args.warm:
+        threading.Thread(target=warm_the_readers, daemon=True).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

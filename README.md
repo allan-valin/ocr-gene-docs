@@ -113,21 +113,30 @@ reader) and offers to install what is missing or to go on with what there is,
 then *Ligar* on a folder of PDFs — it opens the browser — and *Desligar*;
 closing the window or the browser tab stops the server too. Transcriptions are written to a `transcriptions` folder inside the
 folder of PDFs (the repository's own `data/scans` keeps `data/transcriptions`;
-`--store` overrides). It needs only a Python from python.org.
+`--store` overrides). It needs only a Python from python.org — on Windows
+not even that: `Desembarque.bat` installs one, per user, when none is found.
+The window shows which NVIDIA card is there and installs the CUDA readers
+when its driver can take them (580+), with a *Ler usando* toggle between
+card and CPU and the measured seconds per page beside each; *Aquecer os
+leitores ao ligar* loads the models at start so the first page is not the
+slow one; *Desinstalar* removes `.venv-ocr` and (if wanted) the model.
 `launcher/README.md` says this in Portuguese, step by step, with a section per
 system:
 
-* **Windows** — python.org 3.12 with *Add python.exe to PATH*, then
-  `Desembarque.bat`. The PDFs must be on a drive Windows can read (a Linux
-  partition is not). CPU wheels by default. Not yet tried on Windows.
+* **Windows** — `Desembarque.bat`: finds python.org's Python wherever it is,
+  or downloads and silently installs 3.12 without touching PATH. The PDFs
+  must be on a drive Windows can read (a Linux partition is not). Tried on
+  Windows 11 on 2026-10-17 with the previous version
+  (`docs/WINDOWS-TEST-2026-10-17.md`): the report's fixes are in, the new
+  `.bat` and the GPU install are not yet seen running there. A native
+  Inno Setup installer is written but not built: `installer/`.
 * **macOS** — python.org 3.12 (its Tk is what the window needs), then
   `Desembarque.command`; the first run needs right-click → Open past
   Gatekeeper. Not yet tried on a Mac.
 * **Linux** — `python3`, `python3-venv`, `python3-tk` from the distribution,
   then `Desembarque.sh` (or `sh Desembarque.sh`). With an NVIDIA card the
-  CUDA builds go into the same `.venv-ocr` (commands in
-  `requirements-kraken.txt`); the code picks the device by what the install
-  can see. Tried here.
+  install puts the CUDA builds into the same `.venv-ocr`; the code picks the
+  device by what the install can see, or by the window's toggle. Tried here.
 
 Each system needs its own copy of the folder and its own `.venv-ocr`; a
 venv made on one does not run on another.

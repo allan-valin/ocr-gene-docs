@@ -1320,3 +1320,66 @@ def test_the_names_endpoint_hands_over_everything_when_asked(server, monkeypatch
     _, j = call(f"{base}/api/names?q=Kuboch&all=1")
     assert "arquivo" in j and "traco" in j
     assert any(n["name"] == "KUBACH" for g in j["traco"] for n in g["names"])
+
+
+def test_the_engine_status_says_whether_the_readers_are_warm_and_how_long_a_page_takes(server, monkeypatch):
+    """`/api/engine` said "available" the instant the port answered, which
+    means registered, not loaded: the first page paid the model load with
+    no explanation (Windows, 2026-10-17). With `--warm` the server loads
+    the models at start and the page shows "aquecendo o leitor…" until
+    `warm` is true. The device read on and the seconds a page has been
+    measured to take go with it, for the honest estimate."""
+    from desembarque import live
+    base, _ = server
+    monkeypatch.setattr(serve, "WARM", {"state": "cold", "error": ""})
+    live.forget_timings()
+    _, e = call(f"{base}/api/engine")
+    assert e["warm"] == "cold" and e["page_s"] is None and e["device"] in ("cpu", "gpu")
+    monkeypatch.setitem(serve.WARM, "state", "warming")
+    assert call(f"{base}/api/engine")[1]["warm"] == "warming"
+    live.emit_timing("page", 11.0)
+    live.emit_timing("second", 23.0)
+    assert call(f"{base}/api/engine")[1]["page_s"] == 34.0
+    live.forget_timings()
+
+
+def test_warming_up_loads_both_readers_and_says_so(monkeypatch):
+    """`warm_the_readers` builds the engine's predictors and loads kraken's
+    model, and `WARM` goes cold → warming → warm; a reader that fails to
+    load leaves `warm` with the error in it, never a server that hangs."""
+    monkeypatch.setattr(serve, "WARM", {"state": "cold", "error": ""})
+    calls = []
+
+    class Eng:
+        name = "fake"
+        def available(self): return True
+        def warm(self): calls.append("engine")
+    monkeypatch.setattr(engines, "_ACTIVE", Eng())
+    monkeypatch.setattr(serve.secondreading, "warm", lambda: calls.append("kraken") or "")
+    serve.warm_the_readers()
+    assert calls == ["engine", "kraken"] and serve.WARM["state"] == "warm"
+    monkeypatch.setattr(serve.secondreading, "warm", lambda: "kraken: no cuda")
+    serve.warm_the_readers()
+    assert serve.WARM["state"] == "warm" and "no cuda" in serve.WARM["error"]
+
+
+def test_the_engine_is_warmed_on_the_thread_that_reads_documents(server, monkeypatch):
+    """The engine's predictors are per thread, so warming on a thread of
+    the warm-up's own bought the reading thread nothing but the disk
+    cache: the first page still paid 27 s of predictor building
+    (measured 2026-10-18). The warm-up runs on the job runner's worker."""
+    import threading
+    base, _ = server
+    monkeypatch.setattr(serve, "WARM", {"state": "cold", "error": ""})
+    threads = []
+
+    class Eng:
+        name = "fake"
+        def available(self): return True
+        def warm(self): threads.append(threading.current_thread())
+    monkeypatch.setattr(engines, "_ACTIVE", Eng())
+    monkeypatch.setattr(serve.secondreading, "warm", lambda: "")
+    serve.warm_the_readers()
+    done = serve.JOBS.on_worker(lambda: threads.append(threading.current_thread()))
+    assert done.wait(2)
+    assert len(threads) == 2 and threads[0] is threads[1]

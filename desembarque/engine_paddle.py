@@ -739,9 +739,14 @@ def _gpu_count() -> int:
 
 def device_for() -> str:
     """Where the predictors run: `gpu:0` when this paddle is a CUDA build
-    and a card is there, else `cpu`. Decided by the install, never by a
+    and a card is there, else `cpu`. Decided by the install, not by a
     flag — Allan's laptop has an RTX 4050 and every page was read on the
-    CPU until 2026-10-17; a friend's has no card."""
+    CPU until 2026-10-17; a friend's has no card. The one exception is the
+    launcher's toggle, `DESEMBARQUE_DEVICE=cpu`, which keeps a card idle
+    on purpose; `gpu` asks for the card and gets the CPU without one."""
+    import os
+    if os.environ.get("DESEMBARQUE_DEVICE", "").lower() == "cpu":
+        return "cpu"
     return "gpu:0" if _gpu_count() > 0 else "cpu"
 
 
@@ -831,6 +836,19 @@ class PaddleEngine:
         if rec is None:
             rec = self._local.rec = self._make_recogniser()
         return rec
+
+    def warm(self) -> None:
+        """Build this thread's recogniser and detector now, so the models
+        are read from disk (and the card's context made) before the first
+        page rather than inside it: on the Windows laptop the first page
+        was a minute slower than the rest, unexplained (2026-10-17). The
+        recogniser and detector are per thread, so on another thread this
+        buys the model files in the disk cache and the card's context,
+        which are the process's; the whole-page pipeline is shared and is
+        warmed outright. A second call on a warm thread does nothing."""
+        self._recogniser()
+        self._detector()
+        self._full_page()
 
     def _build_page(self, mkldnn: bool):
         from paddleocr import PaddleOCR

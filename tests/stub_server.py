@@ -44,4 +44,7 @@ if "--die-after" in sys.argv:
     threading.Timer(delay, lambda: sys.exit(7)).start()
     import os
     threading.Timer(delay + 0.5, lambda: os._exit(7)).start()
+if "--say-device" in sys.argv:
+    import os
+    print("device=" + os.environ.get("DESEMBARQUE_DEVICE", "unset"), flush=True)
 HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()

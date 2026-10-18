@@ -100,3 +100,28 @@ def test_transcribing_again_does_not_discard_what_a_person_typed(tmp_path):
     out = runner.cached("h")
     assert out["rows"][0]["surname"] == "CONTADORE"
     assert out["voyage"] == {"ship": "Valdivia"}
+
+
+def test_jobs_run_one_after_another_on_one_thread_that_can_be_warmed(tmp_path):
+    """Every job ran on a thread of its own, and the engine's predictors
+    are per thread: each Transcrever rebuilt them, 27 of a page's 33
+    seconds on the GPU (measured 2026-10-18). One worker thread for all
+    jobs, kept, so the predictors are built once — and `on_worker` runs
+    the warm-up on that very thread, the one that will read."""
+    import threading
+    r = JobRunner(tmp_path)
+    seen = []
+
+    def work(job):
+        seen.append(threading.current_thread().name)
+        time.sleep(0.05)
+        return {"rows": []}
+
+    a = r.submit("a", "a", 1, work)
+    b = r.submit("b", "b", 1, work)
+    assert b.status == "queued"
+    assert wait_for(a, {"done"}) == "done" and wait_for(b, {"done"}) == "done"
+    assert len(set(seen)) == 1, "one thread, so what it built it keeps"
+    done = r.on_worker(lambda: seen.append(threading.current_thread().name))
+    assert done.wait(2)
+    assert len(set(seen)) == 1

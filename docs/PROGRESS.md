@@ -6,6 +6,95 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-18 — the Windows test's fixes
+
+Allan ran the launcher on Windows 11 on 2026-10-17 (RTX 4050, ZIP
+download, no terminal) and had the Windows Claude write it up from his
+notes: `docs/WINDOWS-TEST-2026-10-17.md`, seven items. Done this session,
+in its order, except what needs a Windows machine:
+
+* **§1 Python without PATH.** `Desembarque.bat` finds python.org's Python
+  wherever its installer put it (per-user, all-users, the `py` launcher,
+  any `pythonw` on the PATH that is not the Store's stub) and, with none,
+  downloads 3.12.10 from python.org and installs it silently, per user,
+  `PrependPath=0`. A native installer is written, not built:
+  `installer/Desembarque.iss` (Inno Setup: downloads Python, Start-menu
+  shortcut, uninstaller removes `.venv-ocr` and asks about the model) with
+  a checklist in `installer/README.md`. **The install shows a bar** that
+  counts its commands and a line from pip's log: "baixando torch (2.9 GB)".
+* **§2 Desinstalar…** in the check window: `core.uninstall` removes
+  `.venv-ocr`, the settings, and on a second question the model folder;
+  PDFs and `transcriptions` untouched. Migration of an old ZIP's venv to
+  an installer location: not done (the installer does not exist yet).
+* **§3 + §4 the progress box.** No clock against "uns 20 s" any more:
+  the page bar shows the phase (`live.phase`: cutting → reading →
+  second), names read of names cut when there are names, an indeterminate
+  bar with "procurando as linhas da tabela… (há N s)" before, and "lendo
+  as linhas à mão…" during the kraken pass, which **now reports** each
+  page it is on (`live.emit second`), so the document bar counts engine
+  pages plus handwritten pages instead of stalling at the last page. The
+  box **never minimises by itself**: only Esconder. The hint and the
+  request line say the measured time per page (`/api/engine page_s`: the
+  median engine time plus the median second-reading time, kept in
+  `live.timings`), or the device's figure (35 s GPU, 3 min CPU) before one
+  is measured.
+* **§5 the card.** `core.gpu()` reads nvidia-smi (name, driver); a 580+
+  driver makes `install_command` take the cu130 wheels (torch from the
+  cu130 index; `paddlepaddle-gpu==3.4.0` from PaddlePaddle's cu130 index,
+  put in before `paddleocr`, whose requirements do not name paddle). Both
+  wheels exist for win_amd64 and linux, cp310–cp313 (checked on the
+  indexes). `readiness()["gpu"]` reads torch's and paddle's version files,
+  no interpreter. The window says the card and the install ("os leitores
+  instalados são os de processador"), offers **Instalar os leitores de
+  GPU** (the `gpu` tier: paddle CPU out, GPU in with `--no-deps` after,
+  torch force-reinstalled; in the venv that is there, never a second one),
+  and **Ler usando: placa de vídeo / processador** with the time per page
+  beside each — measured on this machine once the server has read a page.
+  `DESEMBARQUE_DEVICE=cpu` keeps a card idle on purpose in both
+  `device_for()`s; AMD/Intel/Apple: not looked for (the report's §5 table
+  says what each costs).
+* **§6 Aquecer os leitores ao ligar**, on by default: `serve.py --warm`
+  builds the engine's predictors on the job runner's thread — **the job
+  runner is one kept thread now** (`JobRunner.on_worker`): the predictors
+  are per thread and a thread per job rebuilt them on every Transcrever —
+  and loads kraken's two models (its default segmentation model was read
+  from disk on every page: `seg_model()`, once). `/api/engine` says
+  `warm: cold|warming|warm`; the page shows "Aquecendo o leitor…
+  carregando os modelos" in the progress box until warm, the launcher
+  logs it. Off = a search-only session, server up at once.
+  **Measured, honestly (GPU, APESP p.6):** warm-up 194 s; the first page
+  after it 106 s (engine 28 s, kraken 77 s); the same page again 24 s
+  (5 s + 19 s). Without the warm-up the first page was 93 s. So the
+  warm-up explains the wait but does not remove the first page's tax: it
+  is the card's first kraken call (isolated, kraken takes 18 s on this
+  page every time, so it is first-call/cudnn work, not the model load),
+  and a blank-page warm read asked the card for 3.7 GB (a 256×64 blank is
+  scaled up to kraken's input height) and OOMed, leaving the real page
+  slower. Open: a warm read of a page-shaped blank, or of the folder's
+  first page, with the VRAM (4.3 GB of 5.6 in use with paddle resident)
+  watched. The help says the first page of a session is slower.
+* **§7 read only this area / column**: not started; see the to-do below.
+* The 5-bands-for-33-lines detector (§3's root cause) is the
+  distrusted-grid path of 2026-10-16 (`rows_from_lines`), already in.
+
+Measured here with the real server (`--warm`, GPU, APESP p.6): the phases
+came through `/api/live` as cutting (24 s) → reading (5 bands) → second
+(reported per page); `page_s` on `/api/engine` after the page. Tests:
+1085 pass.
+
+**Not seen on Windows**: the new `.bat` (the python.org download and
+silent install), the CUDA install path, the `.iss`. Allan's next Windows
+try is the test; the old ZIP copy on his Desktop has a CPU venv that
+"Instalar os leitores de GPU" should switch in place.
+
+**To-do, from the report**: (a) read only this area/column — user-drawn
+regions on the scan, read alone, in a "Leitura personalizada" tab beside
+the full read (§7; the right answer to ruleless tables and double pages);
+(b) migrate/scrub an old ZIP venv when the native installer lands (§2);
+(c) AMD/Intel/Apple acceleration for kraken via MPS/ROCm/DirectML (§5),
+needs such a machine; (d) build and test the Inno Setup installer on
+Windows (§1).
+
 ## 2026-10-17, menu — every reading for a word, in a box
 
 Allan on Kuboch: the menu offered KORCH and five first-letter capital
