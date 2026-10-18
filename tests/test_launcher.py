@@ -501,3 +501,39 @@ def test_the_window_offers_the_device_the_warm_up_and_an_uninstall(monkeypatch):
         assert any(t.startswith("Desinstalar") for t in texts)
     finally:
         root.destroy()
+
+
+@pytest.mark.skipif(not os.environ.get("DISPLAY"), reason="no display")
+def test_the_card_is_the_default_once_it_is_known_to_be_usable(monkeypatch, tmp_path):
+    """Allan, 2026-10-18: "if gpu is available, using it should be default".
+    The radio was set before nvidia-smi had answered, fell to CPU, and
+    stayed there. The card is the default when it is usable and the
+    person has not chosen; a saved choice is kept."""
+    from tkinter import Tk
+    import launcher.desembarque_launcher as dl
+    card = {"vendor": "nvidia", "name": "RTX", "driver": "595.99.02", "cuda": True}
+    ready = {"python": True, "viewer": True, "engine": True, "handwriting": True, "gpu": True}
+    monkeypatch.setattr(core, "gpu", lambda: card)
+    monkeypatch.setattr(core, "readiness", lambda *a, **k: ready)
+    monkeypatch.setattr(core, "load_settings", lambda *a: {})
+    monkeypatch.setattr(core, "SETTINGS", tmp_path / "s.json")
+    root = Tk()
+    root.withdraw()
+    try:
+        w = dl.Window(root)
+        root.update()
+        w._handle(("gpu", card))
+        assert w.device.get() == "gpu"
+        assert str(w.r_gpu.cget("state")) == "normal"
+        # the person chose the CPU last time: kept
+        monkeypatch.setattr(core, "load_settings", lambda *a: {"device": "cpu"})
+        w2 = dl.Window(root)
+        w2._handle(("gpu", card))
+        assert w2.device.get() == "cpu"
+        # no usable card: CPU, whatever was saved
+        monkeypatch.setattr(core, "load_settings", lambda *a: {"device": "gpu"})
+        w3 = dl.Window(root)
+        w3._handle(("gpu", None))
+        assert w3.device.get() == "cpu"
+    finally:
+        root.destroy()

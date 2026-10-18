@@ -49,6 +49,7 @@ class Window:
         # where to read and whether to load the models at start (Windows
         # test, 2026-10-17): the card when the install can use one
         self.device = StringVar(value=self.settings.get("device", "gpu"))
+        self.device_chosen = "device" in self.settings   # else the card when usable
         self.warm = BooleanVar(value=self.settings.get("warm", True))
         self.card: dict | None = None
         self.card_known = False
@@ -121,9 +122,9 @@ class Window:
         dev.pack(fill=X, pady=(4, 0))
         ttk.Label(dev, text="Ler usando:").pack(side=LEFT)
         self.r_gpu = ttk.Radiobutton(dev, text="placa de vídeo", variable=self.device, value="gpu",
-                                     command=self._save)
+                                     command=self._chose_device)
         self.r_cpu = ttk.Radiobutton(dev, text="processador", variable=self.device, value="cpu",
-                                     command=self._save)
+                                     command=self._chose_device)
         self.r_gpu.pack(side=LEFT, padx=(8, 0))
         self.r_cpu.pack(side=LEFT, padx=(8, 0))
         self.b_gpu = ttk.Button(dev, text="Instalar os leitores de GPU (uns 3 GB)",
@@ -168,8 +169,14 @@ class Window:
             state=NORMAL if usable else DISABLED)
         self.r_cpu.configure(text="processador (" + core.page_estimate(
             "cpu", measured if self.device.get() == "cpu" else None) + ")")
-        if not usable and self.device.get() == "gpu":
-            self.device.set("cpu")
+        # the card is the default once it is known to be usable (Allan,
+        # 2026-10-18); before nvidia-smi has answered nothing is decided,
+        # or the radio fell to CPU and stayed there
+        if self.card_known:
+            if not usable and self.device.get() == "gpu":
+                self.device.set("cpu")
+            elif usable and not self.device_chosen:
+                self.device.set("gpu")
         if self.card_known:
             self.card_line.configure(text=core.describe_gpu(self.card, ready))
         if self.card and self.card.get("cuda") and not ready.get("gpu") and ready.get("engine") \
@@ -177,6 +184,11 @@ class Window:
             self.b_gpu.pack(side=LEFT, padx=(12, 0))
         else:
             self.b_gpu.pack_forget()
+
+    def _chose_device(self) -> None:
+        self.device_chosen = True
+        self._save()
+        self._device_lines()
 
     def _say(self, line: str) -> None:
         self.log.configure(state=NORMAL)
