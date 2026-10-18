@@ -123,17 +123,26 @@ def seg_model():
         return _SEG
 
 
+# a blank the shape of a page, for the warm read: kraken scales what it
+# segments to its input height, so a 256×64 blank became 4800×1200 and
+# asked the card for 3.7 GB (OOM, 2026-10-18); a page-shaped one is
+# scaled down, not up
+WARM_BLANK = (1240, 1754)
+
+
 def warm(model_path: Path = MODEL) -> str:
-    """Load both models from disk now, so a page does not pay for it.
-    Returns "" or what went wrong; never raises. Nothing to do without
-    kraken or its model. Not a read of a blank page: tried 2026-10-18,
-    kraken asked the card for 3.7 GB for a 256×64 blank and the OOM left
-    the first real page slower than with no warm-up at all."""
+    """Load both models and segment a page-shaped blank, so the card's
+    first-call cost (two minutes on the RTX 4050 with paddle resident,
+    against ten seconds steady, measured 2026-10-18) is paid at start and
+    not inside the first page a person asks for. Returns "" or what went
+    wrong; never raises. Nothing to do without kraken or its model."""
     if not available(model_path):
         return ""
     try:
-        load_model(model_path)
-        seg_model()
+        from PIL import Image
+        rec = load_model(model_path)
+        seg = seg_model()
+        read_page(Image.new("L", WARM_BLANK, 255), seg, rec, device=device_for())
         return ""
     except Exception as e:
         return f"kraken: {type(e).__name__}: {e}"

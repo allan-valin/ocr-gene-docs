@@ -6,6 +6,66 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-18, later — read only this area / column (§7 of the Windows report)
+
+Allan: "proceed with region read", and "also check the certidao files".
+Built, API checked on his folder; the page's drawing tool is written and
+syntax-checked but has not been clicked in a browser.
+
+* **`desembarque/regions.py`**: `normalize` (corners ordered, clamped,
+  the tiny dropped), `read_regions` (each region cropped from the page
+  image, read as lines by a callable, the lines put back in page
+  coordinates), `rows_from_regions` (the regions' lines aligned into rows
+  by height — a line joins the row it overlaps by half its height, one
+  line per region per row, lines of one region never merge — the first
+  region the name). Tests in `tests/test_regions.py`.
+* **Server**: `POST /api/transcribe?pdf=&page=N&regions=[{x0,y0,x1,y1}…]`
+  → `transcribe_regions`: kraken on the crops when installed (the feature
+  exists for handwriting), else the engine's prose read of the crop; the
+  result under `custom[str(page)]` of the record — `regions`, `rows`
+  (`cells` per region, `page_y`), `lines`, `reader` — the full reading
+  untouched; a document never read gets a skeleton record. `/api/corpus`
+  carries `custom`. Search indexes **every name-like cell** of a custom
+  row (a word of three letters or more): certidão 1 is a double page with
+  a name column on each side, and Kubach's marriage in the right page's
+  column was not found while only the first cell was indexed. Hits carry
+  `custom` and `cell`.
+* **Page**: "Ler só uma área" on the scan toolbar — "＋ Coluna a ler"
+  (drag on the image, crosshair, several regions, Esc leaves the mode),
+  numbered dashed overlays in % units (the zoom keeps them), × per region,
+  Limpar, "Ler as áreas". The right pane gets tabs when a page has regions
+  or a custom reading: "Leitura completa" | "Leitura personalizada (N
+  linhas)" — a table with one column per region and the row's height; a
+  row click outlines it on the scan; a search hit from a custom row opens
+  that tab. After a region read the page stays on its page (it used to jump
+  to the first page with rows) and the custom tab opens. Regions already
+  read are shown again as overlays when the page is reopened.
+
+**Measured on real pages** (GPU, server with `--warm`):
+
+| page | regions | result | time |
+|---|---|---|---|
+| APESP p.6, name + age columns (my sloppy regions) | 2 | 84 rows; "Kuboch August" row 69, found by search as a custom row | 133 s cold, then 11 s, 8 s |
+| Certidão de casamento 1 p.1 (ruleless double-page index) | 10 (5 per page) | 39 rows × 10 cells; row 4 right: "Augusts Friederich Kubach \| Edaliza Grillo Cordiin"; year headings as rows of their own | 29 s |
+| Certidão de casamento 2 p.1 (prose, two pages) | 2 | 39 rows of two prose lines; "Augarts Friederich Kubach" in the right page's line 5 | 21 s |
+
+Isolated, a cropped column costs kraken 10 s (segment 8.7 s, recognise
+1.6 s), so the cold 133 s is the card's first kraken call in a process
+where paddle holds 3.3 of 5.6 GB. The warm-up now segments a
+**page-shaped blank** (1240×1754; the 256×64 one was scaled up to
+4800×1200 by kraken and OOMed): the first region read fell to 97 s, the
+rest 11 s and 8 s — a partial gain, no harm, kept. What the remaining
+~90 s is (recognition's first call? cudnn autotuning per shape?) is not
+measured; a warm read of a page with writing on it would tell.
+
+Tests: 1093 pass. Help (F1) and `launcher/README.md` say how to draw;
+`docs/FUTURE-document-types.md` records the certidão results.
+
+**Open**: the drawing tool in a real browser; editing a custom cell (the
+custom table is read-only; the full reading's cells are editable);
+regions with skew (rectangles only); one custom reading per page (a new
+read replaces it).
+
 ## 2026-10-18 — the Windows test's fixes
 
 Allan ran the launcher on Windows 11 on 2026-10-17 (RTX 4050, ZIP

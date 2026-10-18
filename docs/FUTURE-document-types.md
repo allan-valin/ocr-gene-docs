@@ -67,3 +67,24 @@ started, after accuracy and Kubach:
 4. The review page renders columns from `schema` on the record instead of
    fixed fields; a template may say "row continues on the next page at the
    same height", so one row shows from two scans.
+
+## 2026-10-18 — the person draws the columns (`desembarque/regions.py`)
+
+Before any document-type detection exists, the person can say where the
+columns are: "＋ Coluna a ler" on the scan, one region per column, "Ler as
+áreas". Each region is cropped and read as kraken lines, the lines put back
+in page coordinates and aligned into rows by height, the first region the
+name; the result lives under `custom[page]` of the record, in its own tab,
+and every name-like cell is searchable. Measured on the bisavo folder:
+
+* **Certidão de casamento 1** (ruleless double-page index: nome do marido,
+  nome da mulher, ano, livro, folhas, twice): ten regions, 39 rows × 10
+  cells in 29 s; Kubach's marriage on the right page's row 4, "Augusts
+  Friederich Kubach | Edaliza Grillo Cordiin", found by search. The year
+  headings ("1918", "1920") come out as rows of their own.
+* **Certidão de casamento 2** (prose, two pages per scan): one region per
+  page, 39 rows of two prose lines each in 21 s — readable lines, not a
+  parsed record; prose search over them is the open item above.
+
+This is the manual override; the detector that would find these layouts by
+itself is still the work this file describes.

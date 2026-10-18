@@ -724,7 +724,41 @@ def _parse(f: Path, engine_only: bool,
             **({"guessed": guessed} if guessed else {}),
             "conf": name_score(r),
         })
+    # rows read from regions the person drew (desembarque.regions): where
+    # the grid failed, which is where a name was lost to search
+    # every cell that looks like a name, not the first column alone: a
+    # double page has a name column on each side (certidão 1: Kubach's
+    # marriage sat in the right page's column and was not found, 2026-10-18)
+    for pg, custom in (d.get("custom") or {}).items():
+        for r in (custom or {}).get("rows") or ():
+            cells = r.get("cells") or [r.get("name_raw") or ""]
+            for i, text in enumerate(cells):
+                if not _namelike(text):
+                    continue
+                second, guessed = spellings({**r, "name_raw": text}, text, vocab=vocab)
+                out.append({
+                    "doc": d.get("hash", f.stem),
+                    "notation": d.get("notation"),
+                    **{k: voyage[k] for k in ("ship", "year", "year_source", "line")
+                       if voyage.get(k)},
+                    "file": d.get("file"),
+                    "page": r.get("page") or int(pg),
+                    "row": r.get("n"),
+                    "text": text,
+                    "custom": True,
+                    "cell": i,
+                    **({"alts": second} if second else {}),
+                    **({"guessed": guessed} if guessed else {}),
+                    "conf": name_score(r),
+                })
     return out
+
+
+def _namelike(text: str) -> bool:
+    """A cell worth indexing as a name: searchable, with a word of three
+    letters or more in it — "1924" and "152 v." are not."""
+    text = (text or "").strip()
+    return bool(searchable(text) and re.search(r"[^\W\d_]{3,}", text))
 
 
 def split_year(query: str) -> tuple[str, tuple[int, int] | None]:

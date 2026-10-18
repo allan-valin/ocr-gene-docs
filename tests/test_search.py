@@ -1544,3 +1544,38 @@ class TestUngluedByNames:
         from desembarque.search import unglued_by_names
         assert unglued_by_names("KARLFRENK", None) == []
         assert unglued_by_names("ERNAERN", self.NAMES) == []
+
+
+def test_rows_read_from_drawn_regions_are_searchable_too(tmp_path):
+    """A column the person drew and had read (region read) is where the
+    grid failed, which is where the name was lost to search. Its rows are
+    indexed beside the full reading's, marked, with the page."""
+    import json
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "aaa", "notation": "BS.ENT.1", "file": "a.pdf", "engine": "paddle",
+        "rows": [{"n": 1, "name_raw": "JOSE MUESSO", "page": 2}],
+        "custom": {"3": {"regions": [{"x0": 0.1, "y0": 0.1, "x1": 0.4, "y1": 0.9}],
+                         "rows": [{"n": 1, "name_raw": "KUBACH AUGUST", "cells": ["KUBACH AUGUST"],
+                                   "page": 3, "page_y": [0.1, 0.13]},
+                                  {"n": 2, "name_raw": "", "cells": [""], "page": 3}]}}}))
+    rows = load_index(tmp_path)
+    assert [(r["text"], r["page"], r.get("custom", False)) for r in rows] == [
+        ("JOSE MUESSO", 2, False), ("KUBACH AUGUST", 3, True)]
+
+
+def test_every_name_like_cell_of_a_region_row_is_indexed(tmp_path):
+    """Certidão 1 is a double page: a name column on each side. Kubach's
+    marriage sat in the right page's column and was not found while only
+    the first column was indexed (2026-10-18). Years and folio numbers
+    are not names."""
+    import json
+    (tmp_path / "a.json").write_text(json.dumps({
+        "hash": "aaa", "file": "a.pdf", "engine": "paddle", "rows": [],
+        "custom": {"1": {"regions": [], "rows": [
+            {"n": 4, "name_raw": "ADALBERTO VILLA NOVA", "page": 1,
+             "cells": ["ADALBERTO VILLA NOVA", "MARIA MALUCELLI", "1912", "", "137 v.",
+                       "AUGUSTO FRIEDRICH KUBACH", "ODALGIA GRILLO", "", "", "152 v."]}]}}}))
+    rows = load_index(tmp_path)
+    assert [(r["text"], r["row"], r["cell"]) for r in rows] == [
+        ("ADALBERTO VILLA NOVA", 4, 0), ("MARIA MALUCELLI", 4, 1),
+        ("AUGUSTO FRIEDRICH KUBACH", 4, 5), ("ODALGIA GRILLO", 4, 6)]

@@ -1383,3 +1383,47 @@ def test_the_engine_is_warmed_on_the_thread_that_reads_documents(server, monkeyp
     done = serve.JOBS.on_worker(lambda: threads.append(threading.current_thread()))
     assert done.wait(2)
     assert len(threads) == 2 and threads[0] is threads[1]
+
+
+def test_drawn_regions_are_read_alone_and_kept_beside_the_full_reading(server, monkeypatch):
+    """§7 of the Windows report: when the detector cannot see the table,
+    the person draws the column(s) and only those are read; the result
+    lives under `custom[page]`, the full reading untouched, and the
+    corpus payload carries it for the tab."""
+    base, pdf, eng = _paged(server, monkeypatch)
+    calls = []
+
+    def read_lines(image, regs):
+        calls.append((image, regs))
+        return ([{"n": 1, "name_raw": "KUBACH AUGUST", "cells": ["KUBACH AUGUST"], "page_y": [0.1, 0.13]}],
+                [[{"text": "KUBACH AUGUST", "x0": 0.1, "y0": 0.1, "x1": 0.4, "y1": 0.13}]], "kraken")
+    monkeypatch.setattr(serve, "read_page_regions", read_lines)
+    # a full reading first, so there is something not to clobber
+    code, j = call(f"{base}/api/transcribe?pdf=doc0.pdf&page=2", method="POST")
+    for _ in range(100):
+        _, j = call(f"{base}/api/job?id={j['id']}")
+        if j["status"] == "done":
+            break
+        time.sleep(0.02)
+    regs = '[{"x0":0.1,"y0":0.1,"x1":0.4,"y1":0.9}]'
+    code, j = call(f"{base}/api/transcribe?pdf=doc0.pdf&page=4&regions={regs}", method="POST")
+    assert code == 202
+    for _ in range(100):
+        _, j = call(f"{base}/api/job?id={j['id']}")
+        if j["status"] == "done":
+            break
+        time.sleep(0.02)
+    assert j["status"] == "done", j
+    assert eng.pages == [2], "the engine was not asked for page 4: only the regions were read"
+    assert calls and calls[0][1] == [{"x0": 0.1, "y0": 0.1, "x1": 0.4, "y1": 0.9}]
+    from desembarque.identity import identify
+    data = serve.JOBS.cached(identify(pdf).doc_hash)
+    assert [r["page"] for r in data["rows"]] == [2], "the full reading is as it was"
+    c = data["custom"]["4"]
+    assert c["rows"][0]["name_raw"] == "KUBACH AUGUST" and c["rows"][0]["page"] == 4
+    assert c["regions"] == [{"x0": 0.1, "y0": 0.1, "x1": 0.4, "y1": 0.9}] and c["reader"] == "kraken"
+    _, corpus = call(f"{base}/api/corpus?path=")
+    assert corpus["documents"][0]["custom"]["4"]["rows"][0]["name_raw"] == "KUBACH AUGUST"
+    # bad regions: refused, not queued
+    code, _ = call(f"{base}/api/transcribe?pdf=doc0.pdf&page=4&regions=nonsense", method="POST")
+    assert code == 400

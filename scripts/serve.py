@@ -354,6 +354,8 @@ def corpus(folder: Path, limit: int = 0) -> dict:
             # which pages the engine has been over, and whether some are
             # still to read (a stop at the end of a page, one page alone)
             "partial": bool((cached or {}).get("partial")),
+            # regions the person drew and had read, by page (the custom tab)
+            "custom": (cached or {}).get("custom"),
             "read_pages": sorted({int(p["n"]) for p in (cached or {}).get("pages") or ()
                                   if isinstance(p, dict) and p.get("n") and not p.get("error")}),
         })
@@ -507,6 +509,63 @@ def transcribe_document(pdf: Path, job) -> dict:
         return _transcribe_document(pdf, job, eng)
     finally:
         live.unwatch(pdf.name)
+
+
+def read_page_regions(image: Path, regs: list[dict]) -> tuple[list[dict], list[list[dict]], str]:
+    """The drawn regions of one page image, read as lines: by kraken when
+    it and its model are there (the feature exists for handwriting), else
+    by the engine's prose read of the crop. Returns rows, the lines per
+    region, and which reader."""
+    from desembarque import regions as rg
+    if secondreading.available():
+        model = secondreading.load_model()
+        seg = secondreading.seg_model()
+        device = secondreading.device_for()
+        read = lambda im: secondreading.read_page(im, seg, model, device=device)  # noqa: E731
+        reader = "kraken"
+    else:
+        eng = engines.active()
+
+        def read(im):
+            tmp = CACHE / f"region-{threading.get_ident()}.png"
+            im.save(tmp)
+            got = eng.read_page(tmp, True)
+            w, h = im.size
+            return [{"text": f["text"], "x0": f["x0"] / w, "x1": f["x1"] / w,
+                     "y0": f["y0"] / h, "y1": f["y1"] / h}
+                    for f in got.get("fragments") or ()]
+        reader = eng.name
+    rows, lines = rg.read_regions(image, regs, read)
+    return rows, lines, reader
+
+
+def transcribe_regions(pdf: Path, page: int, regs: list[dict], job=None) -> dict:
+    """Read only the drawn regions of one page and keep the result under
+    `custom[page]` of the document's record, the full reading untouched.
+    A document never read gets a skeleton record, marked partial, so the
+    rows are stored and searchable."""
+    ident = identify(pdf)
+    existing = JOBS.cached(ident.doc_hash) or {
+        "schema": searchlib.SCHEMA, "hash": ident.doc_hash, "file": pdf.name,
+        "notation": ident.notation, "identified_by": ident.source,
+        "pages": [], "rows": [], "partial": True}
+    live.watch(pdf.name, pages=pdf_pages(pdf))
+    try:
+        if job is not None:
+            job.page = page
+        live.emit({"event": "page", "page": page})
+        img = page_image(pdf, page, CACHE) or render_page(pdf, page, dpi=200)
+        if img is None:
+            raise RuntimeError(f"a página {page} não pôde ser renderizada")
+        rows, lines, reader = read_page_regions(img, regs)
+    finally:
+        live.unwatch(pdf.name)
+    for r in rows:
+        r["page"] = page
+    custom = dict(existing.get("custom") or {})
+    custom[str(page)] = {"regions": regs, "rows": rows, "lines": lines,
+                         "reader": reader, "read_at": time.time()}
+    return {**existing, "custom": custom}
 
 
 def _pages_kept(existing: dict, eng_name: str, only: list[int] | None) -> dict[int, dict]:
@@ -1108,6 +1167,19 @@ class Handler(BaseHTTPRequestHandler):
             # a dossier already in the cache — the same silent staleness the
             # schema stamp guards against, from the other end. A partial
             # record is not a reason to refuse: the reading carries on.
+            if q.get("regions"):
+                # only the drawn regions of this page (desembarque.regions)
+                from desembarque import regions as rg
+                try:
+                    regs = rg.normalize(json.loads(q["regions"]))
+                except ValueError:
+                    regs = []
+                if not page or not regs:
+                    return self._send(400, {"error": "regions wants a page and at least one region"})
+                job = JOBS.submit(ident.doc_hash, pdf.name, pdf_pages(pdf),
+                                  lambda j: transcribe_regions(pdf, page, regs, j),
+                                  pages=[page])
+                return self._send(202, job.as_dict())
             cached = JOBS.cached(ident.doc_hash)
             if (cached and not cached.get("partial") and not page
                     and q.get("force", "") in ("", "0")):

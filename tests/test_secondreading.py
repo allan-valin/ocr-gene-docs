@@ -372,9 +372,10 @@ def test_the_second_reading_reports_each_page_it_is_on_and_how_long_it_took(monk
 def test_the_segmentation_model_is_loaded_once_and_the_warm_up_reads_a_blank(monkeypatch):
     """kraken's `blla.segment` loads its default segmentation model from
     disk on every call when given none; the server read every page that
-    way. Loaded once, kept. `warm()` loads both models from disk — not a
-    read of a blank page: that asked the card for 3.7 GB and OOMed
-    (2026-10-18); a failure is returned, never raised."""
+    way. Loaded once, kept. `warm()` loads both models and reads a blank
+    the shape of a page — a 256×64 one was scaled up to 4800×1200 by
+    kraken and OOMed the card (2026-10-18); a failure is returned, never
+    raised."""
     loads = []
     monkeypatch.setattr(sr, "_SEG", None)
     monkeypatch.setattr(sr, "_load_seg", lambda: loads.append("seg") or "SEG")
@@ -382,10 +383,11 @@ def test_the_segmentation_model_is_loaded_once_and_the_warm_up_reads_a_blank(mon
     assert loads == ["seg"]
     calls = []
     monkeypatch.setattr(sr, "load_model", lambda *a, **k: calls.append("rec") or "REC")
-    monkeypatch.setattr(sr, "read_page", lambda *a, **k: calls.append("read"))
+    monkeypatch.setattr(sr, "read_page", lambda im, seg, rec, **k: calls.append((seg, rec, im.size)) or [])
     monkeypatch.setattr(sr, "available", lambda *a, **k: True)
     assert sr.warm() == ""
-    assert calls == ["rec"], "the models, and no read"
+    assert calls == ["rec", ("SEG", "REC", sr.WARM_BLANK)]
+    assert sr.WARM_BLANK[1] > sr.WARM_BLANK[0] >= 1000, "a page, portrait, not a strip"
     monkeypatch.setattr(sr, "load_model", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no cuda")))
     assert "no cuda" in sr.warm()
     n = len(calls)

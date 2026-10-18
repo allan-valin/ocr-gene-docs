@@ -178,6 +178,22 @@
     transition:top .12s ease,height .12s ease}
   #nameBox{position:absolute;border:1.5px solid var(--focus);border-radius:2px;
     box-shadow:0 0 0 9999px rgba(0,0,0,.42);pointer-events:none;transition:all .12s ease}
+  /* regions the person draws to read alone (Windows test report §7):
+     dashed, numbered, each with its ×; positions in % so the zoom keeps them */
+  #regions{position:absolute;inset:0;pointer-events:none}
+  #regions .reg{position:absolute;border:1.5px dashed var(--focus);background:rgba(201,133,63,.10);
+    pointer-events:none}
+  #regions .reg b{position:absolute;left:-1px;top:-1px;background:var(--focus);color:#fff;
+    font-size:10px;padding:0 5px;border-radius:0 0 4px 0;pointer-events:none}
+  #regions .reg button{position:absolute;right:-1px;top:-1px;pointer-events:auto;padding:0 5px;
+    font-size:11px;line-height:16px;border-radius:0 0 0 4px}
+  #drawBox{position:absolute;border:1.5px solid var(--focus);background:rgba(201,133,63,.18);pointer-events:none}
+  #scanInner.drawing{cursor:crosshair}
+  #scantools button[aria-pressed="true"]#regionadd{background:var(--focus);color:#fff}
+  #readtabs{display:flex;gap:4px;padding:4px 6px;border-bottom:1px solid var(--line);align-items:center}
+  #readtabs button{padding:3px 9px;font-size:11px}
+  #readtabs span{font-size:11px;color:var(--muted);margin-left:auto}
+  #ctbl td.y{color:var(--muted);font-size:11px;white-space:nowrap}
   #rowPane{background:var(--panel)}
   table{border-collapse:collapse;width:100%;font-size:12.5px}
   thead th{position:sticky;top:0;background:var(--panel);border-bottom:1.5px solid var(--line);
@@ -433,15 +449,27 @@ Um ano ou o nome do navio na busca não competem com o nome: eles reordenam o qu
       <button id="zoomout" type="button" title="Diminuir (Ctrl + roda do mouse sobre a página)">−</button>
       <button id="zoomin" type="button" title="Aumentar (Ctrl + roda do mouse sobre a página)">+</button>
       <button id="zoomreset" type="button" title="Largura da coluna">100%</button>
+      <span style="margin-left:10px">Ler só uma área</span>
+      <button id="regionadd" type="button" aria-pressed="false"
+        title="Desenhar na imagem uma coluna (ou área) a ler sozinha: para tabelas sem réguas e digitalizações com duas páginas, em que a leitura da página inteira sai errada. Arraste na imagem; pode desenhar várias; a primeira é a coluna do nome. Esc sai do modo.">＋ Coluna a ler</button>
+      <button id="regionclear" type="button" title="Tirar as áreas desenhadas nesta página">Limpar</button>
+      <button id="regionread" type="button" title="Ler só as áreas desenhadas desta página. O resultado fica na aba Leitura personalizada, ao lado da leitura completa, sem mexer nela.">Ler as áreas</button>
     </div>
     <div id="scanInner">
       <img id="scan" alt="Digitalização original da relação de passageiros" draggable="false">
       <div id="bandBox" hidden></div>
       <div id="nameBox" hidden></div>
+      <div id="regions"></div>
+      <div id="drawBox" hidden></div>
     </div>
   </div>
   <div class="pane" id="rowPane">
     <div id="pagestrip"></div>
+    <div id="readtabs" hidden>
+      <button id="tabfull" type="button" aria-pressed="true" title="A leitura da página inteira pelo motor">Leitura completa</button>
+      <button id="tabcustom" type="button" aria-pressed="false" title="A leitura só das áreas desenhadas na imagem">Leitura personalizada</button>
+      <span id="tabnote"></span>
+    </div>
     <div id="empty" class="empty" hidden></div>
     <table id="tbl">
       <thead><tr>
@@ -449,6 +477,10 @@ Um ano ou o nome do navio na busca não competem com o nome: eles reordenam o qu
         <th>Idade</th><th>Sexo</th><th>Estado civil</th><th>Profissão</th><th>Procedência</th><th class="v">✓</th>
       </tr></thead>
       <tbody id="rows"></tbody>
+    </table>
+    <table id="ctbl" hidden>
+      <thead id="chead"></thead>
+      <tbody id="crows"></tbody>
     </table>
   </div>
 </main>
@@ -983,6 +1015,8 @@ function openDoc(i,page){
     note.hidden = false;
   } else { note.hidden = true; note.textContent = ""; }
   renderDocList(); renderPageStrip(); render(); paintBand(0); refreshExport();
+  // the drawn areas and their reading, for this page
+  paintRegions(); setTab(!showRows && customHere() ? "custom" : "full");
   // what the read button does here: read, carry on, or read again
   $("#reread").textContent = !D.transcribed ? "Transcrever"
     : D.partial ? "Continuar a leitura" : "Transcrever de novo";
@@ -1102,12 +1136,16 @@ let ENGINE=null, poll=null;
 // is already in the cache. Without it the only way was to delete the file by
 // hand, so the tool got better and the documents somebody was looking at did
 // not.
-function startTranscription(force, page){
+let readWasRegions=false;
+function startTranscription(force, page, regions){
   if(!SERVED||!D) return;
   clearInterval(poll);
   const dir=STATE.dir?`&dir=${encodeURIComponent(STATE.dir)}`:"";
   const file=D.file;
-  say(page ? `pedindo a leitura da página ${page} de ${file} · ${pageEstimate()}`
+  readWasRegions=!!(regions&&regions.length);
+  const regq = readWasRegions ? `&regions=${encodeURIComponent(JSON.stringify(regions))}` : "";
+  say(readWasRegions ? `pedindo a leitura de ${regions.length} área${regions.length>1?"s":""} da página ${page} de ${file}`
+    : page ? `pedindo a leitura da página ${page} de ${file} · ${pageEstimate()}`
            : `${force?"lendo de novo":"pedindo a leitura de"} ${file} · ${D.total_pages} páginas · ${pageEstimate()} por página`);
   $("#tbl").hidden=true; $("#empty").hidden=false;
   renderEmpty(`<b><span class="spin"></span>Transcrevendo…</b><br>
@@ -1119,7 +1157,7 @@ function startTranscription(force, page){
   // and seconds with nothing on screen is what a click that did nothing looks like
   jobLast={status:"queued", label:file, page:page||0, total:page?1:D.total_pages};
   renderProgress(idxState, jobLast, null);
-  fetch(`/api/transcribe?pdf=${encodeURIComponent(D.file)}${dir}${force?"&force=1":""}${page?`&page=${page}`:""}`,
+  fetch(`/api/transcribe?pdf=${encodeURIComponent(D.file)}${dir}${force?"&force=1":""}${page?`&page=${page}`:""}${regq}`,
         {method:"POST"})
     .then(r=>r.json()).then(j=>{
       if(j.cached||j.status==="done"){
@@ -1330,8 +1368,16 @@ function finishTranscription(why){
   // what was on screen, so the line below can say it was replaced: a grid
   // somebody was filling in vanished under a finished reading, unexplained
   const hadGrid=!!(D && D.geometry && D.geometry.bands_source==="detected" && rows.length);
+  const keepPage = D && D.pages[pageIdx] ? D.pages[pageIdx].n : undefined;
+  const wasRegions = readWasRegions; readWasRegions=false;
   fetch(`/api/corpus?path=${encodeURIComponent(STATE.dir||"")}`).then(r=>r.json()).then(d=>{
-    DB=d; openDoc(docIdx);
+    DB=d; openDoc(docIdx, keepPage);
+    if(wasRegions){
+      const c=customHere();
+      setTab("custom");
+      say(`${why||"leitura concluída"}: ${c?c.rows.length:0} linhas nas áreas desenhadas da página ${keepPage} (${c&&c.reader==="kraken"?"leitor de letra manuscrita":"motor"}) — aba Leitura personalizada; a leitura completa não foi tocada`, c&&c.rows.length?"ok":"");
+      return;
+    }
     const n=rows.length, all=(D.rows||[]).length;
     say(`${why||"leitura concluída"}: ${D.file} · ${all} linhas no documento, ${n} nesta página`, n?"ok":"");
     if(hadGrid) say("a tabela vazia saiu da tela: a página mostra agora o que está salvo "
@@ -1386,7 +1432,7 @@ function renderHits(d){
       · ${d.indexed} linhas indexadas ${dl}</div>`
     + d.hits.slice(0,25).map(h=>`
     <div class="hit" data-file="${h.file||""}" data-page="${h.page||1}"
-         data-row="${h.row||0}" title="Abrir o documento nesta linha">
+         data-row="${h.row||0}" data-custom="${h.custom?1:0}" title="Abrir o documento nesta linha${h.custom?" (leitura personalizada: área desenhada)":""}">
       <b>${h.text}</b>${h.spelling?`<i class="spelling" title="A página foi lida assim; o nome foi encontrado por esta outra grafia da mesma leitura — não é o que está escrito no registro.">encontrado como “${h.spelling}”</i>`:""}${h.ship?`<button class="narrow" data-ship="${h.ship}"
         title="Buscar o mesmo nome só neste navio — dizer o navio é o que faz um nome comum aparecer">só ${h.ship}</button>`
         :h.line?`<button class="narrow" data-ship="${h.line}"
@@ -1432,8 +1478,8 @@ document.addEventListener("click",e=>{
   // hunt for on the page is most of the work left undone — and the scan beside
   // it is the only thing that makes a fuzzy match trustworthy.
   const want=+h.dataset.row;
-  const k=rows.findIndex(r=>r.n===want);
-  if(k>=0) select(k);
+  if(h.dataset.custom==="1"){ setTab("custom"); selectCustom(want); }
+  else { const k=rows.findIndex(r=>r.n===want); if(k>=0) select(k); }
   document.querySelectorAll("#corpushits .hit").forEach(x=>x.classList.remove("on"));
   h.classList.add("on");
 });
@@ -2029,6 +2075,112 @@ document.addEventListener("keydown",e=>{
 });
 try{ setEnhance(localStorage.getItem(ENHANCE_KEY)||""); }catch(e){ setEnhance(""); }
 
+// ---- read only this area / column -----------------------------------------
+// When the grid cannot be found (no ruled lines, two pages in one scan) the
+// whole-page read gives the wrong neighbours and the person had no recourse
+// (Windows test report, 2026-10-17, §7). They draw the column(s) on the scan
+// and only those are read, one row per written line, the areas' lines aligned
+// into rows by height, the first area the name. Kept under the document's
+// `custom[page]`, shown in its own tab, the full reading untouched.
+let REG={drawing:false, byPage:{}, draw:null, tab:"full", csel:-1};
+const regKey = ()=> D ? `${D.hash}|${D.pages[pageIdx].n}` : "";
+function customHere(){ return (D && D.custom && D.custom[String(D.pages[pageIdx].n)]) || null; }
+function regionsHere(){
+  const k=regKey();
+  if(!(k in REG.byPage)){ const c=customHere(); REG.byPage[k] = c ? c.regions.map(r=>({...r})) : []; }
+  return REG.byPage[k];
+}
+function paintRegions(){
+  const el=$("#regions"); if(!el||!D) return;
+  el.innerHTML = regionsHere().map((r,i)=>`<div class="reg" style="left:${r.x0*100}%;top:${r.y0*100}%;width:${(r.x1-r.x0)*100}%;height:${(r.y1-r.y0)*100}%">
+      <b>${i+1}${i===0?" nome":""}</b><button type="button" data-k="${i}" title="Tirar esta área">×</button></div>`).join("");
+}
+function setDrawing(on){
+  REG.drawing=on;
+  $("#regionadd").setAttribute("aria-pressed", String(on));
+  $("#scanInner").classList.toggle("drawing", on);
+  if(on) say("modo de desenho: arraste na imagem a coluna a ler (a primeira é a do nome); pode desenhar várias; Esc ou o botão sai do modo");
+}
+function drawStart(e){
+  const r=$("#scan").getBoundingClientRect();
+  if(!r.width) return;
+  REG.draw={x0:(e.clientX-r.left)/r.width, y0:(e.clientY-r.top)/r.height, x1:null, y1:null};
+  const b=$("#drawBox"); b.hidden=false; drawMove(e);
+}
+function drawMove(e){
+  if(!REG.draw) return;
+  const r=$("#scan").getBoundingClientRect();
+  REG.draw.x1=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));
+  REG.draw.y1=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
+  const d=REG.draw, x0=Math.min(d.x0,d.x1), x1=Math.max(d.x0,d.x1), y0=Math.min(d.y0,d.y1), y1=Math.max(d.y0,d.y1);
+  const b=$("#drawBox");
+  b.style.left=(x0*100)+"%"; b.style.top=(y0*100)+"%"; b.style.width=((x1-x0)*100)+"%"; b.style.height=((y1-y0)*100)+"%";
+}
+function drawEnd(){
+  const d=REG.draw; REG.draw=null; $("#drawBox").hidden=true;
+  if(!d||d.x1==null) return;
+  const reg={x0:Math.min(d.x0,d.x1), y0:Math.min(d.y0,d.y1), x1:Math.max(d.x0,d.x1), y1:Math.max(d.y0,d.y1)};
+  if(reg.x1-reg.x0<0.005||reg.y1-reg.y0<0.005){ say("área pequena demais: arraste mais"); return; }
+  const regs=regionsHere(); regs.push(reg); paintRegions(); renderTabs();
+  say(`área ${regs.length} desenhada${regs.length===1?" (coluna do nome)":""}; desenhe outra, ou Ler as áreas`);
+}
+function renderTabs(){
+  const c=customHere(), regs=regionsHere();
+  const tabs=$("#readtabs"); tabs.hidden = !(c || regs.length);
+  if(tabs.hidden){ REG.tab="full"; }
+  $("#tabfull").setAttribute("aria-pressed", String(REG.tab==="full"));
+  $("#tabcustom").setAttribute("aria-pressed", String(REG.tab==="custom"));
+  $("#tabcustom").textContent = c ? `Leitura personalizada (${c.rows.length} linha${c.rows.length===1?"":"s"})` : "Leitura personalizada";
+  $("#tabnote").textContent = REG.tab==="custom"
+    ? (c ? `${c.regions.length} área${c.regions.length>1?"s":""} · ${c.reader==="kraken"?"leitor de letra manuscrita":c.reader}` : "ainda não lida: Ler as áreas")
+    : "";
+}
+function setTab(t){
+  REG.tab=t;
+  const c=customHere();
+  if(t==="custom"){
+    $("#tbl").hidden=true; $("#empty").hidden=true; $("#ctbl").hidden=false; renderCustom(c);
+  } else {
+    $("#ctbl").hidden=true; $("#tbl").hidden=!rows.length; $("#empty").hidden=rows.length>0;
+    if(!rows.length) renderEmpty();
+    paintBand(sel);
+  }
+  renderTabs();
+}
+function renderCustom(c){
+  const regs=(c&&c.regions)||regionsHere();
+  $("#chead").innerHTML=`<tr><th class="num">#</th>${regs.map((_,i)=>`<th>Área ${i+1}${i===0?" (nome)":""}</th>`).join("")}<th class="y">altura</th></tr>`;
+  if(!c){ $("#crows").innerHTML=`<tr><td colspan="${regs.length+2}" style="color:var(--muted);padding:14px">Áreas desenhadas, ainda não lidas. Clique em Ler as áreas, na barra da imagem.</td></tr>`; return; }
+  $("#crows").innerHTML=c.rows.map((r,i)=>`<tr data-ci="${i}" class="${i===REG.csel?"sel":""}"><td class="num">${r.n}</td>${(r.cells||[r.name_raw]).map(t=>`<td>${t||""}</td>`).join("")}<td class="y">${r.page_y?Math.round(r.page_y[0]*100)+"%":""}</td></tr>`).join("");
+  $("#stat").textContent=`leitura personalizada: ${c.rows.length} linhas de ${regs.length} área${regs.length>1?"s":""}`;
+}
+function selectCustom(n){
+  const c=customHere(); if(!c) return;
+  const i=c.rows.findIndex(r=>r.n===n); if(i<0) return;
+  REG.csel=i;
+  document.querySelectorAll("#crows tr").forEach(tr=>tr.classList.toggle("sel",+tr.dataset.ci===i));
+  const r=c.rows[i], img=$("#scan"), H=img.clientHeight;
+  if(r.page_y && H){ const bb=$("#bandBox"); bb.hidden=false; bb.style.top=(r.page_y[0]*H)+"px"; bb.style.height=((r.page_y[1]-r.page_y[0])*H)+"px"; $("#nameBox").hidden=true;
+    if(locked()){ const pane=$("#scanPane"); pane.scrollTop = r.page_y[0]*H - pane.clientHeight/2; } }
+  document.querySelector(`#crows tr[data-ci="${i}"]`)?.scrollIntoView({block:"nearest"});
+}
+$("#crows").addEventListener("click", e=>{ const tr=e.target.closest("tr[data-ci]"); if(tr) selectCustom(customHere().rows[+tr.dataset.ci].n); });
+$("#tabfull").onclick=()=>setTab("full");
+$("#tabcustom").onclick=()=>setTab("custom");
+$("#regionadd").onclick=()=>setDrawing(!REG.drawing);
+$("#regionclear").onclick=()=>{ REG.byPage[regKey()]=[]; paintRegions(); renderTabs(); if(REG.tab==="custom"&&!customHere()) setTab("full"); say("áreas desenhadas tiradas desta página (uma leitura já feita fica)"); };
+$("#regionread").onclick=()=>{
+  const regs=regionsHere();
+  if(!regs.length){ say("nenhuma área desenhada: clique em ＋ Coluna a ler e arraste na imagem", "err"); return; }
+  setDrawing(false);
+  startTranscription(false, D.pages[pageIdx].n, regs);
+};
+$("#regions").addEventListener("click", e=>{
+  const b=e.target.closest("button[data-k]"); if(!b) return;
+  regionsHere().splice(+b.dataset.k,1); paintRegions(); renderTabs();
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && REG.drawing) setDrawing(false); });
+
 // ---- zoom on the scan -----------------------------------------------------
 // Ctrl + wheel zoomed the whole browser page and the scan stayed the same
 // size in it (Allan, 2026-10-16). The scan zooms on its own: its box gets
@@ -2060,12 +2212,15 @@ function setZoom(z, anchor){
 let PAN=null;
 function panStart(e){
   if(e.button!==0) return;
+  if(e.target.closest("#regions button")) return;
+  if(REG.drawing){ drawStart(e); e.preventDefault(); return; }
   const pane=$("#scanPane");
   PAN={x:e.clientX, y:e.clientY, left:pane.scrollLeft, top:pane.scrollTop, moved:false};
   $("#scanInner").classList.add("panning");
   e.preventDefault();
 }
 function panMove(e){
+  if(REG.draw){ drawMove(e); return; }
   if(!PAN) return;
   const dx=e.clientX-PAN.x, dy=e.clientY-PAN.y;
   if(Math.abs(dx)>3||Math.abs(dy)>3) PAN.moved=true;
@@ -2073,6 +2228,7 @@ function panMove(e){
   pane.scrollLeft=PAN.left-dx; pane.scrollTop=PAN.top-dy;
 }
 function panEnd(){
+  if(REG.draw){ drawEnd(); return; }
   if(!PAN) return;
   const moved=PAN.moved; PAN=null;
   $("#scanInner").classList.remove("panning");

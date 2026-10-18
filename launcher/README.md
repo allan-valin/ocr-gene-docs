@@ -26,6 +26,12 @@
    `transcriptions`, dentro da pasta dos PDFs; da próxima vez continua de
    onde parou.
 
+8. **Quando a leitura sai errada** (tabela sem réguas, duas páginas numa
+   digitalização, prosa em colunas): na barra da imagem, **＋ Coluna a ler**
+   e arraste a coluna; desenhe quantas precisar (a primeira é a do nome) e
+   **Ler as áreas**. O resultado fica na aba **Leitura personalizada**, ao
+   lado da completa, e entra na busca.
+
 **Ajuda (F1)** na janela explica cada botão, o que faz e por quê.
 
 Tudo roda no seu computador. Nada é enviado para fora dele.

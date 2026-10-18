@@ -472,6 +472,15 @@ O que já foi lido fica, página por página; Ligar de novo continua da
 página seguinte. Para abortar e descartar o documento em andamento, use o
 botão Abortar na caixa de progresso da página.
 
+Ler só uma área (na página, barra da imagem)
+Quando a leitura da página inteira sai errada — tabela sem réguas,
+digitalização com duas páginas, prosa em duas colunas — clique em
+"＋ Coluna a ler" e arraste na imagem a coluna (ou área) a ler; pode
+desenhar várias, a primeira é a do nome; "Ler as áreas" lê só elas, uma
+linha por linha escrita, as áreas alinhadas em colunas pela altura. O
+resultado fica na aba "Leitura personalizada", ao lado da completa, sem
+mexer nela, e entra na busca. Uns 10 s por área depois da primeira.
+
 Desinstalar
 Na janela Verificar a instalação: apaga a pasta .venv-ocr (tudo o que foi
 instalado) e, se marcado, o modelo de letra manuscrita baixado em
