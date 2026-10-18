@@ -27,8 +27,20 @@ future task, not built:
   rows, ~1k out — about $0.03 a page on Opus, $0.015 on Sonnet; a
   20-page dossier under a dollar. The Batches API halves that for a
   folder read overnight.
-* It contradicts two of Allan's own rules — open-source-only dependencies
-  and the open-weight engine — so it waits for his explicit yes.
+* Revised the same night: Allan agrees with the design but wants his
+  subscription, not API usage. So the app calls no Claude at all: it
+  exposes a reviewer contract — pack a page (name crops + rows and their
+  alternatives as JSON), take suggestions JSON back, store them as the
+  "leitura de Claude" source in the word menu — and whichever Claude he
+  already pays for drives it: Claude Code through a skill in the repo
+  (first; pack script, the agent's own vision on the crops, apply
+  script), or Claude in Chrome through a "Para um agente" panel on the
+  review page with the same contract. No login to claude.ai from the
+  app (its terms; a session cookie is a worse secret than a key). This
+  adds no proprietary dependency to the app, so the open-source rule
+  holds. Unknown and not to be built on: whether `ant auth login`
+  credentials bill the subscription or usage. Waiting for "build the
+  skill".
 
 ## 2026-10-18, night — the demo closed its own tab; three languages
 
