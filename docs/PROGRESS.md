@@ -6,6 +6,36 @@ already been measured and rejected so it is not tried twice. The design record i
 [the spec](superpowers/specs/2026-07-23-desembarque-design.md); this file is state
 and next actions.
 
+## 2026-10-18, evening — the public demo on the site
+
+Allan asked what it would take to run the project on his GitHub site and
+sent five photos of his own exam notes for a demo (`samples/`): the
+archive's pages are not published. Pages serves static files only, so the
+demo is the review page with its data embedded (`scripts/make_demo.py`,
+the same mechanism as `make_prototype.py`), the page images beside it:
+no transcribing, no corpus search in the browser.
+
+The five pages, each read whole by the engine and as one drawn region by
+kraken (GPU, 4–5 s + 8–15 s each): the typed exam page reads line-perfect
+(38 lines); the cursive notes decently ("network softwarization is the
+tramsition from hardware-bared netwark funttioen…"); the four-language
+handwriting test sheet poorly (modern ballpoint block and cursive against
+a historical-hands model: "This is a test" → "his"); the two highlighted
+formula pages as noise. All five are in the demo, with a banner saying
+what it is; the limits are part of the demonstration.
+
+Live at https://allan-valin.github.io/desembarque/ (site commits ddf1a46,
+and the next one for the pt/de card links). `demo/` is gitignored here;
+rebuild with `.venv-ocr/bin/python scripts/make_demo.py samples/pdf --out demo`
+and copy into the site's `desembarque/`.
+
+Also today: the launcher's CUDA-build check matched only at the start of
+the version files and called Allan's GPU venv CPU (fixed, e5b6caf); the
+card is the default device once nvidia-smi says it is usable (497f531).
+iGPU + dedicated GPU together: not worth it (each reader runs on one
+device, an iGPU has no CUDA path and is 5–10× slower: under ten percent
+of a page at best).
+
 ## 2026-10-18, later — read only this area / column (§7 of the Windows report)
 
 Allan: "proceed with region read", and "also check the certidao files".
