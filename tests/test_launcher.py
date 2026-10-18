@@ -378,12 +378,17 @@ def test_readiness_says_whether_the_installed_readers_can_see_a_card(tmp_path):
     (site / "paddle" / "version").mkdir(parents=True)
     (venv / "bin").mkdir()
     (venv / "bin" / "python").write_text("")
-    (site / "torch" / "version.py").write_text("cuda: Optional[str] = None\n")
-    (site / "paddle" / "version" / "__init__.py").write_text("cuda_version     = 'False'\n")
+    # the lines sit where pip writes them: line 6 of torch's file, line 11
+    # of paddle's — a match anchored at the start of the file said "CPU"
+    # to Allan's CUDA venv (2026-10-18)
+    head_t = "from typing import Optional\n__all__ = ['cuda']\n__version__ = '2.14.0'\ndebug = False\n\n"
+    head_p = "# THIS FILE IS GENERATED\nfull_version  = '3.4.0'\nmajor = '3'\n"
+    (site / "torch" / "version.py").write_text(head_t + "cuda: Optional[str] = None\n")
+    (site / "paddle" / "version" / "__init__.py").write_text(head_p + "cuda_version     = 'False'\n")
     assert core.readiness(tmp_path)["gpu"] is False
-    (site / "torch" / "version.py").write_text("cuda: Optional[str] = '13.0'\n")
+    (site / "torch" / "version.py").write_text(head_t + "cuda: Optional[str] = '13.0'\n")
     assert core.readiness(tmp_path)["gpu"] is False, "paddle is still the CPU build"
-    (site / "paddle" / "version" / "__init__.py").write_text("cuda_version     = '13.0'\n")
+    (site / "paddle" / "version" / "__init__.py").write_text(head_p + "cuda_version     = '13.0'\n")
     assert core.readiness(tmp_path)["gpu"] is True
     assert "gpu" not in core.missing(core.readiness(tmp_path)), "a CPU install is not a missing tier"
 

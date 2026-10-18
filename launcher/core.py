@@ -80,7 +80,7 @@ def _cuda_build(root: Path) -> bool:
                 text = (site / rel).read_text(encoding="utf-8", errors="replace")
             except OSError:
                 continue
-            m = re.search(pattern, text)
+            m = re.search(pattern, text, re.M)
             if m:
                 return m.group(1) not in ("None", "'False'", '"False"', "''", '""')
         return False
