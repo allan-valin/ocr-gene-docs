@@ -2032,8 +2032,10 @@ addEventListener("resize",()=>paintBand(sel));
 // Embedded data means no server, whatever the protocol: the demo on GitHub
 // Pages is http and pinged /api/ping, failed twice, and closed its own tab
 // as "the server has gone" (Allan, 2026-10-18).
+// (no literal placeholder here: the builders replace every occurrence of
+// it in the file, and one in this line put the JSON into the script)
 const EMBEDDED = (()=>{ const el=document.getElementById("payload"); const t=el?el.textContent.trim():"";
-  return !!t && t!=="__DATA__"; })();
+  return t.startsWith("{"); })();
 const SERVED = location.protocol.startsWith("http") && !EMBEDDED;
 function loadData(){
   const el=document.getElementById("payload");

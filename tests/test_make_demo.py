@@ -50,3 +50,32 @@ def test_the_demo_embeds_each_document_s_reading_and_renders_its_pages(tmp_path,
     assert a["transcribed"] is True
     assert b["transcribed"] is False and b["rows"] is None and b["custom"] is None
     assert data["demo"] is True
+
+
+def test_the_built_page_s_script_still_parses(tmp_path, monkeypatch):
+    """The placeholder is replaced everywhere in the file: a line of
+    script that named it got the JSON spliced in and the demo died with a
+    SyntaxError on load (2026-10-18, twice). The built page's scripts are
+    parsed by node when it is there."""
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("no node")
+    folder = tmp_path / "s"
+    (folder / "transcriptions").mkdir(parents=True)
+    (folder / "a.pdf").write_bytes(b"%PDF-1.7\n")
+    monkeypatch.setattr(make_demo, "page_count", lambda pdf: 1)
+    monkeypatch.setattr(make_demo, "doc_hash", lambda pdf: "h" * 64)
+    monkeypatch.setattr(make_demo, "render_page", lambda pdf, n, dest, dpi=120, grayscale=False: dest.write_bytes(b"x") or True)
+    monkeypatch.setattr(make_demo, "image_size", lambda p: (10, 10))
+    out = tmp_path / "out"
+    assert make_demo.build(folder, out, dpi=72) == 0
+    html = (out / "index.html").read_text(encoding="utf-8")
+    assert "__DATA__" not in html
+    js = "\n".join(re.findall(r"<script>(.*?)</script>", html, re.S))
+    (tmp_path / "page.js").write_text(js, encoding="utf-8")
+    r = subprocess.run([node, "--check", str(tmp_path / "page.js")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[:500]
